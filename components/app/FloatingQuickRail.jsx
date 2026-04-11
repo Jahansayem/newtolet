@@ -1,0 +1,326 @@
+'use client'
+
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BiBuildings, BiCoin } from 'react-icons/bi'
+import { CgMenuGridO } from 'react-icons/cg'
+import { FiHeart, FiHome, FiMessageSquare, FiPhone, FiPlus } from 'react-icons/fi'
+import { Link } from '../../src/lib/react-router-dom.jsx'
+import { buildPageHref, getRoutePage } from '../../src/lib/routePaths.js'
+
+const PHONE_NUMBER = '+8801707346634'
+const SAVED_PROPERTIES_EVENT = 'saved-properties-updated'
+
+const menuItems = [
+  {
+    href: buildPageHref('addproperty'),
+    label: 'Add Property',
+    icon: FiPlus,
+  },
+  {
+    href: buildPageHref('propertylist2'),
+    label: 'Property List',
+    icon: BiBuildings,
+  },
+  {
+    href: buildPageHref('book-buy-credits'),
+    label: 'Buy Credits',
+    icon: BiCoin,
+  },
+  {
+    href: buildPageHref('contact'),
+    label: 'Contact',
+    icon: FiMessageSquare,
+  },
+]
+
+const getSavedPropertiesCount = () => {
+  if (typeof window === 'undefined') {
+    return 0
+  }
+
+  try {
+    const saved = JSON.parse(localStorage.getItem('savedProperties') || '[]')
+    return Array.isArray(saved) ? saved.length : 0
+  } catch (error) {
+    console.error('Failed to read saved properties for quick rail:', error)
+    return 0
+  }
+}
+
+const FloatingQuickRail = () => {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const routeKey = `${pathname}?${searchParams?.toString() || ''}`
+  const page = getRoutePage(pathname, searchParams)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [savedCount, setSavedCount] = useState(0)
+  const desktopRailRef = useRef(null)
+  const mobileRailRef = useRef(null)
+
+  const refreshSavedCount = () => {
+    setSavedCount(getSavedPropertiesCount())
+  }
+
+  useEffect(() => {
+    refreshSavedCount()
+  }, [routeKey])
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (!event.key || event.key === 'savedProperties') {
+        refreshSavedCount()
+      }
+    }
+
+    const handleSavedPropertiesChange = () => {
+      refreshSavedCount()
+    }
+
+    const handleWindowFocus = () => {
+      refreshSavedCount()
+    }
+
+    window.addEventListener('storage', handleStorage)
+    window.addEventListener(SAVED_PROPERTIES_EVENT, handleSavedPropertiesChange)
+    window.addEventListener('focus', handleWindowFocus)
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(SAVED_PROPERTIES_EVENT, handleSavedPropertiesChange)
+      window.removeEventListener('focus', handleWindowFocus)
+    }
+  }, [])
+
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [routeKey])
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      const clickInsideDesktop = desktopRailRef.current?.contains(event.target)
+      const clickInsideMobile = mobileRailRef.current?.contains(event.target)
+
+      if (!clickInsideDesktop && !clickInsideMobile) {
+        setMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
+  const quickActions = useMemo(
+    () => [
+      {
+        key: 'home',
+        href: buildPageHref(),
+        label: 'Home',
+        icon: FiHome,
+        isActive: !page,
+      },
+      {
+        key: 'properties',
+        href: buildPageHref('propertylist2'),
+        label: 'Property List',
+        icon: BiBuildings,
+        isActive: ['propertylist', 'propertylist2', 'listdetails'].includes(page),
+      },
+      {
+        key: 'saved',
+        href: buildPageHref('dashboard'),
+        label: 'Saved Properties',
+        icon: FiHeart,
+        isActive: page === 'dashboard',
+        badge: savedCount > 99 ? '99+' : savedCount > 0 ? String(savedCount) : null,
+      },
+      {
+        key: 'call',
+        href: `tel:${PHONE_NUMBER}`,
+        label: 'Call',
+        icon: FiPhone,
+        isActive: false,
+        external: true,
+      },
+    ],
+    [page, savedCount]
+  )
+
+  const railButtonClass = (active) =>
+    `relative flex h-12 w-12 items-center justify-center rounded-full border text-lg shadow-md transition-all duration-200 md:h-14 md:w-14 ${
+      active
+        ? 'border-[#1E73B8] bg-blue-50 text-[#1E73B8] shadow-lg'
+        : 'border-[#1E73B8] bg-white text-[#1E73B8] hover:-translate-y-0.5 hover:shadow-lg'
+    }`
+
+  return (
+    <>
+      <div
+        ref={desktopRailRef}
+        className="fixed right-2 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-4 sm:flex md:right-4 lg:right-6"
+      >
+        <button
+          type="button"
+          aria-label="Open quick actions"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((current) => !current)}
+          className={railButtonClass(menuOpen)}
+        >
+          <CgMenuGridO />
+        </button>
+
+        {quickActions.map((action) =>
+          action.external ? (
+            <a
+              key={action.key}
+              href={action.href}
+              aria-label={action.label}
+              className={railButtonClass(action.isActive)}
+            >
+              <action.icon />
+              {action.badge ? (
+                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {action.badge}
+                </span>
+              ) : null}
+            </a>
+          ) : (
+            <Link
+              key={action.key}
+              href={action.href}
+              aria-label={action.label}
+              className={railButtonClass(action.isActive)}
+            >
+              <action.icon />
+              {action.badge ? (
+                <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {action.badge}
+                </span>
+              ) : null}
+            </Link>
+          )
+        )}
+
+        {menuOpen ? (
+          <div className="absolute right-full top-0 mr-3 w-52 rounded-2xl border border-blue-100 bg-white p-3 shadow-2xl">
+            <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">
+              Quick Access
+            </p>
+            <div className="space-y-1">
+              {menuItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 hover:bg-blue-50 hover:text-[#1E73B8]"
+                >
+                  <item.icon className="text-base text-[#1E73B8]" />
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 px-3 sm:hidden">
+        <div ref={mobileRailRef} className="pointer-events-auto flex justify-end">
+          {menuOpen ? (
+            <>
+              <button
+                type="button"
+                aria-label="Close quick actions"
+                onClick={() => setMenuOpen(false)}
+                className="fixed inset-0 z-40 bg-black/25"
+              />
+              <div className="fixed inset-x-3 bottom-20 z-50 rounded-3xl border border-blue-100 bg-white p-4 shadow-2xl">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-800">Quick Access</p>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(false)}
+                    className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {menuItems.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-2xl border border-gray-100 px-3 py-3 text-sm font-medium text-gray-700 transition-colors duration-200 hover:bg-blue-50 hover:text-[#1E73B8]"
+                    >
+                      <item.icon className="text-base text-[#1E73B8]" />
+                      <span>{item.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          <div className="flex max-w-max items-center gap-3 rounded-full border border-blue-100 bg-white/95 px-3 py-2 shadow-xl backdrop-blur">
+            <button
+              type="button"
+              aria-label="Open quick actions"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((current) => !current)}
+              className={railButtonClass(menuOpen)}
+            >
+              <CgMenuGridO />
+            </button>
+
+            {quickActions.map((action) =>
+              action.external ? (
+                <a
+                  key={action.key}
+                  href={action.href}
+                  aria-label={action.label}
+                  className={railButtonClass(action.isActive)}
+                >
+                  <action.icon />
+                  {action.badge ? (
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {action.badge}
+                    </span>
+                  ) : null}
+                </a>
+              ) : (
+                <Link
+                  key={action.key}
+                  href={action.href}
+                  aria-label={action.label}
+                  className={railButtonClass(action.isActive)}
+                >
+                  <action.icon />
+                  {action.badge ? (
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                      {action.badge}
+                    </span>
+                  ) : null}
+                </Link>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default FloatingQuickRail

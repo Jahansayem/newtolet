@@ -1,0 +1,409 @@
+[
+  {
+    "id": 1,
+    "category": "Family",
+    "property_type": "Flat",
+    "specifications": {
+      "total_rooms": 3,
+      "total_bathrooms": 2,
+      "balcony": 2,
+      "floor_level": "3rd Floor",
+      "occupancy": "Only Family",
+      "room_size_sqft": 180
+    },
+    "pricing": {
+      "rent_amount_bdt": 25000,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Dhaka",
+      "area": "Uttara",
+      "contact_number": "+8801788888888",
+      "short_description": "A clean and airy flat suitable for small families.",
+      "sector": "Sector 7",
+      "road": "Road 5",
+      "house_plot": "House 12/B",
+      "location_link": "https://maps.google.com/?q=uttara+sector+7"
+    },
+    "amenities": [
+      "Lift",
+      "Gas Connection",
+      "CCTV",
+      "WiFi"
+    ],
+    "availability": {
+      "available_from": "2025-01-10",
+      "deadline": "2025-02-10"
+    },
+    "images": [
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 2,
+    "category": "Office",
+    "property_type": "Floor",
+    "specifications": {
+      "total_rooms": 5,
+      "total_bathrooms": 2,
+      "balcony": 0,
+      "floor_level": "6th Floor",
+      "occupancy": "No Restriction"
+    },
+    "pricing": {
+      "rent_amount_bdt": 55000,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Dhaka",
+      "area": "Banani",
+      "contact_number": "+8801999445566",
+      "short_description": "Perfect commercial floor for startups or small offices.",
+      "sector": "Block C",
+      "road": "Road 11",
+      "house_plot": "Plot 22",
+      "location_link": "https://maps.google.com/?q=banani+road+11"
+    },
+    "amenities": [
+      "Lift",
+      "Generator",
+      "CCTV",
+      "Security Alarm"
+    ],
+    "availability": {
+      "available_from": "2025-01-05",
+      "deadline": "2025-03-01"
+    },
+    "images": [
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 3,
+    "category": "Bachelor",
+    "property_type": "Room",
+    "specifications": {
+      "total_rooms": 1,
+      "total_bathrooms": 1,
+      "balcony": 0,
+      "floor_level": "Ground Level",
+      "occupancy": "Only Male",
+      "room_size_sqft": 120
+    },
+    "pricing": {
+      "rent_amount_bdt": 5500,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Dhaka",
+      "area": "Mohakhali",
+      "contact_number": "+8801711002299",
+      "short_description": "A quiet bachelor room near bus stand.",
+      "sector": "",
+      "road": "Link Road",
+      "house_plot": "House 44/2",
+      "location_link": "https://maps.google.com/?q=mohakhali"
+    },
+    "amenities": [
+      "WiFi",
+      "CCTV"
+    ],
+    "availability": {
+      "available_from": "2025-01-01",
+      "deadline": "2025-01-25"
+    },
+    "images": [
+      "https://i.postimg.cc/fyqY0XMW/istockphoto-1057252894-2048x2048.jpg",
+      "https://i.postimg.cc/fyqY0XMW/istockphoto-1057252894-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 4,
+    "category": "Hostel",
+    "property_type": "Seat",
+    "specifications": {
+      "total_rooms": 1,
+      "total_bathrooms": 1,
+      "balcony": 1,
+      "floor_level": "2nd Floor",
+      "occupancy": "Only Female"
+    },
+    "pricing": {
+      "rent_amount_bdt": 3500,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Chattogram",
+      "area": "GEC Circle",
+      "contact_number": "+8801888776655",
+      "short_description": "Girls hostel seat available with secure environment.",
+      "road": "Road 3",
+      "house_plot": "House 8",
+      "location_link": "https://maps.google.com/?q=gec+circle"
+    },
+    "amenities": [
+      "WiFi",
+      "CCTV",
+      "Garage"
+    ],
+    "availability": {
+      "available_from": "2025-01-12",
+      "deadline": "2025-02-12"
+    },
+    "images": [
+      "https://i.postimg.cc/ZRTN7jRP/istockphoto-2195132029-2048x2048.jpg",
+      "https://i.postimg.cc/ZRTN7jRP/istockphoto-2195132029-2048x2048.jpg",
+      "https://i.postimg.cc/ZRTN7jRP/istockphoto-2195132029-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 5,
+    "category": "Shop",
+    "property_type": "Unit",
+    "specifications": {
+      "total_rooms": 1,
+      "total_bathrooms": 0,
+      "balcony": 0,
+      "floor_level": "Ground Level",
+      "occupancy": "No Restriction",
+      "room_size_sqft": 200
+    },
+    "pricing": {
+      "rent_amount_bdt": 15000,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Sylhet",
+      "area": "Zindabazar",
+      "contact_number": "+8801765432211",
+      "short_description": "Main road shop, good for mobile or clothing business.",
+      "road": "Main Road",
+      "house_plot": "Shop 12",
+      "location_link": "https://maps.google.com/?q=zindabazar"
+    },
+    "amenities": [
+      "Security Alarm",
+      "CCTV"
+    ],
+    "availability": {
+      "available_from": "2025-01-15",
+      "deadline": "2025-03-15"
+    },
+    "restrictions": {
+      "occupancy": "Only Family",
+      "allowed": [
+        "Only Family",
+        "No Restriction"
+      ]
+    },
+    "images": [
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 6,
+    "category": "Family",
+    "property_type": "Flat",
+    "specifications": {
+      "total_rooms": 3,
+      "total_bathrooms": 2,
+      "balcony": 2,
+      "floor_level": "3rd Floor",
+      "occupancy": "Only Family",
+      "room_size_sqft": 180
+    },
+    "pricing": {
+      "rent_amount_bdt": 25000,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Dhaka",
+      "area": "Uttara",
+      "contact_number": "+8801788888888",
+      "short_description": "A clean and airy flat suitable for small families.",
+      "sector": "Sector 7",
+      "road": "Road 5",
+      "house_plot": "House 12/B",
+      "location_link": "https://maps.google.com/?q=uttara+sector+7"
+    },
+    "amenities": [
+      "Lift",
+      "Gas Connection",
+      "CCTV",
+      "WiFi"
+    ],
+    "availability": {
+      "available_from": "2025-01-10",
+      "deadline": "2025-02-10"
+    },
+    "images": [
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 7,
+    "category": "Office",
+    "property_type": "Floor",
+    "specifications": {
+      "total_rooms": 5,
+      "total_bathrooms": 2,
+      "balcony": 0,
+      "floor_level": "6th Floor",
+      "occupancy": "No Restriction"
+    },
+    "pricing": {
+      "rent_amount_bdt": 55000,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Dhaka",
+      "area": "Banani",
+      "contact_number": "+8801999445566",
+      "short_description": "Perfect commercial floor for startups or small offices.",
+      "sector": "Block C",
+      "road": "Road 11",
+      "house_plot": "Plot 22",
+      "location_link": "https://maps.google.com/?q=banani+road+11"
+    },
+    "amenities": [
+      "Lift",
+      "Generator",
+      "CCTV",
+      "Security Alarm"
+    ],
+    "availability": {
+      "available_from": "2025-01-05",
+      "deadline": "2025-03-01"
+    },
+    "images": [
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 8,
+    "category": "Bachelor",
+    "property_type": "Room",
+    "specifications": {
+      "total_rooms": 1,
+      "total_bathrooms": 1,
+      "balcony": 0,
+      "floor_level": "Ground Level",
+      "occupancy": "Only Male",
+      "room_size_sqft": 120
+    },
+    "pricing": {
+      "rent_amount_bdt": 5500,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Dhaka",
+      "area": "Mohakhali",
+      "contact_number": "+8801711002299",
+      "short_description": "A quiet bachelor room near bus stand.",
+      "sector": "",
+      "road": "Link Road",
+      "house_plot": "House 44/2",
+      "location_link": "https://maps.google.com/?q=mohakhali"
+    },
+    "amenities": [
+      "WiFi",
+      "CCTV"
+    ],
+    "availability": {
+      "available_from": "2025-01-01",
+      "deadline": "2025-01-25"
+    },
+    "images": [
+      "https://i.postimg.cc/fyqY0XMW/istockphoto-1057252894-2048x2048.jpg",
+      "https://i.postimg.cc/fyqY0XMW/istockphoto-1057252894-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 9,
+    "category": "Hostel",
+    "property_type": "Seat",
+    "specifications": {
+      "total_rooms": 1,
+      "total_bathrooms": 1,
+      "balcony": 1,
+      "floor_level": "2nd Floor",
+      "occupancy": "Only Female"
+    },
+    "pricing": {
+      "rent_amount_bdt": 3500,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Chattogram",
+      "area": "GEC Circle",
+      "contact_number": "+8801888776655",
+      "short_description": "Girls hostel seat available with secure environment.",
+      "road": "Road 3",
+      "house_plot": "House 8",
+      "location_link": "https://maps.google.com/?q=gec+circle"
+    },
+    "amenities": [
+      "WiFi",
+      "CCTV",
+      "Garage"
+    ],
+    "availability": {
+      "available_from": "2025-01-12",
+      "deadline": "2025-02-12"
+    },
+    "images": [
+      "https://i.postimg.cc/ZRTN7jRP/istockphoto-2195132029-2048x2048.jpg",
+      "https://i.postimg.cc/ZRTN7jRP/istockphoto-2195132029-2048x2048.jpg",
+      "https://i.postimg.cc/ZRTN7jRP/istockphoto-2195132029-2048x2048.jpg"
+    ]
+  },
+  {
+    "id": 10,
+    "category": "Shop",
+    "property_type": "Unit",
+    "specifications": {
+      "total_rooms": 1,
+      "total_bathrooms": 0,
+      "balcony": 0,
+      "floor_level": "Ground Level",
+      "occupancy": "No Restriction",
+      "room_size_sqft": 200
+    },
+    "pricing": {
+      "rent_amount_bdt": 15000,
+      "rent_period": "Monthly"
+    },
+    "location": {
+      "state_district": "Sylhet",
+      "area": "Zindabazar",
+      "contact_number": "+8801765432211",
+      "short_description": "Main road shop, good for mobile or clothing business.",
+      "road": "Main Road",
+      "house_plot": "Shop 12",
+      "location_link": "https://maps.google.com/?q=zindabazar"
+    },
+    "amenities": [
+      "Security Alarm",
+      "CCTV"
+    ],
+    "availability": {
+      "available_from": "2025-01-15",
+      "deadline": "2025-03-15"
+    },
+    "images": [
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg",
+      "https://i.postimg.cc/nrF1mpBn/istockphoto-1470008295-2048x2048.jpg"
+    ]
+  }
+]

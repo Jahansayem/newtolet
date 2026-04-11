@@ -1,0 +1,12 @@
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  RewriteRule ^listdetails/([^/]+)/?$ /listdetails/?id=$1 [L,QSA,NC]
+  RewriteRule ^orderhome/([^/]+)/?$ /orderhome/?id=$1 [L,QSA,NC]
+  RewriteRule ^book/([^/]+)/?$ /book/?id=$1 [L,QSA,NC]
+  RewriteRule ^edit-property/([^/]+)/?$ /edit-property/?propertyId=$1 [L,QSA,NC]
+</IfModule>

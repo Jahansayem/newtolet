@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "category": "Family"
+  },
+  {
+    "id": 2,
+    "category": "Office"
+  },
+  {
+    "id": 3,
+    "category": "Sublet"
+  },
+  {
+    "id": 4,
+    "category": "Bachelor"
+  },
+  {
+    "id": 5,
+    "category": "Hostel"
+  },
+  {
+    "id": 6,
+    "category": "Shop"
+  }
+]

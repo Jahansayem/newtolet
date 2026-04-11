@@ -1,0 +1,138 @@
+import {
+  FiBriefcase,
+  FiClock,
+  FiCreditCard,
+  FiDollarSign,
+  FiFileText,
+  FiGrid,
+  FiHeart,
+  FiHome,
+  FiLayers,
+  FiMapPin,
+  FiPackage,
+  FiStar,
+  FiUser,
+  FiUsers,
+} from 'react-icons/fi'
+import { buildDashboardHref, buildPageHref } from '../../lib/routePaths'
+
+export const USER_PANEL_NAV_ITEMS = [
+  { key: 'dashboard', label: 'Dashboard', href: buildDashboardHref('dashboard'), icon: FiGrid },
+  { key: 'home', label: 'Go to Homepage', href: '/', icon: FiHome },
+  { key: 'orders', label: 'Orders', href: '/my-orders', icon: FiPackage, section: 'Orders & Packages' },
+  {
+    key: 'buy-credits',
+    label: 'Buy Credits',
+    href: buildPageHref('book-buy-credits'),
+    icon: FiCreditCard,
+    section: 'Orders & Packages',
+  },
+  {
+    key: 'myproperties',
+    label: 'My Properties',
+    href: '/my-properties',
+    icon: FiMapPin,
+    section: 'Properties',
+  },
+  {
+    key: 'saved',
+    label: 'Saved Listings',
+    href: buildDashboardHref('saved'),
+    icon: FiHeart,
+    section: 'Properties',
+  },
+  {
+    key: 'unlocked-listings',
+    label: 'Unlocked Listings',
+    href: buildDashboardHref('unlocked-listings'),
+    icon: FiLayers,
+    section: 'Properties',
+  },
+  {
+    key: 'recently-viewed',
+    label: 'Recently Viewed',
+    href: buildDashboardHref('recently-viewed'),
+    icon: FiClock,
+    section: 'Properties',
+  },
+  {
+    key: 'earnings',
+    label: 'Earnings',
+    href: buildDashboardHref('earnings'),
+    icon: FiDollarSign,
+    section: 'Earn With Us',
+  },
+  {
+    key: 'job-feed',
+    label: 'Job Feed',
+    href: buildDashboardHref('job-feed'),
+    icon: FiBriefcase,
+    section: 'Earn With Us',
+  },
+  {
+    key: 'job-history',
+    label: 'Job History',
+    href: buildDashboardHref('job-history'),
+    icon: FiClock,
+    section: 'Earn With Us',
+  },
+  {
+    key: 'referrals',
+    label: 'My Referrals',
+    href: buildDashboardHref('referrals'),
+    icon: FiUsers,
+    section: 'Earn With Us',
+  },
+  {
+    key: 'withdrawals',
+    label: 'Withdrawal History',
+    href: buildDashboardHref('withdrawals'),
+    icon: FiDollarSign,
+    section: 'Earn With Us',
+  },
+  {
+    key: 'wallets',
+    label: 'Wallet',
+    href: buildDashboardHref('wallets'),
+    icon: FiCreditCard,
+    section: 'Financials',
+  },
+  {
+    key: 'invoice-history',
+    label: 'Invoice History',
+    href: buildDashboardHref('invoice-history'),
+    icon: FiFileText,
+    section: 'Financials',
+  },
+  {
+    key: 'profile',
+    label: 'Profile',
+    href: buildDashboardHref('profile'),
+    icon: FiUser,
+    section: 'Account',
+  },
+]
+
+export const groupUserPanelItems = () => {
+  const primary = USER_PANEL_NAV_ITEMS.filter((item) => !item.section)
+  const sections = USER_PANEL_NAV_ITEMS.reduce((acc, item) => {
+    if (!item.section) {
+      return acc
+    }
+
+    if (!acc[item.section]) {
+      acc[item.section] = []
+    }
+
+    acc[item.section].push(item)
+    return acc
+  }, {})
+
+  return {
+    primary,
+    sections,
+  }
+}
+
+export const getUserPanelTitle = (activeKey) =>
+  USER_PANEL_NAV_ITEMS.find((item) => item.key === activeKey)?.label || 'Dashboard'

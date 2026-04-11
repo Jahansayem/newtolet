@@ -1,0 +1,1043 @@
+{
+  "divisions": [
+    {
+      "id": "barishal",
+      "name": "Barishal",
+      "districts": [
+        {
+          "id": "barguna",
+          "name": "Barguna",
+          "upazillas": [
+            { "name": "Amtali", "sub_areas": [] },
+            { "name": "Bamna", "sub_areas": [] },
+            { "name": "Barguna Sadar", "sub_areas": ["Amtolar Par", "Bottola", "Charkalony", "Koraitola", "Lakurtola", "Thana Para", "Town Hall", "Ukil Potti"] },
+            { "name": "Betagi", "sub_areas": [] },
+            { "name": "Patharghata", "sub_areas": [] },
+            { "name": "Taltali", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "barishal",
+          "name": "Barishal",
+          "upazillas": [
+            { "name": "Agailjhara", "sub_areas": [] },
+            { "name": "Airport", "sub_areas": [] },
+            { "name": "Babuganj", "sub_areas": [] },
+            { "name": "Bakerganj", "sub_areas": [] },
+            { "name": "Banaripara", "sub_areas": [] },
+            { "name": "Barishal Sadar", "sub_areas": ["Alekanda", "Amtola", "Bangla Bazar", "Kashipur", "Kazipara", "Nathullabad", "Rupatali", "Sagardi", "Vatikhana"] },
+            { "name": "Bondor", "sub_areas": [] },
+            { "name": "Gaurnadi", "sub_areas": [] },
+            { "name": "Hizla", "sub_areas": [] },
+            { "name": "Kawnia", "sub_areas": [] },
+            { "name": "Mehendiganj", "sub_areas": [] },
+            { "name": "Muladi", "sub_areas": [] },
+            { "name": "Wazirpur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "bhola",
+          "name": "Bhola",
+          "upazillas": [
+            { "name": "Bhola Sadar", "sub_areas": ["Banglabazar", "Kalibari Rd", "Muslim Para", "Ukill Para", "Zugirghol"] },
+            { "name": "Burhanuddin", "sub_areas": [] },
+            { "name": "Char Fasson", "sub_areas": [] },
+            { "name": "Dakshin Aicha", "sub_areas": [] },
+            { "name": "Daulatkhan", "sub_areas": [] },
+            { "name": "Dularhat", "sub_areas": [] },
+            { "name": "Lalmohan", "sub_areas": [] },
+            { "name": "Manpura", "sub_areas": [] },
+            { "name": "Shoshivushon", "sub_areas": [] },
+            { "name": "Tazumuddin", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "jhalokati",
+          "name": "Jhalokati",
+          "upazillas": [
+            { "name": "Jhalokati Sadar", "sub_areas": ["Chowmatha", "College Road", "Jelepara", "Kamarpotti", "Pal Bari", "Paschim Chandkathi", "Purbo Chandkathi", "Thanar More"] },
+            { "name": "Kathalia", "sub_areas": [] },
+            { "name": "Nalchity", "sub_areas": [] },
+            { "name": "Rajapur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "patuakhali",
+          "name": "Patuakhali",
+          "upazillas": [
+            { "name": "Bauphal", "sub_areas": [] },
+            { "name": "Dashmina", "sub_areas": [] },
+            { "name": "Dumki", "sub_areas": [] },
+            { "name": "Galachipa", "sub_areas": [] },
+            { "name": "Kalapara", "sub_areas": [] },
+            { "name": "Mirzaganj", "sub_areas": [] },
+            { "name": "Patuakhali Sadar", "sub_areas": ["Arambag", "Banani", "Hetalia", "Notun Bazar", "Shantibag", "Shobuzbag"] },
+            { "name": "Rangabali", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "pirojpur",
+          "name": "Pirojpur",
+          "upazillas": [
+            { "name": "Bhandaria", "sub_areas": [] },
+            { "name": "Kaukhali", "sub_areas": [] },
+            { "name": "Mathbaria", "sub_areas": [] },
+            { "name": "Nazirpur", "sub_areas": [] },
+            { "name": "Nesarabad", "sub_areas": [] },
+            { "name": "Pirojpur Sadar", "sub_areas": ["C I Para", "Khumuria", "Masimpur", "Palpara", "Saheb Para", "Shaikh Para", "Shikarpur"] },
+            { "name": "Zianagar", "sub_areas": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chattogram",
+      "name": "Chattogram",
+      "districts": [
+        {
+          "id": "bandarban",
+          "name": "Bandarban",
+          "upazillas": [
+            { "name": "Ali kadam", "sub_areas": [] },
+            { "name": "Bandarban Sadar", "sub_areas": [] },
+            { "name": "Lama", "sub_areas": [] },
+            { "name": "Naikhongchhari", "sub_areas": [] },
+            { "name": "Rowangchhari", "sub_areas": [] },
+            { "name": "Ruma", "sub_areas": [] },
+            { "name": "Thanchi", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "brahmanbaria",
+          "name": "Brahmanbaria",
+          "upazillas": [
+            { "name": "Akhaura", "sub_areas": [] },
+            { "name": "Ashuganj", "sub_areas": [] },
+            { "name": "Bancharampur", "sub_areas": [] },
+            { "name": "Bijoynagar", "sub_areas": [] },
+            { "name": "Brahmanbaria Sadar", "sub_areas": ["Banik Para", "College Para", "Halder Para", "Kandi Para", "Kawtoli", "Kazi Para", "Moddopara", "Moulovi Para", "Munsef Para", "North Mourail", "Paik Para", "South Mourail", "Vadughar Bazar", "West Medda"] },
+            { "name": "Kasba", "sub_areas": [] },
+            { "name": "Nabinagar", "sub_areas": [] },
+            { "name": "Nasirnagar", "sub_areas": [] },
+            { "name": "Sarail", "sub_areas": [] },
+            { "name": "Shahbazpur Town", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "chandpur",
+          "name": "Chandpur",
+          "upazillas": [
+            { "name": "Chandpur Sadar", "sub_areas": [] },
+            { "name": "Faridganj", "sub_areas": [] },
+            { "name": "Haimchar", "sub_areas": [] },
+            { "name": "Haziganj", "sub_areas": [] },
+            { "name": "Kachua", "sub_areas": [] },
+            { "name": "Matlab Dakkhin", "sub_areas": [] },
+            { "name": "Matlab Uttar", "sub_areas": [] },
+            { "name": "Shahrasti", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "chattogram",
+          "name": "Chattogram",
+          "upazillas": [
+            { "name": "Akbor Shah", "sub_areas": [] },
+            { "name": "Anwara", "sub_areas": [] },
+            { "name": "Baijid bostami", "sub_areas": ["Bangla Bazar", "Chandra Nagar", "Oxygen", "Rahman Nagar"] },
+            { "name": "Bakolia", "sub_areas": ["Dewan Bazar", "Hatkhola", "Hillview R/A", "Rahattarpul"] },
+            { "name": "Bandar", "sub_areas": [] },
+            { "name": "Banshkhali", "sub_areas": [] },
+            { "name": "Boalkhali", "sub_areas": [] },
+            { "name": "Chandanaish", "sub_areas": [] },
+            { "name": "Chandgaon", "sub_areas": ["Bahaddarhat"] },
+            { "name": "Chokbazar", "sub_areas": ["Chandanpura"] },
+            { "name": "Doublemooring", "sub_areas": ["Agrabad", "Choumohoni", "Dewanhat", "Gosaildanga"] },
+            { "name": "EPZ", "sub_areas": [] },
+            { "name": "Fatikchhari", "sub_areas": ["Bibir Hat"] },
+            { "name": "Hali Shohor", "sub_areas": ["Rampur"] },
+            { "name": "Hathazari", "sub_areas": [] },
+            { "name": "Kornafuli", "sub_areas": [] },
+            { "name": "Kotwali", "sub_areas": ["Andar Killa", "Kazir Dewri", "Mehedibag"] },
+            { "name": "Kulshi", "sub_areas": ["Cosmopolitan", "GEC", "Khulshi RA", "Lal Khan Bazar", "Rose Valley RA"] },
+            { "name": "Lohagara", "sub_areas": [] },
+            { "name": "Mirsharai", "sub_areas": [] },
+            { "name": "Pahartali", "sub_areas": [] },
+            { "name": "Panchlaish", "sub_areas": ["Al Falah", "Badurtola", "Hamjarbag", "Kapasgola", "Katalganj R/A", "Mohammadpur", "Muradpur", "Nasirabad", "Panchlaish R/A", "Sholokbahar", "Sholoshohor", "Sugandha"] },
+            { "name": "Patiya", "sub_areas": [] },
+            { "name": "Potenga", "sub_areas": [] },
+            { "name": "Rangunia", "sub_areas": [] },
+            { "name": "Raozan", "sub_areas": [] },
+            { "name": "Sandwip", "sub_areas": [] },
+            { "name": "Satkania", "sub_areas": [] },
+            { "name": "Shodhorgat", "sub_areas": [] },
+            { "name": "Sitakunda", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "cumilla",
+          "name": "Comilla",
+          "upazillas": [
+            { "name": "Barura", "sub_areas": [] },
+            { "name": "Brahmanpara", "sub_areas": [] },
+            { "name": "Burichong", "sub_areas": [] },
+            { "name": "Chandina", "sub_areas": [] },
+            { "name": "Chauddagram", "sub_areas": [] },
+            { "name": "Comilla Sadar", "sub_areas": ["Bagichagoun", "Bhatpara", "Champaknagar", "Chawkbazar", "Chotora", "Chowmuhani", "Daulatpur", "Dharmapur", "Jhautola", "Kandirpar", "Kuchaituli", "Mogoltuli", "Muradpur", "Raajgonz", "Race Course", "Ranir Bazar", "South Chartha", "Thakur Para"] },
+            { "name": "Comilla Sadar South", "sub_areas": ["EPZ 1 No Gate", "Shaktola"] },
+            { "name": "Daudkandi", "sub_areas": [] },
+            { "name": "Debidwar", "sub_areas": [] },
+            { "name": "Homna", "sub_areas": [] },
+            { "name": "Laksam", "sub_areas": [] },
+            { "name": "Meghna", "sub_areas": [] },
+            { "name": "Monohorgonj", "sub_areas": [] },
+            { "name": "Muradnagar", "sub_areas": [] },
+            { "name": "Nangalkot", "sub_areas": [] },
+            { "name": "Titas", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "coxs_bazar",
+          "name": "Cox's Bazar",
+          "upazillas": [
+            { "name": "Chakaria", "sub_areas": [] },
+            { "name": "Cox's Bazar Sadar", "sub_areas": ["Baharchara", "Burmese Market", "Dokkhin Tekpara", "Kolatoli", "Konarpara", "Pahartali", "Rumaliar Chara", "Taraboniar Chara", "Tek Para", "Uttor Tekpara"] },
+            { "name": "Kutubdia", "sub_areas": [] },
+            { "name": "Maheshkhali", "sub_areas": [] },
+            { "name": "Pekua", "sub_areas": [] },
+            { "name": "Ramu", "sub_areas": [] },
+            { "name": "Teknaf", "sub_areas": [] },
+            { "name": "Ukhia", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "feni",
+          "name": "Feni",
+          "upazillas": [
+            { "name": "Chagalnaiya", "sub_areas": [] },
+            { "name": "Daganbhyan", "sub_areas": [] },
+            { "name": "Feni Sadar", "sub_areas": ["Arambag", "Barahipur", "Charipur", "College Road", "Daudpur", "Doctor Para", "Khajuriya", "Mohipal", "Shanti Company Road", "Shohortoli"] },
+            { "name": "Fhulgazi", "sub_areas": [] },
+            { "name": "Parshuram", "sub_areas": [] },
+            { "name": "Sonagazi", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "khagrachari",
+          "name": "Khagrachari",
+          "upazillas": [
+            { "name": "Dighinala", "sub_areas": [] },
+            { "name": "Khagrachari", "sub_areas": [] },
+            { "name": "Lakshmichhari", "sub_areas": [] },
+            { "name": "Mahalchhari", "sub_areas": [] },
+            { "name": "Manikchhari", "sub_areas": [] },
+            { "name": "Matiranga", "sub_areas": [] },
+            { "name": "Panchhari", "sub_areas": [] },
+            { "name": "Ramgarh", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "lakshmipur",
+          "name": "Lakshmipur",
+          "upazillas": [
+            { "name": "Komol Nagar", "sub_areas": [] },
+            { "name": "Lakshmipur Sadar", "sub_areas": ["Bagbari", "Chak Bazar", "Dokkhin Temuhoni", "Mandari", "Poddar Bazar", "Uttar Temuhoni"] },
+            { "name": "Raipur", "sub_areas": [] },
+            { "name": "Ramganj", "sub_areas": [] },
+            { "name": "Ramgati", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "noakhali",
+          "name": "Noakhali",
+          "upazillas": [
+            { "name": "Begumganj", "sub_areas": ["Chowmuhani", "Eklashpur"] },
+            { "name": "Chatkhil", "sub_areas": [] },
+            { "name": "Companyganj", "sub_areas": [] },
+            { "name": "Hatia", "sub_areas": [] },
+            { "name": "Kobirhat", "sub_areas": [] },
+            { "name": "Noakhali Sadar", "sub_areas": ["Maijdee", "Master Para", "Uttar Fakirpur"] },
+            { "name": "Shenbag", "sub_areas": [] },
+            { "name": "Sonaimuri", "sub_areas": ["Sonapur"] },
+            { "name": "Suborno Char", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "rangamati",
+          "name": "Rangamati",
+          "upazillas": [
+            { "name": "Bagaichhari", "sub_areas": [] },
+            { "name": "Barkal", "sub_areas": [] },
+            { "name": "Belaichhari", "sub_areas": [] },
+            { "name": "Juraichhari", "sub_areas": [] },
+            { "name": "Kaptai", "sub_areas": [] },
+            { "name": "Kaukhali", "sub_areas": [] },
+            { "name": "Langadu", "sub_areas": [] },
+            { "name": "Nannerchar", "sub_areas": [] },
+            { "name": "Rajasthali", "sub_areas": [] },
+            { "name": "Rangamati Sadar", "sub_areas": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dhaka",
+      "name": "Dhaka",
+      "districts": [
+        {
+          "id": "dhaka",
+          "name": "Dhaka",
+          "upazillas": [
+            { "name": "Adabor", "sub_areas": ["Adabor 10", "Baitul Aman Housing", "Dhaka Housing", "Monsurabad", "PC Culture Housing", "Sunibir Housing"] },
+            { "name": "Airport", "sub_areas": ["Ashkona", "Hazi Camp", "Kurmitola"] },
+            { "name": "Badda", "sub_areas": ["Adarsha Nagar", "Aftab Nagar", "Badda DIT Project", "Beraid", "Khilbari Tek", "Merul Badda", "Middle Badda", "North Badda", "Satarkul", "South Badda"] },
+            { "name": "Banani", "sub_areas": [] },
+            { "name": "Bangshal", "sub_areas": ["Chankharpul", "Nazira Bazar", "Saat Rawza"] },
+            { "name": "Bhashantek", "sub_areas": [] },
+            { "name": "Cantonment", "sub_areas": ["Balughat", "ECB Chattar", "Manikdi", "Matikata"] },
+            { "name": "Chawkbazar", "sub_areas": [] },
+            { "name": "Darussalam", "sub_areas": ["Gabtoli"] },
+            { "name": "Daskhinkhan", "sub_areas": ["Aainusbag", "Faydabad", "Goaltek", "Kawlar", "Kazibari", "Mollapara", "Naddapara"] },
+            { "name": "Demra", "sub_areas": ["Amulia", "Dogair", "Konapara", "Matuail", "Nayapara", "Sanarpar", "Sarulia"] },
+            { "name": "Dhamrai", "sub_areas": ["Amta", "Baishkanda", "Balia", "Bhararia", "Chauhat", "Ganggutia", "Jadabpur", "Kulla", "Kushura", "Nannar", "Roail", "Sanura", "Sombhag", "Suapur", "Sutipara"] },
+            { "name": "Dhanmondi", "sub_areas": ["Dhanmondi 15", "Dhanmondi 32", "Elephant Road", "Rabindra Sorubar", "Shangkar", "Sobhanbagh", "Vuter Goli", "West Dhanmondi", "Zigatola"] },
+            { "name": "Dohar", "sub_areas": [] },
+            { "name": "Gandaria", "sub_areas": ["LPG Point", "Niketon"] },
+            { "name": "Gulshan", "sub_areas": ["Baridhara", "Baridhara DOHS", "Gulshan 1", "Gulshan 2", "Kalachandpur", "Mohakhali", "Nadda", "Niketon", "Shahjadpur"] },
+            { "name": "Hazaribag", "sub_areas": ["Burhanpur", "Nawabganj", "Talibag"] },
+            { "name": "Jatrabari", "sub_areas": ["Bibir Bagicha", "Dania", "Dolairpar", "Kajla", "Matuail", "Mir-Hazirbag", "Rayerbag", "Sheikhdi", "Shonir Akhra"] },
+            { "name": "Kafrul", "sub_areas": ["Kochukhet", "Mohakhali DOHS", "West Kafrul"] },
+            { "name": "Kalabagan", "sub_areas": ["Hatirpul", "Katabon", "Kathalbagan", "Lake Circus Road", "Panthapath"] },
+            { "name": "Kamrangirchar", "sub_areas": ["Hasan Nagar", "Huzurpara", "Karimbag", "Sultanganj"] },
+            { "name": "Keraniganj", "sub_areas": ["Adarshanagar", "Aga Nagar", "Aminpara", "Ati", "Chunkutia", "Godarbag", "Guljarbag", "Hasnabad", "Jilmil RA", "Kadamtali", "Kaliganj", "Khejurbag", "Konakhola", "Malancha", "Naya Bazar", "Nazirbag", "Zinzira"] },
+            { "name": "Khilgaon", "sub_areas": ["Adarshabag", "Ansarbag", "Basabo", "Bhuyanpara", "Goran", "Kadamtala", "Madartek", "Meradia", "Nandibag", "Nandipara", "Nobinbag", "Sipahibag", "Taltola", "Tilpapara"] },
+            { "name": "Khilkhet", "sub_areas": ["Barua", "Bepari Para", "Moddopara", "Namapara", "Nikunja 1", "Nikunja 2", "Noyanagor", "Uttarpara"] },
+            { "name": "Kotwali", "sub_areas": [] },
+            { "name": "Lalbag", "sub_areas": ["Amligola", "Azimpur", "Bakshibazar", "Nawabganj", "Old Dhaka", "Palashi", "Rosulbag", "Sadarghat", "Shahid Nagar"] },
+            { "name": "Mirpur", "sub_areas": ["60 Feet Road", "East Shewrapara", "Gabtoli", "Kallyanpur", "Kazipara", "Mirpur 1", "Mirpur 10", "Mirpur 11", "Mirpur 12", "Mirpur 13", "Mirpur 14", "Mirpur 2", "Mirpur 6", "Mirpur 7", "Mirpur DOHS", "Monipur", "Paikpara", "Pallabi", "Pirerbag", "Rupnagar", "Senpara Parbata", "Shewrapara", "Shiyal Bari", "West Shewrapara"] },
+            { "name": "Mohammadpur", "sub_areas": ["40 Feet", "Bosila", "Chad Uddan", "Chandmiya Housing", "Chandrima Model Town", "Dhaka Housing", "Dhaka Uddan Housing", "Future Town Housing", "Geneva Camp", "Jafrabad", "Japan Garden City", "Kaderabad Housing Society", "Katasur", "Lalmatia", "Mohammadia Housing LTD", "Mohammadia Housing Society", "Nabi Nagar Housing", "Noboudoy Housing", "Rayer Bazar", "Satmosjid Housing", "Shekhertek", "Shyamoli", "Tallabag", "Tikkapara", "Town Hall"] },
+            { "name": "Motijheel", "sub_areas": ["AGB Colony", "Arambag", "Baitul Mukarram", "Fakirapool", "Golapbagh", "Gopibag", "Komlapur", "Rajarbag", "Shantibag", "Shantinagar"] },
+            { "name": "Mugda", "sub_areas": ["Ahmedbag", "Jannatbag", "Manda", "Maniknagar", "Modinabag", "North Mugda", "South Mugda"] },
+            { "name": "Nawabganj", "sub_areas": [] },
+            { "name": "New Market", "sub_areas": ["Nilkhet"] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "Pallabi", "sub_areas": ["Agunda", "Baigertek", "Barontek", "Baunia", "Kalshi", "Shagufta"] },
+            { "name": "Paltan", "sub_areas": ["Naya Paltan", "Shantinagar"] },
+            { "name": "Purbachal", "sub_areas": [] },
+            { "name": "Ramna", "sub_areas": ["Banglamotor", "Eskaton", "Kakrail", "Moghbazar", "Nayatola", "Segunbagicha"] },
+            { "name": "Rampura", "sub_areas": ["Banasree", "Bou Bazar", "East Rampura", "Hazipara", "Mirbag", "Modhubag", "Mohanagar Project", "South Banasree", "Ullan", "West Rampura"] },
+            { "name": "Rupnagar", "sub_areas": [] },
+            { "name": "Sabujbag", "sub_areas": ["Ahammedbag", "Basabo", "Begunbari"] },
+            { "name": "Savar", "sub_areas": ["Aminbazar", "Anandapur", "Ashulia", "Bank Colony", "Bank Town", "Bhatpara", "Bish Mail", "CRP Road", "Dilkushabag", "Genda", "Gerua", "Imandipur", "Islamnagar", "Kuturia", "Mojidpur", "Nobinagar", "Radio Colony", "Shahibagh", "Shimultola", "Vagolpur"] },
+            { "name": "Shah Ali", "sub_areas": ["Kazi Furi", "Turag City"] },
+            { "name": "Shahbag", "sub_areas": [] },
+            { "name": "Shahjahanpur", "sub_areas": ["Gulbagh", "Malibag", "Mouchak", "Shahidbag", "Shantibag", "Siddheswari"] },
+            { "name": "Sher-E-Bangla Nagar", "sub_areas": ["Agargaon"] },
+            { "name": "Shyampur", "sub_areas": ["Jurain", "Meraj Nagar", "Muradpur", "Postagola", "Purba Jurain"] },
+            { "name": "Sutrapur", "sub_areas": ["Gopibag", "Shamibag"] },
+            { "name": "Tejgaon", "sub_areas": ["Arjatpara", "Bijoy Soroni", "Farmgate", "Kamarbari", "Kawran Bazar", "Nakhal Para", "Raja Bazar", "Shukrabad", "Tejkuni Para", "West Rajarbazar"] },
+            { "name": "Tejgaon I/A", "sub_areas": ["Begunbari", "FDC Area", "Nabisco"] },
+            { "name": "Turag", "sub_areas": [] },
+            { "name": "Uttara", "sub_areas": ["Abdullahpur", "Azampur", "Bamnartek", "Baunia", "Bhatuliya", "Dholipara", "Diyabari", "House Building", "Kamarpara", "Ranavola", "Rosdia", "Rupayan City", "Sector 1", "Sector 10", "Sector 11", "Sector 12", "Sector 13", "Sector 14", "Sector 15", "Sector 18", "Sector 2", "Sector 3", "Sector 4", "Sector 5", "Sector 6", "Sector 7", "Sector 8", "Sector 9", "Uttara 16", "Uttara 17"] },
+            { "name": "Uttara West", "sub_areas": [] },
+            { "name": "Uttarkhan", "sub_areas": ["Beparipara", "Gulgulia", "Master Bari", "Nowapara"] },
+            { "name": "Vatara", "sub_areas": ["100 Ft Rood", "Bashundhara R.A", "Kuril", "Natun Bazar", "Nurer Chala", "Sayeed Nagar", "Solmaid"] },
+            { "name": "Wari", "sub_areas": ["Narinda", "Sayedabad", "Tikatuli"] }
+          ]
+        },
+        {
+          "id": "faridpur",
+          "name": "Faridpur",
+          "upazillas": [
+            { "name": "Alfadanga", "sub_areas": [] },
+            { "name": "Bhanga", "sub_areas": [] },
+            { "name": "Boalmari", "sub_areas": [] },
+            { "name": "Charbhadrasan", "sub_areas": [] },
+            { "name": "Faridpur Sadar", "sub_areas": ["Alipur", "Ambika", "Chanmari", "Charkamlapur", "Chawk Bazar", "Guhalaxmipur", "Jhiltuly", "Khabaspur", "Sarda", "Tepakhola"] },
+            { "name": "Madhukhali", "sub_areas": [] },
+            { "name": "Nagarkanda", "sub_areas": [] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "Sadarpur", "sub_areas": [] },
+            { "name": "Shaltha", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "gazipur",
+          "name": "Gazipur",
+          "upazillas": [
+            { "name": "Gazipur sadar", "sub_areas": ["Chandona", "Dakshin Chayabithy", "Gazipur Chowrasta", "Hariken", "Kashimpur", "Konabari", "Kudabo", "Mirer Bazar", "Pubail", "Rajbari", "Salna", "Sardagonj", "Shaha Para", "Shanti polli", "Shimultoli", "Signboard", "Uttar Cyabithy", "Vuruliya"] },
+            { "name": "Joydebpur", "sub_areas": ["Gonimunshir Tek", "Luxmipura", "Marialy", "Munshipara", "Paschim Bilashpur", "Uttar Bilashpur"] },
+            { "name": "Kaliakior", "sub_areas": ["Chandra"] },
+            { "name": "Kaliganj", "sub_areas": [] },
+            { "name": "Kapasia", "sub_areas": [] },
+            { "name": "Sripur", "sub_areas": ["Mulaid"] },
+            { "name": "Tongi", "sub_areas": ["Dattapara"] }
+          ]
+        },
+        {
+          "id": "gopalganj",
+          "name": "Gopalganj",
+          "upazillas": [
+            { "name": "Gopalganj Sadar", "sub_areas": ["Arambag", "Betgram", "Bottola", "Chadmari", "Charmanikdah", "Ghosher Char", "Hemangon", "Mohammad Para", "Shikkhok Polli"] },
+            { "name": "Kashiani", "sub_areas": [] },
+            { "name": "Kotalipara", "sub_areas": [] },
+            { "name": "Muksudpur", "sub_areas": [] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "Tungipara", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "kishoreganj",
+          "name": "Kishoreganj",
+          "upazillas": [
+            { "name": "Astagram", "sub_areas": [] },
+            { "name": "Bajitpur", "sub_areas": [] },
+            { "name": "Bhairab", "sub_areas": [] },
+            { "name": "Hossainpur", "sub_areas": [] },
+            { "name": "Itna", "sub_areas": [] },
+            { "name": "Karimganj", "sub_areas": [] },
+            { "name": "Katiadi", "sub_areas": [] },
+            { "name": "Kishoreganj Sadar", "sub_areas": ["Akhrabazar", "Ekrampur", "Gaital", "Haibatnagar", "Harua", "Kalapara", "Kharampatti", "Mukshedpur", "Nagua", "Nilgonj Road", "Ukilpara"] },
+            { "name": "Kuliarchar", "sub_areas": [] },
+            { "name": "Mithamain", "sub_areas": [] },
+            { "name": "Nikli", "sub_areas": [] },
+            { "name": "Pakundia", "sub_areas": [] },
+            { "name": "Tarail", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "madaripur",
+          "name": "Madaripur",
+          "upazillas": [
+            { "name": "Kalkini", "sub_areas": [] },
+            { "name": "Madaripur Sadar", "sub_areas": ["Amirabad", "Badamtola", "Iterpool", "Mostofapur", "Panichatra", "Pathokkandi"] },
+            { "name": "Rajoir", "sub_areas": [] },
+            { "name": "Shibchar", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "manikganj",
+          "name": "Manikganj",
+          "upazillas": [
+            { "name": "Daulatpur", "sub_areas": [] },
+            { "name": "Ghior", "sub_areas": [] },
+            { "name": "Harirampur", "sub_areas": [] },
+            { "name": "Manikganj Sadar", "sub_areas": ["Beutha", "Bongram R/A", "Gangadhorpotti", "Joyra", "Khalpar", "Paschim Dasora", "Porra", "Uttar Seuta"] },
+            { "name": "Saturia", "sub_areas": [] },
+            { "name": "Shibalaya", "sub_areas": [] },
+            { "name": "Singair", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "munshiganj",
+          "name": "Munshiganj",
+          "upazillas": [
+            { "name": "Gazaria", "sub_areas": [] },
+            { "name": "Lohajang", "sub_areas": [] },
+            { "name": "Munshiganj Sadar", "sub_areas": ["Kachari", "Manikpur", "Mathpara", "Muktarpur", "Panchasar", "Rampal", "Sipahipara"] },
+            { "name": "Sirajdikhan", "sub_areas": [] },
+            { "name": "Sreenagar", "sub_areas": [] },
+            { "name": "Tongibari", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "narayanganj",
+          "name": "Narayanganj",
+          "upazillas": [
+            { "name": "Araihazar", "sub_areas": [] },
+            { "name": "Bandar", "sub_areas": ["Nobigonj"] },
+            { "name": "Naryanganj Sadar", "sub_areas": ["Amlapara", "Beparipara", "Chanmari", "Chashara", "Godenail", "Hajiganj", "Isdair Bazar", "Kadamtoli", "Kutubail", "Masdair"] },
+            { "name": "Rupganj", "sub_areas": [] },
+            { "name": "Siddirgonj", "sub_areas": [] },
+            { "name": "Sonargaon", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "narsingdi",
+          "name": "Narsingdi",
+          "upazillas": [
+            { "name": "Belabo", "sub_areas": [] },
+            { "name": "Monohardi", "sub_areas": [] },
+            { "name": "Narsingdi Sadar", "sub_areas": ["Bashail", "Bilashdi", "Brahmondi", "Chinishpur", "Ghoradia", "Sangita", "Velanagar"] },
+            { "name": "Palash", "sub_areas": [] },
+            { "name": "Raipura , Narsingdi", "sub_areas": [] },
+            { "name": "Shibpur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "rajbari",
+          "name": "Rajbari",
+          "upazillas": [
+            { "name": "Baliakandi", "sub_areas": [] },
+            { "name": "Goalandaghat", "sub_areas": [] },
+            { "name": "Kalukhali", "sub_areas": [] },
+            { "name": "Pangsha", "sub_areas": [] },
+            { "name": "Rajbari Sadar", "sub_areas": ["Aladipur", "Bankpara", "Bhobanipur", "Binodpur", "Boro Pool", "Kazikanda", "Notun Bazar", "Sajjankanda"] }
+          ]
+        },
+        {
+          "id": "shariatpur",
+          "name": "Shariatpur",
+          "upazillas": [
+            { "name": "Bhedarganj", "sub_areas": [] },
+            { "name": "Damudya", "sub_areas": [] },
+            { "name": "Gosairhat", "sub_areas": [] },
+            { "name": "Jajira", "sub_areas": [] },
+            { "name": "Naria", "sub_areas": [] },
+            { "name": "Padma Bridge (South)", "sub_areas": [] },
+            { "name": "Shariatpur Sadar - Palong", "sub_areas": ["Chowrongi Mor"] },
+            { "name": "Sokhipur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "tangail",
+          "name": "Tangail",
+          "upazillas": [
+            { "name": "Basail", "sub_areas": [] },
+            { "name": "Bhuapur", "sub_areas": [] },
+            { "name": "Delduar", "sub_areas": [] },
+            { "name": "Dhanbari", "sub_areas": [] },
+            { "name": "Ghatail", "sub_areas": [] },
+            { "name": "Gopalpur", "sub_areas": [] },
+            { "name": "Kalihati", "sub_areas": [] },
+            { "name": "Madhupur", "sub_areas": [] },
+            { "name": "Mirzapur", "sub_areas": [] },
+            { "name": "Nagarpur", "sub_areas": [] },
+            { "name": "Sakhipur", "sub_areas": [] },
+            { "name": "Tangail Sadar", "sub_areas": ["Aat Pukur Par", "Adalot para", "Adi Tangail", "Biswas Betka", "Capsule Market", "Choto Kalibari", "Dighulia", "Kodalia", "Polashtoli", "Sabalia"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "khulna",
+      "name": "Khulna",
+      "districts": [
+        {
+          "id": "bagerhat",
+          "name": "Bagerhat",
+          "upazillas": [
+            { "name": "Bagerhat Sadar", "sub_areas": ["Amlapara", "Basabati", "Doshani", "Harikhali", "Mitha Pukur", "Munigonj", "Sonatola"] },
+            { "name": "Chitalmari", "sub_areas": [] },
+            { "name": "Fakirhat", "sub_areas": [] },
+            { "name": "Kachua", "sub_areas": [] },
+            { "name": "Mollahat", "sub_areas": [] },
+            { "name": "Mongla", "sub_areas": [] },
+            { "name": "Morrelganj", "sub_areas": [] },
+            { "name": "Rampal", "sub_areas": [] },
+            { "name": "Sarankhola", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "chuadanga",
+          "name": "Chuadanga",
+          "upazillas": [
+            { "name": "Alamdanga", "sub_areas": [] },
+            { "name": "Chuadanga Sadar", "sub_areas": ["Alukdia", "Cinema Hall Para", "Court Para", "Farm Para", "Gulshan Para", "Hatkalugonj", "Hospital Para", "Islam Para", "Kana Pukur Para", "Kedargonj", "Mohila College Para", "Mukti Para", "Polash Para", "Police Line", "Sabuj Para", "Thana Council Para"] },
+            { "name": "Damurhuda", "sub_areas": [] },
+            { "name": "Jibannagar", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "jashore",
+          "name": "Jessore",
+          "upazillas": [
+            { "name": "Abhaynagar", "sub_areas": [] },
+            { "name": "Bagherpara", "sub_areas": [] },
+            { "name": "Chaugachha", "sub_areas": [] },
+            { "name": "Jessore Sadar", "sub_areas": ["Bahadurpur", "Bajpara", "Chachra", "Dhormotola", "Kazipara", "Khorki", "Pulerhat", "Sheikhhati"] },
+            { "name": "Jhikargachha", "sub_areas": [] },
+            { "name": "Keshabpur", "sub_areas": [] },
+            { "name": "Manirampur", "sub_areas": [] },
+            { "name": "Sharsha", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "jhenaidah",
+          "name": "Jhenaidah",
+          "upazillas": [
+            { "name": "Harinakunda", "sub_areas": [] },
+            { "name": "Jhenaidah Sadar", "sub_areas": ["Adarshapara", "Arappur", "Bepari Para", "Chaklapara", "Hamdah", "Kalikapur", "Kanchannagar", "Master Para", "Pabohati", "Paglakanai", "Uposhohor Para"] },
+            { "name": "Kaliganj", "sub_areas": [] },
+            { "name": "Kotchandpur", "sub_areas": [] },
+            { "name": "Maheshpur", "sub_areas": [] },
+            { "name": "Shailkupa", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "khulna",
+          "name": "Khulna",
+          "upazillas": [
+            { "name": "Aranghata", "sub_areas": [] },
+            { "name": "Batiaghata", "sub_areas": [] },
+            { "name": "Dacope", "sub_areas": [] },
+            { "name": "Daulatpur", "sub_areas": [] },
+            { "name": "Dighalia", "sub_areas": [] },
+            { "name": "Dumuria", "sub_areas": [] },
+            { "name": "Harintana", "sub_areas": [] },
+            { "name": "Horintana", "sub_areas": [] },
+            { "name": "Khalishpur", "sub_areas": [] },
+            { "name": "Khanjahan Ali", "sub_areas": [] },
+            { "name": "Khulna Sadar", "sub_areas": ["Bagmara", "Bania Khamar", "Boikali Bazar", "Boyra", "Dolkhola", "Farazipara", "Goborchaka", "Gollamari", "Ikbalnogor", "Mistrypara", "Moulovipara", "Moylapota", "New Market", "Nirala", "PTI More", "Tootpara"] },
+            { "name": "Koyra", "sub_areas": [] },
+            { "name": "Labanchora", "sub_areas": [] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "Paikgachha", "sub_areas": [] },
+            { "name": "Phultala", "sub_areas": [] },
+            { "name": "Rupsa", "sub_areas": [] },
+            { "name": "Sonadanga", "sub_areas": [] },
+            { "name": "Terokhada", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "kushtia",
+          "name": "Kushtia",
+          "upazillas": [
+            { "name": "Bheramara", "sub_areas": [] },
+            { "name": "Daulatpur", "sub_areas": [] },
+            { "name": "Khoksa", "sub_areas": [] },
+            { "name": "Kumarkhali", "sub_areas": [] },
+            { "name": "Kushtia Sadar", "sub_areas": ["Adarshapara", "Aruapara", "Bou Bazar", "Courtpara", "Jamtola", "Kalishonkorpur", "Kataikhana", "Mazampur", "Mongol Baria", "PTI Road", "Rupnagar", "Tali Para"] },
+            { "name": "Mirpur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "magura",
+          "name": "Magura",
+          "upazillas": [
+            { "name": "Magura Sadar", "sub_areas": ["College Para", "Council Para", "Keshtapur", "Molla Para", "Parnanduali", "Ramnagar", "Vaina More"] },
+            { "name": "Mohammadpur", "sub_areas": [] },
+            { "name": "Shalikha", "sub_areas": [] },
+            { "name": "Sreepur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "meherpur",
+          "name": "Meherpur",
+          "upazillas": [
+            { "name": "Angni", "sub_areas": [] },
+            { "name": "Meherpur Sadar", "sub_areas": [] },
+            { "name": "Mujib Nagar", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "narail",
+          "name": "Narail",
+          "upazillas": [
+            { "name": "Kalia", "sub_areas": [] },
+            { "name": "Lohagara", "sub_areas": [] },
+            { "name": "Narail Sadar", "sub_areas": ["Aladatpur", "Baoakhali", "Mohishkhola", "Rupganj"] }
+          ]
+        },
+        {
+          "id": "satkhira",
+          "name": "Satkhira",
+          "upazillas": [
+            { "name": "Assasuni", "sub_areas": [] },
+            { "name": "Debhata", "sub_areas": [] },
+            { "name": "Kalaroa", "sub_areas": [] },
+            { "name": "Kaliganj", "sub_areas": [] },
+            { "name": "Satkhira Sadar", "sub_areas": ["Amtola More", "Itagacha", "Kadamtala", "Modhumollardangi", "Munjitpur", "New Market", "Polashpol"] },
+            { "name": "Shyamnagar", "sub_areas": [] },
+            { "name": "Tala", "sub_areas": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mymensingh",
+      "name": "Mymensingh",
+      "districts": [
+        {
+          "id": "jamalpur",
+          "name": "Jamalpur",
+          "upazillas": [
+            { "name": "Baksiganj", "sub_areas": [] },
+            { "name": "Dewanganj", "sub_areas": [] },
+            { "name": "Islampur", "sub_areas": [] },
+            { "name": "Jamalpur Sadar", "sub_areas": ["Amlapara", "Bank Colony", "Bokultola", "Bosepara", "Doripara", "Gatepar", "Kacharipara", "Lichutala", "Mukundabari", "Nayapara", "Sardarpara", "Shakervita", "Tomaltola More"] },
+            { "name": "Madarganj", "sub_areas": [] },
+            { "name": "Melandaha", "sub_areas": [] },
+            { "name": "Narundi Police I.C", "sub_areas": [] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "Sarishabari", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "mymensingh",
+          "name": "Mymensingh",
+          "upazillas": [
+            { "name": "Bhaluka", "sub_areas": [] },
+            { "name": "Dhobaura", "sub_areas": [] },
+            { "name": "Fulbaria", "sub_areas": [] },
+            { "name": "Gafargaon", "sub_areas": [] },
+            { "name": "Gauripur", "sub_areas": [] },
+            { "name": "Haluaghat", "sub_areas": [] },
+            { "name": "Ishwarganj", "sub_areas": [] },
+            { "name": "Muktagachha", "sub_areas": [] },
+            { "name": "Mymensingh Sadar", "sub_areas": ["Academy Road", "Amla Para", "Aqua", "Baghmara", "Boundary Road", "Brammopolly", "Charpara", "College Road", "Dapunia", "Dhopakhola", "Gohailkandi", "Golpukurpar", "Gulkibari", "Jamtola moor", "Kachijhuli", "Kewatkhali", "Khagdohor", "Kristopur", "Maskanda", "Naumahal", "Nayapara", "Outer Stadium", "Patgudam Rd", "Police Line", "Ponditpara", "Senbari", "Shankipara", "Town Hall", "Vatikashor"] },
+            { "name": "Nandail", "sub_areas": [] },
+            { "name": "Phulpur", "sub_areas": [] },
+            { "name": "Trishal", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "netrakona",
+          "name": "Netrokona",
+          "upazillas": [
+            { "name": "Atpara", "sub_areas": [] },
+            { "name": "Barhatta", "sub_areas": [] },
+            { "name": "Durgapur", "sub_areas": [] },
+            { "name": "Kalmakanda", "sub_areas": [] },
+            { "name": "Kendua", "sub_areas": [] },
+            { "name": "Khaliajuri", "sub_areas": [] },
+            { "name": "Madan", "sub_areas": [] },
+            { "name": "Mohanganj", "sub_areas": [] },
+            { "name": "Netrakona Sadar", "sub_areas": ["Ananda Bazar", "Boro Bazar", "Chawkpara", "Goruhatta", "Islampur", "Jaynagar", "Katli", "Kazi Road", "Kurpar", "Muktarpara", "Nagra", "New Town", "Rajur Bazar", "Satpai"] },
+            { "name": "Purbadhala", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "sherpur",
+          "name": "Sherpur",
+          "upazillas": [
+            { "name": "Jhenaigati", "sub_areas": [] },
+            { "name": "Nakla", "sub_areas": [] },
+            { "name": "Nalitabari", "sub_areas": [] },
+            { "name": "Sherpur Sadar", "sub_areas": ["Bagraksha", "Chapatoli", "Goalpotti", "Kazibari", "Kharampur", "Madhabpur", "Nabinagar", "Newmarket", "Noyani Bazar", "Rajballavpur", "Shingpara"] },
+            { "name": "Sreebardi", "sub_areas": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rajshahi",
+      "name": "Rajshahi",
+      "districts": [
+        {
+          "id": "bogura",
+          "name": "Bogura",
+          "upazillas": [
+            { "name": "Adamdighi", "sub_areas": [] },
+            { "name": "Bogra Sadar", "sub_areas": ["Badurtola", "Bakshi Bazar", "Borogola", "Chalk Sutrapur", "Hajipara", "Jahurul Nagar", "Jalesharitola", "Rahman Nagar"] },
+            { "name": "Dhunat", "sub_areas": [] },
+            { "name": "Dhupchanchia", "sub_areas": [] },
+            { "name": "Gabtali", "sub_areas": [] },
+            { "name": "Kahaloo", "sub_areas": [] },
+            { "name": "Nandigram", "sub_areas": [] },
+            { "name": "Sahajanpur", "sub_areas": [] },
+            { "name": "Sariakandi", "sub_areas": [] },
+            { "name": "Sherpur", "sub_areas": [] },
+            { "name": "Shibganj", "sub_areas": [] },
+            { "name": "Sonatala", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "chapainawabganj",
+          "name": "Chapainawabganj",
+          "upazillas": [
+            { "name": "Bholahat", "sub_areas": [] },
+            { "name": "Chapainawabganj Sadar", "sub_areas": ["Arambag", "Baroghoria", "Belepukur", "Islampur", "Majhpara", "Professor Para", "Shahibag", "Shibtola", "Swarupnagar", "Upor Rajarampur"] },
+            { "name": "Gomastapur", "sub_areas": [] },
+            { "name": "Nachole", "sub_areas": [] },
+            { "name": "Shibganj", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "joypurhat",
+          "name": "Joypurhat",
+          "upazillas": [
+            { "name": "Akkelpur", "sub_areas": [] },
+            { "name": "Joypurhat Sadar", "sub_areas": ["Biswas Para", "Dewan Para", "Dhanmondi", "Khanjanpur", "Masterpara", "Natunhat", "Sabujnagar", "Santinagar", "Shaheb Para", "Shekhpara"] },
+            { "name": "Kalai", "sub_areas": [] },
+            { "name": "Khetlal", "sub_areas": [] },
+            { "name": "Panchbibi", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "naogaon",
+          "name": "Naogaon",
+          "upazillas": [
+            { "name": "Atrai", "sub_areas": [] },
+            { "name": "Badalgachhi", "sub_areas": [] },
+            { "name": "Dhamoirhat", "sub_areas": [] },
+            { "name": "Manda", "sub_areas": [] },
+            { "name": "Mohadevpur", "sub_areas": [] },
+            { "name": "Naogaon Sadar", "sub_areas": ["Alupotti", "Baludanga", "Chak Anaet", "Chakdev", "Chakmukter", "College Para", "Kalitala", "Master Para", "Rojakpur", "Ukil Para"] },
+            { "name": "Niamatpur", "sub_areas": [] },
+            { "name": "Patnitala", "sub_areas": [] },
+            { "name": "Porsha", "sub_areas": [] },
+            { "name": "Raninagar", "sub_areas": [] },
+            { "name": "Sapahar", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "natore",
+          "name": "Natore",
+          "upazillas": [
+            { "name": "Bagatipara", "sub_areas": [] },
+            { "name": "Baraigram", "sub_areas": [] },
+            { "name": "Gurudaspur", "sub_areas": [] },
+            { "name": "Lalpur", "sub_areas": [] },
+            { "name": "Natore Sadar", "sub_areas": ["Alaipur", "Bolaripara", "Bonpara", "Chakrampur", "Horishpur", "Kanaikhali", "Kandivita", "Kathalbaria", "Mallickhati", "Mirpara"] },
+            { "name": "Singra", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "pabna",
+          "name": "Pabna",
+          "upazillas": [
+            { "name": "Aminpur ", "sub_areas": [] },
+            { "name": "Ataikula", "sub_areas": [] },
+            { "name": "Atgharia", "sub_areas": [] },
+            { "name": "Bera", "sub_areas": [] },
+            { "name": "Bhangura", "sub_areas": [] },
+            { "name": "Chatmohar", "sub_areas": [] },
+            { "name": "Faridpur", "sub_areas": [] },
+            { "name": "Ishwardi", "sub_areas": [] },
+            { "name": "Pabna Sadar", "sub_areas": ["Arifpur", "Atua", "Kafil Uddin Para", "Krishnapur", "Lashkarpur", "Mahendrapur", "Narayanpur", "Pailanpur", "Radhanagar", "Ramanandapur", "Satiany"] },
+            { "name": "Santhia", "sub_areas": [] },
+            { "name": "Sujanagar", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "rajshahi",
+          "name": "Rajshahi",
+          "upazillas": [
+            { "name": "Bagha", "sub_areas": [] },
+            { "name": "Bagmara", "sub_areas": [] },
+            { "name": "Boalia", "sub_areas": [] },
+            { "name": "Charghat", "sub_areas": [] },
+            { "name": "Durgapur", "sub_areas": [] },
+            { "name": "Godagari", "sub_areas": [] },
+            { "name": "Mohanpur", "sub_areas": [] },
+            { "name": "Motihar", "sub_areas": [] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "Paba", "sub_areas": [] },
+            { "name": "Puthia", "sub_areas": [] },
+            { "name": "Rajpara", "sub_areas": [] },
+            { "name": "Rajshahi Sadar", "sub_areas": ["Baharampur", "Baliapukur", "Basua", "Bhadra", "Binodpur", "Bornali", "Choto Bonagram", "Dingadoba", "Ghoramara", "Gonokpara", "Hatem Khan", "Hosenigonj", "Jhautola", "Kadirganj", "Katakhali", "Kazihata", "Kazla", "Koroitola", "Koyerdara", "Kumarpara", "Laxmipur", "Meherchandi", "Mohisbathan", "New Bilsimla", "New Market", "Nowdapara", "Padma Residential Area", "Ponchoboti", "Ramchandrapur", "Sadhur More", "Sapura", "Sheikhpara", "Sheroil", "Sipaipara", "Terokhadia", "Tikapara", "Uposhohor", "Vatapara", "Zinnahnagor"] },
+            { "name": "Shahmokhdum", "sub_areas": [] },
+            { "name": "Tanore", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "sirajganj",
+          "name": "Sirajganj",
+          "upazillas": [
+            { "name": "Bangabandhu Bridge West", "sub_areas": [] },
+            { "name": "Belkuchi", "sub_areas": [] },
+            { "name": "Chauhali", "sub_areas": [] },
+            { "name": "Enayetpur", "sub_areas": [] },
+            { "name": "Kamarkhanda", "sub_areas": [] },
+            { "name": "Kazipur", "sub_areas": [] },
+            { "name": "Raiganj", "sub_areas": [] },
+            { "name": "Shahjadpur", "sub_areas": [] },
+            { "name": "Sirajganj Sadar", "sub_areas": ["Bahirgola", "Dhanbandhi", "Ghospara", "Hossainpur", "Janpur", "Kalibari", "Kazipur Mor", "Masimpur", "Sayadhangara", "Shialkol", "Shohidgonj"] },
+            { "name": "Solonga", "sub_areas": [] },
+            { "name": "Tarash", "sub_areas": [] },
+            { "name": "Ullahpara", "sub_areas": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rangpur",
+      "name": "Rangpur",
+      "districts": [
+        {
+          "id": "dinajpur",
+          "name": "Dinajpur",
+          "upazillas": [
+            { "name": "Biral", "sub_areas": [] },
+            { "name": "Birampur", "sub_areas": [] },
+            { "name": "Birganj", "sub_areas": [] },
+            { "name": "Bochaganj", "sub_areas": [] },
+            { "name": "Chirirbandar", "sub_areas": [] },
+            { "name": "Dinajpur Sadar", "sub_areas": ["Fakirpara", "Golapbag", "Kalitola", "Masimpur", "Munshipara", "Professorpara", "Ramnagar", "Suihari", "Uposhohor"] },
+            { "name": "Ghoraghat", "sub_areas": [] },
+            { "name": "Hakimpur", "sub_areas": [] },
+            { "name": "Kaharole", "sub_areas": [] },
+            { "name": "Khansama", "sub_areas": [] },
+            { "name": "Nawabganj", "sub_areas": [] },
+            { "name": "Parbatipur", "sub_areas": [] },
+            { "name": "Phulbari", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "gaibandha",
+          "name": "Gaibandha",
+          "upazillas": [
+            { "name": "Fulchhari", "sub_areas": [] },
+            { "name": "Gaibandha sadar", "sub_areas": ["Bonarpara", "College Para", "Dokkhin Dhanghora", "Fakir para", "Masterpara", "Modoner Para", "Munshipara", "Polash Para", "Purba Para", "Shapla Para", "Thanapara"] },
+            { "name": "Gobindaganj", "sub_areas": [] },
+            { "name": "Palashbari", "sub_areas": [] },
+            { "name": "Sadullapur", "sub_areas": [] },
+            { "name": "Saghata", "sub_areas": [] },
+            { "name": "Sundarganj", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "kurigram",
+          "name": "Kurigram",
+          "upazillas": [
+            { "name": "Bhurungamari", "sub_areas": [] },
+            { "name": "Char Rajibpur", "sub_areas": [] },
+            { "name": "Chilmari", "sub_areas": [] },
+            { "name": "Kurigram Sadar", "sub_areas": ["Choruapara", "Khalilganj", "Shobuj Para", "Taltola", "Vocational More"] },
+            { "name": "Nageshwari", "sub_areas": [] },
+            { "name": "Phulbari", "sub_areas": [] },
+            { "name": "Rajarhat", "sub_areas": [] },
+            { "name": "Rowmari", "sub_areas": [] },
+            { "name": "Ulipur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "lalmonirhat",
+          "name": "Lalmonirhat",
+          "upazillas": [
+            { "name": "Aditmari", "sub_areas": [] },
+            { "name": "Hatibandha", "sub_areas": [] },
+            { "name": "Kaliganj", "sub_areas": [] },
+            { "name": "Lalmanirhat Sadar", "sub_areas": [] },
+            { "name": "Patgram", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "nilphamari",
+          "name": "Nilphamari",
+          "upazillas": [
+            { "name": "Dimla", "sub_areas": [] },
+            { "name": "Domar", "sub_areas": ["Chilahati"] },
+            { "name": "Jaldhaka", "sub_areas": [] },
+            { "name": "Kishoreganj", "sub_areas": [] },
+            { "name": "Nilphamari Sadar", "sub_areas": ["Babupara", "Chowrongi Mor", "Gachbari", "Kalibari", "Kalitola", "Kazipara", "Kukhapara", "Shobuj Para", "Soudagor Para"] },
+            { "name": "Saidpur", "sub_areas": ["Noyatola"] }
+          ]
+        },
+        {
+          "id": "panchagarh",
+          "name": "Panchagarh",
+          "upazillas": [
+            { "name": "Atwari", "sub_areas": [] },
+            { "name": "Boda", "sub_areas": [] },
+            { "name": "Debiganj", "sub_areas": [] },
+            { "name": "Panchagarh Sadar", "sub_areas": ["Dhakkamara", "Docropara", "East Jalashi", "Islambag", "Mosjidpara", "Rowshanabag"] },
+            { "name": "Tetulia", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "rangpur",
+          "name": "Rangpur",
+          "upazillas": [
+            { "name": "Badarganj", "sub_areas": [] },
+            { "name": "Gangachara", "sub_areas": [] },
+            { "name": "Kaunia", "sub_areas": [] },
+            { "name": "Mithapukur", "sub_areas": [] },
+            { "name": "Pirgachha", "sub_areas": [] },
+            { "name": "Pirganj", "sub_areas": [] },
+            { "name": "Rangpur Sadar", "sub_areas": ["Alomnagar", "Ashratpur", "Babukha", "Balapara", "Bashundhara R/A", "Bou Bazar", "Darshana More", "Ganeshpur", "Gomostapara", "Guratipara", "Habibnagar", "Islambag", "Jummapara", "Kamal Kachna", "Kamar Para", "Keranipara", "Khalifa Para", "Kotkipara", "Lalbag", "Lalkuthi", "Mulatol", "Munshi Para", "New Adarsha Para", "New Jummapara", "New Shenpara", "Pirzabad", "Purbo Shalbon", "Shantidhara", "Shatgara", "Shatgara Mistree Paara"] },
+            { "name": "Taraganj", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "thakurgaon",
+          "name": "Thakurgaon",
+          "upazillas": [
+            { "name": "Baliadangi", "sub_areas": [] },
+            { "name": "Haripur", "sub_areas": [] },
+            { "name": "Pirganj", "sub_areas": [] },
+            { "name": "Ranisankail", "sub_areas": [] },
+            { "name": "Thakurgaon Sadar", "sub_areas": ["Ashrampara", "Boshirpara", "College Para", "Goalpara", "Goshpara", "Hazipara", "Islambag", "Kalibari", "Sarkarpara", "Thakurgaon"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sylhet",
+      "name": "Sylhet",
+      "districts": [
+        {
+          "id": "habiganj",
+          "name": "Habiganj",
+          "upazillas": [
+            { "name": "Ajmiriganj", "sub_areas": [] },
+            { "name": "Bahubal", "sub_areas": [] },
+            { "name": "Baniachang", "sub_areas": [] },
+            { "name": "Chunarughat", "sub_areas": [] },
+            { "name": "Habiganj Sadar", "sub_areas": ["Anwarpur", "Gosaipur", "Inatabad", "Natirabad", "North Shyamoli", "Rajnagar", "Sabujbag", "Shaistanagar", "Sultan Mahmudpur"] },
+            { "name": "Lakhai", "sub_areas": [] },
+            { "name": "Madhabpur", "sub_areas": [] },
+            { "name": "Nabiganj", "sub_areas": [] },
+            { "name": "Shaistagonj", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "moulvibazar",
+          "name": "Moulvibazar",
+          "upazillas": [
+            { "name": "Barlekha", "sub_areas": [] },
+            { "name": "Juri", "sub_areas": [] },
+            { "name": "Kamalganj", "sub_areas": [] },
+            { "name": "Kulaura", "sub_areas": [] },
+            { "name": "Moulvibazar Sadar", "sub_areas": ["Borhat", "Borobari", "Chandni Ghat", "Chowmohuna", "Court Road", "Dorga moholla", "Fata Bill", "Hilalpur", "Kalimabad", "Kazir Gaon", "Mostofapur", "Pagulia", "Sultanpur"] },
+            { "name": "Rajnagar", "sub_areas": [] },
+            { "name": "Sreemangal", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "sunamganj",
+          "name": "Sunamganj",
+          "upazillas": [
+            { "name": "Bishwamvarpur", "sub_areas": [] },
+            { "name": "Chhatak", "sub_areas": [] },
+            { "name": "Derai", "sub_areas": [] },
+            { "name": "Dharampasha", "sub_areas": [] },
+            { "name": "Dowarabazar", "sub_areas": [] },
+            { "name": "Jagannathpur", "sub_areas": [] },
+            { "name": "Jamalganj", "sub_areas": [] },
+            { "name": "Shanthiganj", "sub_areas": [] },
+            { "name": "Sulla", "sub_areas": [] },
+            { "name": "Sunamganj Sadar", "sub_areas": ["Ali Para", "Banani Para", "Hajipara", "Hason Nogor", "Jamtola", "Kalayea", "Kazir Point", "Mallikpur", "Notun Para", "Shologhar"] },
+            { "name": "Tahirpur", "sub_areas": [] }
+          ]
+        },
+        {
+          "id": "sylhet",
+          "name": "Sylhet",
+          "upazillas": [
+            { "name": "Airport", "sub_areas": [] },
+            { "name": "Balaganj", "sub_areas": [] },
+            { "name": "Beanibazar", "sub_areas": [] },
+            { "name": "Bishwanath", "sub_areas": [] },
+            { "name": "Companiganj", "sub_areas": [] },
+            { "name": "Dakshin Surma", "sub_areas": [] },
+            { "name": "Fenchuganj", "sub_areas": [] },
+            { "name": "Golapganj", "sub_areas": [] },
+            { "name": "Gowainghat", "sub_areas": [] },
+            { "name": "Hazrat Shah Paran", "sub_areas": [] },
+            { "name": "Jaintiapur", "sub_areas": [] },
+            { "name": "Jalalabad", "sub_areas": [] },
+            { "name": "Kanaighat", "sub_areas": [] },
+            { "name": "Kowtali", "sub_areas": [] },
+            { "name": "Moglabazar", "sub_areas": [] },
+            { "name": "Nobigonj", "sub_areas": [] },
+            { "name": "Osmani Nagar", "sub_areas": [] },
+            { "name": "Others", "sub_areas": [] },
+            { "name": "South Surma", "sub_areas": [] },
+            { "name": "Sylhet Sadar", "sub_areas": ["Ambarkhana", "Chubra", "Kadamtoli", "Kanishail", "Kazitula", "Khadim Para", "Khasdabir", "Kollanpur", "Kumar Para", "Lama Para", "Lamabazar", "Madina Market", "Majortila", "Mira Bazar", "Pathantula", "Payra", "Shibgonj", "Subid Bazar", "Tultikar", "Upashahar", "Zindabazar"] },
+            { "name": "Zakiganj", "sub_areas": [] }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "country": "Bangladesh",
+    "total_divisions": 8,
+    "total_districts": 64,
+    "source": "thetolet.com",
+    "extracted_at": "2026-03-31",
+    "version": "2.0",
+    "structure": "Division > District (Zilla) > Upazilla > Sub Area"
+  }
+}

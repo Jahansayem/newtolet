@@ -1,168 +1,144 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/fa';
 import { IoMdMail } from 'react-icons/io';
 import { FaPhone, FaLocationDot } from 'react-icons/fa6';
 import { IoChevronUp } from 'react-icons/io5';
 
-const LOGO_SRC = '/logo.png'
-const LOGO_FALLBACK_SRC = '/logo1.png'
+const LOGO_SRC = '/logo.png';
+const LOGO_FALLBACK_SRC = '/logo1.png';
+
+const footerLinks = [
+    { to: '/', label: 'Home' },
+    { to: '/propertylist2', label: 'Property List' },
+    { to: '/addproperty', label: 'Add Property' },
+    { to: '/about', label: 'About Us' },
+    { to: '/contact', label: 'Contact' },
+];
+
+const propertyTypeLinks = [
+    { to: '/propertylist?type=apartment', label: 'Apartments' },
+    { to: '/propertylist?type=house', label: 'Houses' },
+    { to: '/propertylist?type=villa', label: 'Villas' },
+    { to: '/propertylist?type=commercial', label: 'Commercial' },
+    { to: '/propertylist?type=land', label: 'Land' },
+];
+
+const socialLinks = [
+    { href: 'https://facebook.com', icon: FaFacebookF, label: 'Facebook' },
+    { href: 'https://twitter.com', icon: FaTwitter, label: 'Twitter' },
+    { href: 'https://instagram.com', icon: FaInstagram, label: 'Instagram' },
+    { href: 'https://linkedin.com', icon: FaLinkedinIn, label: 'LinkedIn' },
+];
 
 const Footer = () => {
-    const [email, setEmail] = useState('');
-    const [subscribed, setSubscribed] = useState(false);
-
-    const handleSubscribe = (e) => {
-        e.preventDefault();
-        if (email && email.includes('@')) {
-            setSubscribed(true);
-            setEmail('');
-            setTimeout(() => setSubscribed(false), 3000);
-        }
-    };
+    const currentYear = new Date().getFullYear();
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const currentYear = new Date().getFullYear();
-
     return (
-        <footer className='bg-gray-900 text-white '>
-            {/* Main Footer Content */}
-            <div className='mx-auto py-16 px-3 md:px-20 lg:px-32'>
-                <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10'>
-
-                    {/* Brand Section */}
-                    <div className='space-y-5 animate-fade-in-up'>
+        <footer className='mt-16 bg-slate-950 text-white'>
+            <div className='site-shell-wide py-14 md:py-16'>
+                <div className='grid gap-10 border-b border-white/10 pb-12 md:grid-cols-2 xl:grid-cols-[1.15fr_repeat(3,minmax(0,1fr))]'>
+                    <div className='space-y-6'>
                         <img
-                            className='w-40 md:w-44 brightness-0 invert hover:scale-105 transition-transform duration-300'
+                            className='w-40 brightness-0 invert transition-transform duration-300 hover:scale-[1.02] md:w-44'
                             src={LOGO_SRC}
                             alt="Company Logo"
                             onError={(event) => {
-                                event.currentTarget.src = LOGO_FALLBACK_SRC
+                                event.currentTarget.src = LOGO_FALLBACK_SRC;
                             }}
                         />
-                        <p className='text-gray-400 text-sm leading-relaxed'>
-                            Your trusted partner in finding the perfect property. We connect buyers, sellers, and renters with their dream homes through innovative technology and personalized service.
+                        <p className='max-w-md text-sm leading-7 text-slate-300'>
+                            Your trusted partner in finding the right rental property. Search with clearer filters, browse verified listings, and move faster with tools built for real tenants.
                         </p>
-                        <div className='flex gap-3'>
-                            <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
-                                className='w-10 h-10 bg-gray-800 hover:bg-[#1E73B8] rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg'>
-                                <FaFacebookF className='text-sm' />
-                            </a>
-                            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
-                                className='w-10 h-10 bg-gray-800 hover:bg-[#1E73B8] rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg'>
-                                <FaTwitter className='text-sm' />
-                            </a>
-                            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
-                                className='w-10 h-10 bg-gray-800 hover:bg-[#1E73B8] rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg'>
-                                <FaInstagram className='text-sm' />
-                            </a>
-                            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer"
-                                className='w-10 h-10 bg-gray-800 hover:bg-[#1E73B8] rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg'>
-                                <FaLinkedinIn className='text-sm' />
-                            </a>
+                        <div className='flex flex-wrap gap-3'>
+                            {socialLinks.map(({ href, icon: Icon, label }) => (
+                                <a
+                                    key={label}
+                                    href={href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={label}
+                                    className='flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition-all duration-300 hover:border-[#1E73B8] hover:bg-[#1E73B8] hover:text-white'
+                                >
+                                    <Icon className='text-sm' />
+                                </a>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Quick Links */}
-                    <div className='space-y-5 animate-fade-in-up animation-delay-100'>
-                        <h3 className='text-lg font-semibold'>Quick Links</h3>
-                        <ul className='space-y-3 text-gray-400 text-sm'>
-                            <li>
-                                <Link to='/' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Home</Link>
-                            </li>
-                            <li>
-                                <Link to='/propertylist' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Property List</Link>
-                            </li>
-                            <li>
-                                <Link to='/addproperty' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Add Property</Link>
-                            </li>
-                            <li>
-                                <Link to='/about' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>About Us</Link>
-                            </li>
-                            <li>
-                                <Link to='/contact' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Contact</Link>
-                            </li>
+                    <div className='space-y-5'>
+                        <h3 className='text-base font-semibold text-white'>Quick Links</h3>
+                        <ul className='space-y-3 text-sm text-slate-300'>
+                            {footerLinks.map(({ to, label }) => (
+                                <li key={label}>
+                                    <Link to={to} className='inline-flex transition-colors duration-300 hover:text-[#67aee2]'>
+                                        {label}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
 
-                    {/* Property Types */}
-                    <div className='space-y-5 animate-fade-in-up animation-delay-200'>
-                        <h3 className='text-lg font-semibold'>Property Types</h3>
-                        <ul className='space-y-3 text-gray-400 text-sm'>
-                            <li>
-                                <Link to='/propertylist?type=apartment' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Apartments</Link>
-                            </li>
-                            <li>
-                                <Link to='/propertylist?type=house' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Houses</Link>
-                            </li>
-                            <li>
-                                <Link to='/propertylist?type=villa' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Villas</Link>
-                            </li>
-                            <li>
-                                <Link to='/propertylist?type=commercial' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Commercial</Link>
-                            </li>
-                            <li>
-                                <Link to='/propertylist?type=land' className='hover:text-[#1E73B8] hover:translate-x-1 inline-block transition-all duration-300'>Land</Link>
-                            </li>
+                    <div className='space-y-5'>
+                        <h3 className='text-base font-semibold text-white'>Property Types</h3>
+                        <ul className='space-y-3 text-sm text-slate-300'>
+                            {propertyTypeLinks.map(({ to, label }) => (
+                                <li key={label}>
+                                    <Link to={to} className='inline-flex transition-colors duration-300 hover:text-[#67aee2]'>
+                                        {label}
+                                    </Link>
+                                </li>
+                            ))}
                         </ul>
                     </div>
 
-                    {/* Contact & Newsletter */}
-                    <div className='space-y-5 animate-fade-in-up animation-delay-300'>
-                        <h3 className='text-lg font-semibold'>Get In Touch</h3>
-                        <address className='not-italic space-y-3 text-gray-400 text-sm'>
-                            <p className='flex items-center gap-3'>
-                                <FaPhone className='text-[#1E73B8]' />
+                    <div className='space-y-5'>
+                        <h3 className='text-base font-semibold text-white'>Get In Touch</h3>
+                        <address className='space-y-4 text-sm not-italic text-slate-300'>
+                            <p className='flex items-start gap-3'>
+                                <FaPhone className='mt-1 text-[#67aee2]' />
                                 <span>+880 1707346634</span>
                             </p>
-                            <p className='flex items-center gap-3'>
-                                <IoMdMail className='text-[#1E73B8]' />
+                            <p className='flex items-start gap-3 break-all'>
+                                <IoMdMail className='mt-1 text-[#67aee2]' />
                                 <span>newtolet.com@gmail.com</span>
                             </p>
                             <p className='flex items-start gap-3'>
-                                <FaLocationDot className='text-[#1E73B8] mt-1' />
-                                <span>jugidor,Moulvibazar,Sylhet</span>
+                                <FaLocationDot className='mt-1 text-[#67aee2]' />
+                                <span>Jugidor, Moulvibazar, Sylhet</span>
                             </p>
                         </address>
-
-                        {/* Newsletter */}
-
                     </div>
                 </div>
-            </div>
 
-            {/* Bottom Bar */}
-            <div className='border-t border-gray-800'>
-                <div className='mx-auto py-5 px-6 md:px-20 lg:px-32 flex flex-col md:flex-row justify-between items-center gap-4'>
-                    <div></div>
-                    <div className='text-gray-400 text-sm text-center '>
-                        <p>&copy; {currentYear} Property. All rights reserved.</p>
+                <div className='flex flex-col gap-4 py-6 text-center text-sm text-slate-400 md:flex-row md:items-center md:justify-between md:text-left'>
+                    <div>
+                        <p>&copy; {currentYear} NewTolet. All rights reserved.</p>
                         <p className='mt-1'>
                             Developed by{' '}
                             <a
                                 href='https://www.wavezly.com'
                                 target='_blank'
                                 rel='noopener noreferrer'
-                                className='text-white  hover:text-[#1665a0] font-extrabold transition-colors duration-300'
+                                className='font-semibold text-white transition-colors duration-300 hover:text-[#67aee2]'
                             >
                                 Wavezly
                             </a>
                         </p>
                     </div>
-                     <div className='flex justify-end'>
+
                     <button
                         onClick={scrollToTop}
-                        className='w-10 h-10  bg-[#1E73B8] hover:bg-[#1665a0] rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 hover:shadow-lg animate-bounce-in'
+                        className='ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#1E73B8]/30 bg-[#1E73B8] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#1665a0] hover:shadow-lg md:ml-0'
                         aria-label="Scroll to top"
                     >
                         <IoChevronUp className='text-xl' />
                     </button>
                 </div>
-                </div>
-               
             </div>
         </footer>
     );

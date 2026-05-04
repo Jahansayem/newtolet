@@ -183,7 +183,7 @@ const Registration = () => {
     };
 
     return (
-        <div className='relative h-full min-h-[80vh] flex items-center py-8 overflow-hidden bg-gradient-to-br from-white via-blue-50 to-white'>
+        <div className='auth-shell py-8'>
             {/* Animated Wave Background */}
             <div className='absolute inset-0 overflow-hidden'>
                 <svg className='absolute w-full h-full' xmlns='http://www.w3.org/2000/svg'>
@@ -209,71 +209,72 @@ const Registration = () => {
             <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
             <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
-            <form onSubmit={handleSubmit} className='relative z-10 w-full flex items-center justify-center'>
-                <div className='flex flex-col gap-3 m-auto items-start p-8 min-w-[340px] sm:min-w-96 border-2 rounded-2xl login-card-border text-sm shadow-xl bg-white'>
-                <p className='text-2xl mx-auto pb-3 font-semibold w-full text-center'>Registration Here</p>
+            <form onSubmit={handleSubmit} className='auth-form-shell'>
+                <div className='auth-card auth-card-wide login-card-border text-sm'>
+                <p className='auth-title'>Registration Here</p>
+                <p className='auth-subtitle'>Create your account to save properties, manage listings, and unlock contact details faster.</p>
 
                 {message.text && (
-                    <div className={`w-full px-4 py-2 rounded ${
+                    <div className={`auth-message ${
                         message.type === 'success'
-                            ? 'bg-green-100 border border-green-400 text-green-700'
-                            : 'bg-red-100 border border-red-400 text-red-700'
+                            ? 'auth-message-success'
+                            : 'auth-message-error'
                     }`}>
                         {message.text}
                     </div>
                 )}
 
                 <div className='w-full'>
-                    <p className='text-zinc-700 font-medium'>Full Name</p>
+                    <p className='auth-label'>Full Name</p>
                     <input
                         type="text"
                         name="name"
                         value={formData.name}
                         onChange={handleChange}
                         placeholder='Full Name'
-                        className='w-full border border-gray-300 rounded p-2 my-2 focus:outline-none focus:border-[#1E73B8]'
+                        className='auth-input my-2'
                         disabled={isLoading}
                     />
                     {errors.name && <p className='text-red-700 text-xs'>{errors.name}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='text-zinc-700 font-medium'>Email</p>
+                    <p className='auth-label'>Email</p>
                     <input
                         type="email"
                         name="email"
                         value={formData.email}
                         onChange={handleChange}
                         placeholder='Email'
-                        className='w-full border border-gray-300 rounded p-2 my-2 focus:outline-none focus:border-[#1E73B8]'
+                        className='auth-input my-2'
                         disabled={isLoading}
                     />
                     {errors.email && <p className='text-red-700 text-xs'>{errors.email}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='text-zinc-700 font-medium'>Phone Number</p>
+                    <p className='auth-label'>Phone Number</p>
                     <input
                         type="tel"
                         name="phone"
                         value={formData.phone}
                         onChange={handleChange}
                         placeholder='Phone Number (e.g., 01712345678)'
-                        className='w-full border border-gray-300 rounded p-2 my-2 focus:outline-none focus:border-[#1E73B8]'
+                        className='auth-input my-2'
                         disabled={isLoading}
                     />
                     {errors.phone && <p className='text-red-700 text-xs'>{errors.phone}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='text-zinc-700 font-medium'>Password</p>
+                    <p className='auth-label'>Password</p>
                     <input
                         type="password"
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
                         placeholder="Password (6-20 characters)"
-                        className='w-full border border-gray-300 rounded p-2 my-2 focus:outline-none focus:border-[#1E73B8]'
+                        className='auth-input my-2'
                         disabled={isLoading}
                     />
                     {errors.password && <p className='text-red-700 text-xs'>{errors.password}</p>}
@@ -281,7 +282,7 @@ const Registration = () => {
 
                 {/* Referral Field */}
                 <div className='w-full'>
-                    <p className='text-zinc-700 font-medium flex items-center gap-2'>
+                    <p className='auth-label flex items-center gap-2'>
                         <FaGift className='text-green-500' />
                         Referral Username or Code (Optional)
                     </p>
@@ -291,7 +292,7 @@ const Registration = () => {
                         value={formData.referralCode}
                         onChange={handleReferralCodeChange}
                         placeholder='Enter referral username or legacy code'
-                        className='w-full border border-gray-300 rounded p-2 my-2 focus:outline-none focus:border-[#1E73B8]'
+                        className='auth-input my-2'
                         disabled={isLoading}
                         maxLength={32}
                     />
@@ -313,13 +314,13 @@ const Registration = () => {
 
                 <button
                     type="submit"
-                    className='w-full bg-[#1E73B8] py-2 rounded text-white font-medium cursor-pointer hover:bg-[#1a619c] transition disabled:opacity-50 disabled:cursor-not-allowed'
+                    className='auth-submit disabled:cursor-not-allowed disabled:opacity-50'
                     disabled={isLoading}
                 >
                     {isLoading ? "Registering..." : "Register"}
                 </button>
 
-                <p className='py-2 w-full text-center'>
+                <p className='w-full py-2 text-center'>
                     Already have an account?{' '}
                     <Link to='/login' className='text-[#1E73B8] font-medium cursor-pointer hover:underline'>
                         Login

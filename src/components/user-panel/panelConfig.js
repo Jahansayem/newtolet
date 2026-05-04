@@ -113,26 +113,5 @@ export const USER_PANEL_NAV_ITEMS = [
   },
 ]
 
-export const groupUserPanelItems = () => {
-  const primary = USER_PANEL_NAV_ITEMS.filter((item) => !item.section)
-  const sections = USER_PANEL_NAV_ITEMS.reduce((acc, item) => {
-    if (!item.section) {
-      return acc
-    }
-
-    if (!acc[item.section]) {
-      acc[item.section] = []
-    }
-
-    acc[item.section].push(item)
-    return acc
-  }, {})
-
-  return {
-    primary,
-    sections,
-  }
-}
-
 export const getUserPanelTitle = (activeKey) =>
   USER_PANEL_NAV_ITEMS.find((item) => item.key === activeKey)?.label || 'Dashboard'

@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { RxCross2 } from 'react-icons/rx'
 import { listcontext } from '../Route/Listprovaider'
 import CategoryFilterBar from '../Home/CategoryFilterBar'
@@ -9,10 +9,11 @@ import PropertySearchForm from '../Home/PropertySearchForm'
 import { logCustomerSearch } from '../../services/searchHistoryService'
 import {
   DEFAULT_SEARCH_FILTERS,
-  buildSearchParams,
+  buildSearchHref,
   clearSearchFilter,
   getActiveSearchChips,
   getSearchLocationPayload,
+  getSearchRouteContext,
   getSearchPriceSummary,
   hasActiveSearchFilters,
   parseSearchFilters,
@@ -21,14 +22,21 @@ import {
 
 const Propertylist2 = () => {
   const [resultCount, setResultCount] = useState(null)
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const routeParams = useParams()
   const { isLoading, selectedCategory, setSelectedCategory } = useContext(listcontext)
   const lastLoggedSignatureRef = useRef('')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const routeContext = useMemo(
+    () => getSearchRouteContext(location.pathname, routeParams),
+    [location.pathname, routeParams]
+  )
 
   const searchFilters = useMemo(
-    () => parseSearchFilters(searchParams),
-    [searchParams]
+    () => parseSearchFilters(searchParams, routeContext),
+    [routeContext, searchParams]
   )
 
   const activeChips = useMemo(
@@ -75,8 +83,7 @@ const Propertylist2 = () => {
   }, [hasActiveFilters, isLoading, resultCount, searchFilters, searchSignature])
 
   const applyNextFilters = (nextFilters) => {
-    const nextSearchParams = buildSearchParams(nextFilters)
-    setSearchParams(nextSearchParams)
+    navigate(buildSearchHref(nextFilters, routeContext), { replace: true })
   }
 
   const handleFieldChange = (field, value) => {
@@ -90,7 +97,7 @@ const Propertylist2 = () => {
 
   const handleClearAll = () => {
     setSelectedCategory(DEFAULT_SEARCH_FILTERS.category)
-    setSearchParams(new URLSearchParams())
+    navigate(buildSearchHref(DEFAULT_SEARCH_FILTERS, routeContext), { replace: true })
   }
 
   const handleClearChip = (chipKey) => {
@@ -98,26 +105,26 @@ const Propertylist2 = () => {
   }
 
   return (
-    <div className='min-h-screen max-w-[1520px] bg-gray-50 mx-auto py-8 px-3 md:px-20 lg:px-32'>
-      <div className='sticky top-[72px] z-40 -mx-3 mb-6 border-b border-gray-200/80 bg-gray-50/95 px-3 py-3 backdrop-blur md:top-[118px] md:-mx-20 md:px-20 lg:-mx-32 lg:px-32'>
+    <div className='site-shell-wide min-h-screen bg-gray-50 py-6 md:py-8'>
+      <div className='sticky top-[72px] z-40 -mx-4 mb-6 border-b border-gray-200/80 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5 md:top-[118px] lg:-mx-8 lg:px-8 xl:mx-0 xl:px-0'>
         <CategoryFilterBar
           selectedCategory={searchFilters.category}
           onCategorySelect={handleCategorySelect}
         />
       </div>
 
-      <div className='mb-8'>
+      <div className='mb-8 md:mb-10'>
         <Cover />
       </div>
 
-      <div className='mb-8 rounded-[28px] border border-gray-200 bg-white p-5 shadow-sm md:p-6'>
+      <div className='site-card-strong mb-8 p-4 sm:p-5 md:p-6 lg:p-7'>
         <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
-          <div>
-            <p className='text-xs font-semibold uppercase tracking-[0.35em] text-[#1E73B8]'>
+          <div className='max-w-3xl'>
+            <p className='site-kicker'>
               Search Rentals
             </p>
-            <h1 className='mt-3 text-3xl font-bold text-gray-800'>Find properties the way tenants actually search</h1>
-            <p className='mt-2 text-gray-600'>
+            <h1 className='mt-3 text-balance text-3xl font-bold text-gray-800 md:text-4xl lg:text-[2.65rem]'>Find properties the way tenants actually search</h1>
+            <p className='mt-3 text-sm leading-7 text-gray-600 md:text-base'>
               Filter by area, budget, category, property type, and room count with shareable result URLs.
             </p>
           </div>
@@ -125,7 +132,7 @@ const Propertylist2 = () => {
           <button
             type='button'
             onClick={() => setMobileFiltersOpen((current) => !current)}
-            className='inline-flex items-center justify-center rounded-full border border-gray-200 bg-gray-100 px-5 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-200 md:hidden'
+            className='site-button-secondary md:hidden'
           >
             {mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}
           </button>
@@ -144,7 +151,7 @@ const Propertylist2 = () => {
         </div>
 
         {activeChips.length > 0 && (
-          <div className='mt-5 flex flex-wrap items-center gap-2'>
+          <div className='mt-5 flex flex-wrap items-center gap-2.5'>
             {activeChips.map((chip) => (
               <button
                 key={chip.key}
@@ -160,7 +167,7 @@ const Propertylist2 = () => {
             <button
               type='button'
               onClick={handleClearAll}
-              className='inline-flex items-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50'
+              className='site-button-secondary text-sm'
             >
               Clear all
             </button>

@@ -3,6 +3,7 @@ import { useAddProperty } from '../../contexts/AddPropertyContext'
 import { validateScreen4 } from '../../utils/formValidation'
 import ImageUploader from './ImageUploader'
 import IDVerification from './IDVerification'
+import RentDisplay from '../RentDisplay'
 
 const Screen4AmenitiesUpload = () => {
   const { formData, updateFormData, errors, setFormErrors, clearErrors, nextStep } =
@@ -182,9 +183,15 @@ const Screen4AmenitiesUpload = () => {
             <strong>Property Type:</strong> {formData.property_type}
           </p>
           <p>
-            <strong>Price:</strong> ৳{' '}
-            {parseInt(formData.rent_amount_bdt).toLocaleString('en-BD')} per{' '}
-            {formData.rent_period}
+            <strong>Price:</strong>{' '}
+            <RentDisplay
+              pricing={{
+                rent_amount_bdt: formData.rent_amount_bdt,
+                is_rent_negotiable: formData.is_rent_negotiable,
+              }}
+              prefix='৳ '
+              suffix={!formData.is_rent_negotiable || formData.rent_amount_bdt ? `per ${formData.rent_period}` : ''}
+            />
           </p>
           <p>
             <strong>Location:</strong> {formData.area}, {formData.state_district}

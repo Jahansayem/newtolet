@@ -1,5 +1,10 @@
 import { supabase } from './supabaseClient'
-import { authenticatedJsonRequest } from './apiClient'
+import { getAccessToken } from './apiClient'
+import { invokeSupabaseFunction } from './functionClient'
+
+const PROPERTY_IMAGES_BUCKET = 'property-images'
+const MAX_LISTING_REPORT_DAYS = 90
+const LISTING_REPORT_STATUSES = ['approved', 'pending']
 
 const getLocalDateKey = (value) => {
   const date = value instanceof Date ? value : new Date(value)
@@ -14,6 +19,179 @@ const formatReportLabel = (dateKey) => {
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric'
+  })
+}
+
+const normalizeReportBoundary = (value, endOfDay = false) => {
+  if (value instanceof Date) {
+    const normalizedDate = new Date(value)
+    normalizedDate.setHours(endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0)
+    return normalizedDate
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const normalizedDate = new Date(`${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}`)
+
+    if (!Number.isNaN(normalizedDate.getTime())) {
+      return normalizedDate
+    }
+  }
+
+  return null
+}
+
+const normalizeReportRange = (rangeOrDays = 7) => {
+  if (typeof rangeOrDays === 'number') {
+    const safeDays = Math.min(MAX_LISTING_REPORT_DAYS, Math.max(1, rangeOrDays))
+    const startDate = new Date()
+    startDate.setHours(0, 0, 0, 0)
+    startDate.setDate(startDate.getDate() - (safeDays - 1))
+
+    const endDate = new Date()
+    endDate.setHours(23, 59, 59, 999)
+
+    return {
+      startDate,
+      endDate,
+      startDateKey: getLocalDateKey(startDate),
+      endDateKey: getLocalDateKey(endDate),
+      totalDays: safeDays,
+    }
+  }
+
+  const nextStartDate = normalizeReportBoundary(rangeOrDays?.startDate, false)
+  const nextEndDate = normalizeReportBoundary(rangeOrDays?.endDate, true)
+
+  if (!nextStartDate || !nextEndDate || nextStartDate.getTime() > nextEndDate.getTime()) {
+    return normalizeReportRange(7)
+  }
+
+  const requestedTotalDays =
+    Math.floor((nextEndDate.getTime() - nextStartDate.getTime()) / 86400000) + 1
+  const totalDays = Math.min(MAX_LISTING_REPORT_DAYS, Math.max(1, requestedTotalDays))
+  const safeEndDate = new Date(nextStartDate)
+  safeEndDate.setDate(nextStartDate.getDate() + (totalDays - 1))
+  safeEndDate.setHours(23, 59, 59, 999)
+
+  return {
+    startDate: nextStartDate,
+    endDate: safeEndDate,
+    startDateKey: getLocalDateKey(nextStartDate),
+    endDateKey: getLocalDateKey(safeEndDate),
+    totalDays,
+  }
+}
+
+const normalizePhoneForDuplicateKey = (value) => {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const digits = value.replace(/\D/g, '')
+
+  if (!digits) {
+    return ''
+  }
+
+  return digits.length >= 11 ? digits.slice(-11) : digits
+}
+
+const buildDuplicatePropertyMetadata = (properties = []) => {
+  const countsByPhoneKey = {}
+
+  properties.forEach((property) => {
+    const phoneKey = normalizePhoneForDuplicateKey(property?.contact_number)
+
+    if (!phoneKey) {
+      return
+    }
+
+    countsByPhoneKey[phoneKey] = (countsByPhoneKey[phoneKey] || 0) + 1
+  })
+
+  const duplicatePhoneKeys = new Set(
+    Object.entries(countsByPhoneKey)
+      .filter(([, count]) => count > 1)
+      .map(([phoneKey]) => phoneKey)
+  )
+
+  const duplicateMetadataByPropertyId = {}
+
+  properties.forEach((property) => {
+    if (!property?.id) {
+      return
+    }
+
+    const duplicatePhoneKey = normalizePhoneForDuplicateKey(property.contact_number)
+    const duplicateCount = duplicatePhoneKey ? countsByPhoneKey[duplicatePhoneKey] || 0 : 0
+
+    duplicateMetadataByPropertyId[property.id] = {
+      duplicatePhoneKey,
+      duplicateCount,
+      isDuplicatePhone: duplicatePhoneKeys.has(duplicatePhoneKey),
+    }
+  })
+
+  return {
+    duplicateMetadataByPropertyId,
+    duplicatePhoneKeys,
+  }
+}
+
+const applyDuplicateMetadataToProperties = (properties = [], duplicateMetadataByPropertyId = {}) =>
+  (properties || []).map((property) => ({
+    ...property,
+    ...duplicateMetadataByPropertyId[property.id],
+  }))
+
+const sortPropertiesByCreatedAtDesc = (properties = []) =>
+  [...(properties || [])].sort(
+    (left, right) => new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime()
+  )
+
+const buildDuplicatePhoneGroups = (properties = []) => {
+  const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(properties)
+  const sortedProperties = sortPropertiesByCreatedAtDesc(properties)
+  const allPropertiesByPhoneKey = {}
+  const pendingDuplicateGroupsByPhoneKey = {}
+
+  sortedProperties.forEach((property) => {
+    const duplicateMeta = duplicateMetadataByPropertyId[property.id]
+    const phoneKey = duplicateMeta?.duplicatePhoneKey
+
+    if (!phoneKey) {
+      return
+    }
+
+    if (!allPropertiesByPhoneKey[phoneKey]) {
+      allPropertiesByPhoneKey[phoneKey] = []
+    }
+
+    allPropertiesByPhoneKey[phoneKey].push(property)
+
+    if (property.status !== 'pending' || !duplicateMeta?.isDuplicatePhone) {
+      return
+    }
+
+    if (!pendingDuplicateGroupsByPhoneKey[phoneKey]) {
+      pendingDuplicateGroupsByPhoneKey[phoneKey] = []
+    }
+
+    pendingDuplicateGroupsByPhoneKey[phoneKey].push(property)
+  })
+
+  return Object.entries(pendingDuplicateGroupsByPhoneKey).map(([phoneKey, pendingProperties]) => {
+    const previewProperty = pendingProperties[0]
+
+    return {
+      id: phoneKey,
+      duplicatePhoneKey: phoneKey,
+      contact_number: previewProperty?.contact_number || '',
+      pendingDuplicateCount: pendingProperties.length,
+      totalPropertiesCount: allPropertiesByPhoneKey[phoneKey]?.length || pendingProperties.length,
+      previewProperty,
+      latestPendingCreatedAt: previewProperty?.created_at || null,
+    }
   })
 }
 
@@ -242,17 +420,63 @@ const buildPropertyImageMap = (images = []) => {
       return
     }
 
+    const normalizedImageUrl = normalizePropertyImageUrl(image.image_url)
+    if (!normalizedImageUrl) {
+      return
+    }
+
     const existingImages = imageMap.get(image.property_id) || []
-    existingImages.push(image.image_url)
+    if (!existingImages.includes(normalizedImageUrl)) {
+      existingImages.push(normalizedImageUrl)
+    }
     imageMap.set(image.property_id, existingImages)
   })
 
   return imageMap
 }
 
-const normalizeAdminPropertyRecord = (property, imageMap = new Map()) => ({
+const normalizePropertyImageUrl = (value) => {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmedValue = value.trim()
+  if (!trimmedValue) {
+    return null
+  }
+
+  if (/^https?:\/\//i.test(trimmedValue) || trimmedValue.startsWith('data:image/')) {
+    return trimmedValue
+  }
+
+  const bucketPathMatch = trimmedValue.match(/(?:^|\/)property-images\/(.+)$/i)
+  const objectPath = (bucketPathMatch?.[1] || trimmedValue).replace(/^\/+/, '')
+
+  if (!objectPath) {
+    return null
+  }
+
+  const { data } = supabase.storage.from(PROPERTY_IMAGES_BUCKET).getPublicUrl(objectPath)
+  return data?.publicUrl || null
+}
+
+const normalizeSubmitterRecord = (userId, userMap = new Map()) => {
+  const user = userMap.get(userId)
+
+  return {
+    id: userId || null,
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    is_active: user?.is_active !== false,
+  }
+}
+
+const normalizeAdminPropertyRecord = (property, imageMap = new Map(), userMap = new Map()) => ({
   ...property,
+  submitted_by: normalizeSubmitterRecord(property.user_id, userMap),
   images: imageMap.get(property.id) || [],
+  primary_image: imageMap.get(property.id)?.[0] || null,
   status: property.status || 'pending',
   is_featured: property.is_featured || false,
   location: {
@@ -262,6 +486,7 @@ const normalizeAdminPropertyRecord = (property, imageMap = new Map()) => ({
   pricing: {
     rent_amount_bdt: property.rent_amount_bdt,
     rent_period: property.rent_period,
+    is_rent_negotiable: Boolean(property.is_rent_negotiable),
   },
 })
 
@@ -283,21 +508,55 @@ const fetchPropertyImages = async (propertyIds) => {
   return data || []
 }
 
+const fetchPropertySubmitters = async (properties = []) => {
+  const userIds = Array.from(
+    new Set((properties || []).map((property) => property?.user_id).filter(Boolean))
+  )
+
+  if (!userIds.length) {
+    return new Map()
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, email, phone, is_active')
+    .in('id', userIds)
+
+  if (error) {
+    throw error
+  }
+
+  return new Map((data || []).map((user) => [user.id, user]))
+}
+
 export const getAdminPropertyCounts = async () => {
   try {
-    const [totalResult, approvedResult, pendingResult, rejectedResult] = await Promise.all([
+    const [totalResult, approvedResult, pendingResult, rejectedResult, duplicateSourceResult] = await Promise.all([
       supabase.from('properties').select('id', { count: 'exact', head: true }),
       supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
       supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'rejected'),
+      supabase.from('properties').select('id, status, contact_number'),
     ])
 
     const queryError =
-      totalResult.error || approvedResult.error || pendingResult.error || rejectedResult.error
+      totalResult.error ||
+      approvedResult.error ||
+      pendingResult.error ||
+      rejectedResult.error ||
+      duplicateSourceResult.error
 
     if (queryError) {
       throw queryError
     }
+
+    const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(
+      duplicateSourceResult.data || []
+    )
+    const duplicatePending = (duplicateSourceResult.data || []).filter((property) => {
+      const duplicateMeta = duplicateMetadataByPropertyId[property.id]
+      return property.status === 'pending' && duplicateMeta?.isDuplicatePhone
+    }).length
 
     return {
       data: {
@@ -305,6 +564,7 @@ export const getAdminPropertyCounts = async () => {
         approved: approvedResult.count || 0,
         pending: pendingResult.count || 0,
         rejected: rejectedResult.count || 0,
+        duplicatePending,
       },
       error: null,
     }
@@ -316,8 +576,159 @@ export const getAdminPropertyCounts = async () => {
         approved: 0,
         pending: 0,
         rejected: 0,
+        duplicatePending: 0,
       },
       error,
+    }
+  }
+}
+
+export const getAdminDuplicatePhoneGroupsPage = async ({ page = 1, pageSize = 20 } = {}) => {
+  const safePage = Math.max(1, Number(page) || 1)
+  const safePageSize = Math.max(1, Number(pageSize) || 20)
+  const from = (safePage - 1) * safePageSize
+  const to = from + safePageSize - 1
+
+  try {
+    const { data: allProperties, error } = await supabase
+      .from('properties')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    const allGroups = buildDuplicatePhoneGroups(allProperties || [])
+    const pagedGroups = allGroups.slice(from, to + 1)
+
+    if (!pagedGroups.length) {
+      return {
+        data: [],
+        error: null,
+        page: safePage,
+        pageSize: safePageSize,
+        totalCount: allGroups.length,
+        hasMore: false,
+      }
+    }
+
+    const previewPropertyIds = pagedGroups
+      .map((group) => group.previewProperty?.id)
+      .filter(Boolean)
+    const [propertyImages, userMap] = await Promise.all([
+      fetchPropertyImages(previewPropertyIds),
+      fetchPropertySubmitters(pagedGroups.map((group) => group.previewProperty).filter(Boolean)),
+    ])
+    const imageMap = buildPropertyImageMap(propertyImages)
+    const groupsWithPreview = pagedGroups.map((group) => ({
+      ...group,
+      previewProperty: group.previewProperty
+        ? normalizeAdminPropertyRecord(group.previewProperty, imageMap, userMap)
+        : null,
+    }))
+
+    return {
+      data: groupsWithPreview,
+      error: null,
+      page: safePage,
+      pageSize: safePageSize,
+      totalCount: allGroups.length,
+      hasMore: to + 1 < allGroups.length,
+    }
+  } catch (error) {
+    console.error('Error fetching duplicate phone groups:', error)
+    return {
+      data: [],
+      error,
+      page: safePage,
+      pageSize: safePageSize,
+      totalCount: 0,
+      hasMore: false,
+    }
+  }
+}
+
+export const getAdminPropertiesByPhoneGroup = async ({
+  phoneKey = '',
+  page = 1,
+  pageSize = 20,
+} = {}) => {
+  const safePhoneKey = normalizePhoneForDuplicateKey(phoneKey)
+  const safePage = Math.max(1, Number(page) || 1)
+  const safePageSize = Math.max(1, Number(pageSize) || 20)
+  const from = (safePage - 1) * safePageSize
+  const to = from + safePageSize - 1
+
+  if (!safePhoneKey) {
+    return {
+      data: [],
+      error: null,
+      page: safePage,
+      pageSize: safePageSize,
+      totalCount: 0,
+      hasMore: false,
+    }
+  }
+
+  try {
+    const { data: allProperties, error } = await supabase
+      .from('properties')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    const matchingProperties = sortPropertiesByCreatedAtDesc(allProperties || []).filter(
+      (property) => normalizePhoneForDuplicateKey(property?.contact_number) === safePhoneKey
+    )
+    const pagedProperties = matchingProperties.slice(from, to + 1)
+
+    if (!pagedProperties.length) {
+      return {
+        data: [],
+        error: null,
+        page: safePage,
+        pageSize: safePageSize,
+        totalCount: matchingProperties.length,
+        hasMore: false,
+      }
+    }
+
+    const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(allProperties || [])
+    const propertyIds = pagedProperties.map((property) => property.id)
+    const [propertyImages, userMap] = await Promise.all([
+      fetchPropertyImages(propertyIds),
+      fetchPropertySubmitters(pagedProperties),
+    ])
+    const imageMap = buildPropertyImageMap(propertyImages)
+    const propertiesWithImages = pagedProperties.map((property) =>
+      normalizeAdminPropertyRecord(property, imageMap, userMap)
+    )
+    const propertiesWithDuplicateMetadata = applyDuplicateMetadataToProperties(
+      propertiesWithImages,
+      duplicateMetadataByPropertyId
+    )
+
+    return {
+      data: propertiesWithDuplicateMetadata,
+      error: null,
+      page: safePage,
+      pageSize: safePageSize,
+      totalCount: matchingProperties.length,
+      hasMore: to + 1 < matchingProperties.length,
+    }
+  } catch (error) {
+    console.error('Error fetching properties by duplicate phone group:', error)
+    return {
+      data: [],
+      error,
+      page: safePage,
+      pageSize: safePageSize,
+      totalCount: 0,
+      hasMore: false,
     }
   }
 }
@@ -329,6 +740,10 @@ export const getAdminPropertiesPage = async ({ page = 1, pageSize = 20, status =
   const to = from + safePageSize - 1
 
   try {
+    if (status === 'duplicate_pending') {
+      return getAdminDuplicatePhoneGroupsPage({ page: safePage, pageSize: safePageSize })
+    }
+
     let query = supabase
       .from('properties')
       .select('*', { count: 'exact' })
@@ -356,20 +771,38 @@ export const getAdminPropertiesPage = async ({ page = 1, pageSize = 20, status =
       }
     }
 
+    const { data: duplicateSourceProperties, error: duplicateSourceError } = await supabase
+      .from('properties')
+      .select('id, contact_number')
+
+    if (duplicateSourceError) {
+      throw duplicateSourceError
+    }
+
+    const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(
+      duplicateSourceProperties || []
+    )
     const propertyIds = properties.map((property) => property.id)
-    const propertyImages = await fetchPropertyImages(propertyIds)
+    const [propertyImages, userMap] = await Promise.all([
+      fetchPropertyImages(propertyIds),
+      fetchPropertySubmitters(properties),
+    ])
     const imageMap = buildPropertyImageMap(propertyImages)
     const propertiesWithImages = properties.map((property) =>
-      normalizeAdminPropertyRecord(property, imageMap)
+      normalizeAdminPropertyRecord(property, imageMap, userMap)
+    )
+    const propertiesWithDuplicateMetadata = applyDuplicateMetadataToProperties(
+      propertiesWithImages,
+      duplicateMetadataByPropertyId
     )
 
     return {
-      data: propertiesWithImages,
+      data: propertiesWithDuplicateMetadata,
       error: null,
       page: safePage,
       pageSize: safePageSize,
       totalCount: count || 0,
-      hasMore: from + propertiesWithImages.length < (count || 0),
+      hasMore: from + propertiesWithDuplicateMetadata.length < (count || 0),
     }
   } catch (error) {
     console.error('Error fetching paginated admin properties:', error)
@@ -399,10 +832,22 @@ export const getAllProperties = async () => {
     }
 
     const propertyIds = properties.map((p) => p.id)
-    const propertyImages = await fetchPropertyImages(propertyIds)
-    const imageMap = buildPropertyImageMap(propertyImages)
+    let imageMap = new Map()
+    let userMap = new Map()
+
+    try {
+      const [propertyImages, submitterMap] = await Promise.all([
+        fetchPropertyImages(propertyIds),
+        fetchPropertySubmitters(properties),
+      ])
+      imageMap = buildPropertyImageMap(propertyImages)
+      userMap = submitterMap
+    } catch (imageError) {
+      console.warn('Unable to load property images or submitters for admin property list. Continuing with partial data.', imageError)
+    }
+
     const propertiesWithImages = properties.map((property) =>
-      normalizeAdminPropertyRecord(property, imageMap)
+      normalizeAdminPropertyRecord(property, imageMap, userMap)
     )
 
     return { data: propertiesWithImages, error: null }
@@ -428,6 +873,31 @@ export const updatePropertyStatus = async (propertyId, status) => {
     return { data, error: null }
   } catch (error) {
     console.error('Error updating property status:', error)
+    return { data: null, error }
+  }
+}
+
+export const updatePropertiesStatus = async (propertyIds, status) => {
+  try {
+    const safePropertyIds = Array.isArray(propertyIds) ? propertyIds.filter(Boolean) : []
+
+    if (!safePropertyIds.length) {
+      return { data: [], error: null }
+    }
+
+    const { data, error } = await supabase
+      .from('properties')
+      .update({
+        status,
+        reviewed_at: new Date().toISOString()
+      })
+      .in('id', safePropertyIds)
+      .select('id')
+
+    if (error) throw error
+    return { data: data || [], error: null }
+  } catch (error) {
+    console.error('Error updating property statuses:', error)
     return { data: null, error }
   }
 }
@@ -723,16 +1193,25 @@ export const deleteInquiry = async (inquiryId) => {
 
 // ==================== PAYMENT TRANSACTIONS ====================
 
+const PAYMENT_TRANSACTION_RELATIONS = `
+  *,
+  buyer:users!payment_transactions_user_id_fkey(name, email),
+  package:credit_packages!payment_transactions_package_id_fkey(package_name)
+`
+
+const serializeAdminError = (error) => ({
+  code: error?.code || null,
+  message: error?.message || 'Unknown error',
+  details: error?.details || null,
+  hint: error?.hint || null,
+})
+
 // Get all payment transactions
 export const getAllPaymentTransactions = async () => {
   try {
     const { data, error } = await supabase
       .from('payment_transactions')
-      .select(`
-        *,
-        users(name, email),
-        credit_packages(package_name)
-      `)
+      .select(PAYMENT_TRANSACTION_RELATIONS)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -742,8 +1221,8 @@ export const getAllPaymentTransactions = async () => {
     }
     return { data: (data || []).map(mapPaymentTransactionRecord), error: null }
   } catch (error) {
-    console.error('Error fetching payment transactions:', error)
-    return { data: [], error: null }
+    console.error('Error fetching payment transactions:', serializeAdminError(error))
+    return { data: [], error }
   }
 }
 
@@ -752,11 +1231,7 @@ export const getPaymentTransactionsByStatus = async (status) => {
   try {
     let query = supabase
       .from('payment_transactions')
-      .select(`
-        *,
-        users(name, email),
-        credit_packages(package_name)
-      `)
+      .select(PAYMENT_TRANSACTION_RELATIONS)
       .order('created_at', { ascending: false })
 
     query = query.eq('status', status)
@@ -770,8 +1245,8 @@ export const getPaymentTransactionsByStatus = async (status) => {
     }
     return { data: (data || []).map(mapPaymentTransactionRecord), error: null }
   } catch (error) {
-    console.error('Error fetching payment transactions by status:', error)
-    return { data: [], error: null }
+    console.error('Error fetching payment transactions by status:', serializeAdminError(error))
+    return { data: [], error }
   }
 }
 
@@ -824,8 +1299,18 @@ export const updateTransactionStatus = async (transactionId, status) => {
 
 export const approvePaymentTransaction = async (transactionId) => {
   try {
-    const response = await authenticatedJsonRequest(`/api/admin/payments/${transactionId}/approve`, {
-      method: 'POST'
+    const token = await getAccessToken()
+
+    if (!token) {
+      throw new Error('Authentication required')
+    }
+
+    const response = await invokeSupabaseFunction({
+      functionName: 'paymently-approve',
+      token,
+      body: {
+        paymentId: transactionId,
+      },
     })
 
     return {
@@ -946,25 +1431,24 @@ export const getDashboardStats = async () => {
   }
 }
 
-export const getDailyListingReport = async (days = 7) => {
-  const safeDays = Math.max(1, days)
-  const startDate = new Date()
-  startDate.setHours(0, 0, 0, 0)
-  startDate.setDate(startDate.getDate() - (safeDays - 1))
+export const getDailyListingReport = async (rangeOrDays = 7) => {
+  const range = normalizeReportRange(rangeOrDays)
 
   try {
     const { data, error } = await supabase
       .from('properties')
       .select('created_at')
-      .gte('created_at', startDate.toISOString())
+      .in('status', LISTING_REPORT_STATUSES)
+      .gte('created_at', range.startDate.toISOString())
+      .lte('created_at', range.endDate.toISOString())
       .order('created_at', { ascending: true })
 
     if (error) throw error
 
     const countsByDay = {}
-    for (let offset = 0; offset < safeDays; offset += 1) {
-      const day = new Date(startDate)
-      day.setDate(startDate.getDate() + offset)
+    for (let offset = 0; offset < range.totalDays; offset += 1) {
+      const day = new Date(range.startDate)
+      day.setDate(range.startDate.getDate() + offset)
       countsByDay[getLocalDateKey(day)] = 0
     }
 
@@ -987,7 +1471,10 @@ export const getDailyListingReport = async (days = 7) => {
 
     return {
       data: {
-        days: safeDays,
+        days: range.totalDays,
+        totalDays: range.totalDays,
+        startDate: range.startDateKey,
+        endDate: range.endDateKey,
         dailyCounts,
         totalNewListings: dailyCounts.reduce((sum, item) => sum + item.count, 0),
         todaysNewListings: dailyCounts[dailyCounts.length - 1]?.count || 0
@@ -998,9 +1485,9 @@ export const getDailyListingReport = async (days = 7) => {
     console.error('Error fetching daily listing report:', error)
 
     const fallbackDays = []
-    for (let offset = 0; offset < safeDays; offset += 1) {
-      const day = new Date(startDate)
-      day.setDate(startDate.getDate() + offset)
+    for (let offset = 0; offset < range.totalDays; offset += 1) {
+      const day = new Date(range.startDate)
+      day.setDate(range.startDate.getDate() + offset)
       const dateKey = getLocalDateKey(day)
       fallbackDays.push({
         date: dateKey,
@@ -1011,67 +1498,68 @@ export const getDailyListingReport = async (days = 7) => {
 
     return {
       data: {
-        days: safeDays,
+        days: range.totalDays,
+        totalDays: range.totalDays,
+        startDate: range.startDateKey,
+        endDate: range.endDateKey,
         dailyCounts: fallbackDays,
         totalNewListings: 0,
         todaysNewListings: 0
       },
-      error: null
+      error
     }
   }
 }
 
-const buildEmptyEmployeeListingReport = (safeDays, startDate) => {
+const buildEmptySubmitterListingReport = (range) => {
   const dailyRows = []
 
-  for (let offset = 0; offset < safeDays; offset += 1) {
-    const day = new Date(startDate)
-    day.setDate(startDate.getDate() + offset)
+  for (let offset = 0; offset < range.totalDays; offset += 1) {
+    const day = new Date(range.startDate)
+    day.setDate(range.startDate.getDate() + offset)
     const dateKey = getLocalDateKey(day)
 
     dailyRows.push({
       date: dateKey,
       label: formatReportLabel(dateKey),
-      countsByEmployeeId: {},
+      countsBySubmitterId: {},
       total: 0
     })
   }
 
   return {
-    days: safeDays,
-    employees: [],
+    days: range.totalDays,
+    totalDays: range.totalDays,
+    startDate: range.startDateKey,
+    endDate: range.endDateKey,
+    submitters: [],
     dailyRows,
-    todayCountsByEmployeeId: {},
+    todayCountsBySubmitterId: {},
     todayTotal: 0,
-    totalsByEmployeeId: {},
+    totalsBySubmitterId: {},
     grandTotal: 0
   }
 }
 
-export const getDailyEmployeeWiseListingReport = async (days = 7) => {
-  const safeDays = Math.max(1, days)
-  const startDate = new Date()
-  startDate.setHours(0, 0, 0, 0)
-  startDate.setDate(startDate.getDate() - (safeDays - 1))
+export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
+  const range = normalizeReportRange(rangeOrDays)
   const todayDateKey = getLocalDateKey(new Date())
 
-  const emptyReport = buildEmptyEmployeeListingReport(safeDays, startDate)
+  const emptyReport = buildEmptySubmitterListingReport(range)
 
   try {
-    const [recentPropertiesResult, propertyOwnersResult, usersResult] = await Promise.all([
+    const [recentPropertiesResult, usersResult] = await Promise.all([
       supabase
         .from('properties')
         .select('created_at, user_id')
-        .gte('created_at', startDate.toISOString())
+        .in('status', LISTING_REPORT_STATUSES)
+        .gte('created_at', range.startDate.toISOString())
+        .lte('created_at', range.endDate.toISOString())
         .order('created_at', { ascending: true }),
-      supabase
-        .from('properties')
-        .select('user_id'),
       getAllUsers()
     ])
 
     if (recentPropertiesResult.error) throw recentPropertiesResult.error
-    if (propertyOwnersResult.error) throw propertyOwnersResult.error
     if (usersResult.error) throw usersResult.error
 
     const usersById = new Map(
@@ -1080,90 +1568,115 @@ export const getDailyEmployeeWiseListingReport = async (days = 7) => {
         .map((user) => [user.id, user])
     )
 
-    const employeeIds = Array.from(
+    const submitterIds = Array.from(
       new Set(
-        (propertyOwnersResult.data || [])
+        (recentPropertiesResult.data || [])
           .map((property) => property?.user_id)
           .filter(Boolean)
       )
     )
 
-    const employees = employeeIds
-      .map((employeeId) => {
-        const user = usersById.get(employeeId)
+    const submitters = submitterIds
+      .map((submitterId) => {
+        const user = usersById.get(submitterId)
         return {
-          id: employeeId,
-          name: user?.name || user?.email || 'Employee',
+          id: submitterId,
+          name: user?.name || user?.email || 'Unknown User',
           email: user?.email || ''
         }
       })
       .sort((left, right) => left.name.localeCompare(right.name))
-    const employeeIdSet = new Set(employeeIds)
+    const submitterIdSet = new Set(submitterIds)
 
-    if (employees.length === 0) {
+    if (submitters.length === 0) {
       return { data: emptyReport, error: null }
     }
 
-    const dailyCountsByEmployee = {}
-    const todayCountsByEmployeeId = Object.fromEntries(employees.map((employee) => [employee.id, 0]))
+    const dailyCountsBySubmitter = {}
+    const todayCountsBySubmitterId = Object.fromEntries(submitters.map((submitter) => [submitter.id, 0]))
 
     ;(recentPropertiesResult.data || []).forEach((property) => {
-      if (!property?.created_at || !property?.user_id || !employeeIdSet.has(property.user_id)) {
+      if (!property?.created_at || !property?.user_id || !submitterIdSet.has(property.user_id)) {
         return
       }
 
       const dateKey = getLocalDateKey(property.created_at)
-      if (!dailyCountsByEmployee[dateKey]) {
-        dailyCountsByEmployee[dateKey] = {}
+      if (!dailyCountsBySubmitter[dateKey]) {
+        dailyCountsBySubmitter[dateKey] = {}
       }
 
-      dailyCountsByEmployee[dateKey][property.user_id] =
-        (dailyCountsByEmployee[dateKey][property.user_id] || 0) + 1
+      dailyCountsBySubmitter[dateKey][property.user_id] =
+        (dailyCountsBySubmitter[dateKey][property.user_id] || 0) + 1
 
       if (dateKey === todayDateKey) {
-        todayCountsByEmployeeId[property.user_id] += 1
+        todayCountsBySubmitterId[property.user_id] += 1
       }
     })
 
-    const totalsByEmployeeId = Object.fromEntries(employees.map((employee) => [employee.id, 0]))
+    const totalsBySubmitterId = Object.fromEntries(submitters.map((submitter) => [submitter.id, 0]))
 
     const dailyRows = emptyReport.dailyRows.map((day) => {
-      const rawCounts = dailyCountsByEmployee[day.date] || {}
-      const countsByEmployeeId = {}
+      const rawCounts = dailyCountsBySubmitter[day.date] || {}
+      const countsBySubmitterId = {}
       let total = 0
 
-      employees.forEach((employee) => {
-        const count = rawCounts[employee.id] || 0
-        countsByEmployeeId[employee.id] = count
-        totalsByEmployeeId[employee.id] += count
+      submitters.forEach((submitter) => {
+        const count = rawCounts[submitter.id] || 0
+        countsBySubmitterId[submitter.id] = count
+        totalsBySubmitterId[submitter.id] += count
         total += count
       })
 
       return {
         ...day,
-        countsByEmployeeId,
+        countsBySubmitterId,
         total
       }
     })
 
     const grandTotal = dailyRows.reduce((sum, day) => sum + day.total, 0)
-    const todayTotal = Object.values(todayCountsByEmployeeId).reduce((sum, count) => sum + count, 0)
+    const todayTotal = Object.values(todayCountsBySubmitterId).reduce((sum, count) => sum + count, 0)
 
     return {
       data: {
-        days: safeDays,
-        employees,
+        days: range.totalDays,
+        totalDays: range.totalDays,
+        startDate: range.startDateKey,
+        endDate: range.endDateKey,
+        submitters,
         dailyRows,
-        todayCountsByEmployeeId,
+        todayCountsBySubmitterId,
         todayTotal,
-        totalsByEmployeeId,
+        totalsBySubmitterId,
         grandTotal
       },
       error: null
     }
   } catch (error) {
-    console.error('Error fetching daily employee-wise listing report:', error)
-    return { data: emptyReport, error: null }
+    console.error('Error fetching daily submitter-wise listing report:', error)
+    return { data: emptyReport, error }
+  }
+}
+
+export const getDailyEmployeeWiseListingReport = async (days = 7) => {
+  const result = await getDailySubmitterWiseListingReport(days)
+
+  if (!result?.data) {
+    return result
+  }
+
+  return {
+    data: {
+      ...result.data,
+      employees: result.data.submitters,
+      todayCountsByEmployeeId: result.data.todayCountsBySubmitterId,
+      totalsByEmployeeId: result.data.totalsBySubmitterId,
+      dailyRows: result.data.dailyRows.map((day) => ({
+        ...day,
+        countsByEmployeeId: day.countsBySubmitterId
+      }))
+    },
+    error: result.error
   }
 }
 
@@ -1193,11 +1706,12 @@ export const getRecentActivities = async (limit = 10) => {
 // Default credit costs
 const DEFAULT_CREDIT_COSTS = {
   property_listing: 20,
-  contact_view: 10,
-  photo_view: 10
+  contact_view: 20,
+  photo_view: 20
 }
 
 const CREDIT_SETTINGS_ROW_ID = true
+const CREDIT_SETTINGS_COLUMNS = 'property_listing, contact_view, photo_view'
 
 const readLocalJson = (key, fallback) => {
   try {
@@ -1257,14 +1771,31 @@ const buildCreditPackagePayload = (packageData, includeOptionalFields = true) =>
   return payload
 }
 
-const mapCreditSettingsRecord = (record) => ({
-  property_listing: Number(record?.property_listing ?? DEFAULT_CREDIT_COSTS.property_listing),
-  contact_view: Number(record?.contact_view ?? DEFAULT_CREDIT_COSTS.contact_view),
-  photo_view: Number(record?.photo_view ?? DEFAULT_CREDIT_COSTS.photo_view)
-})
+const normalizeSharedUnlockCost = (record) => {
+  const resolvedCost = Number(
+    record?.property_listing ??
+    record?.contact_view ??
+    record?.photo_view ??
+    DEFAULT_CREDIT_COSTS.contact_view
+  )
+
+  return Number.isFinite(resolvedCost) ? resolvedCost : DEFAULT_CREDIT_COSTS.contact_view
+}
+
+const mapCreditSettingsRecord = (record) => {
+  const sharedUnlockCost = normalizeSharedUnlockCost(record)
+
+  return {
+    property_listing: sharedUnlockCost,
+    contact_view: sharedUnlockCost,
+    photo_view: sharedUnlockCost
+  }
+}
 
 const mapPaymentTransactionRecord = (record) => ({
   ...record,
+  users: record?.users || record?.buyer || null,
+  credit_packages: record?.credit_packages || record?.package || null,
   amount: Number(record?.amount ?? record?.amount_bdt ?? 0),
   credits_to_add: Number(record?.credits_to_add ?? 0),
   transaction_id: record?.transaction_id || record?.invoice_id || record?.id,
@@ -1473,7 +2004,7 @@ const saveAutoApproveToFlatSettings = async (enabled) => {
 const getCreditCostsFromTable = async () => {
   const { data, error } = await supabase
     .from('credit_settings')
-    .select('property_listing, contact_view, photo_view')
+    .select(CREDIT_SETTINGS_COLUMNS)
     .eq('id', CREDIT_SETTINGS_ROW_ID)
     .maybeSingle()
 
@@ -1488,17 +2019,70 @@ const getCreditCostsFromTable = async () => {
   return mapCreditSettingsRecord(data)
 }
 
+const getCreditCostsFromSiteSettings = async () => {
+  const { data, error } = await supabase
+    .from('site_settings')
+    .select(`id, ${CREDIT_SETTINGS_COLUMNS}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    throw error
+  }
+
+  if (!data) {
+    return { ...DEFAULT_CREDIT_COSTS }
+  }
+
+  return mapCreditSettingsRecord(data)
+}
+
 const saveCreditCostsToTable = async (costs) => {
+  const sharedUnlockCost = normalizeSharedUnlockCost(costs)
   const payload = {
     id: CREDIT_SETTINGS_ROW_ID,
-    property_listing: Number(costs.property_listing),
-    contact_view: Number(costs.contact_view),
-    photo_view: Number(costs.photo_view)
+    property_listing: sharedUnlockCost,
+    contact_view: sharedUnlockCost,
+    photo_view: sharedUnlockCost
   }
 
   const { data, error } = await supabase
     .from('credit_settings')
     .upsert(payload, { onConflict: 'id' })
+    .select()
+
+  if (error) {
+    throw error
+  }
+
+  return data
+}
+
+const saveCreditCostsToSiteSettings = async (costs) => {
+  const sharedUnlockCost = normalizeSharedUnlockCost(costs)
+
+  const { data: existingRow, error: selectError } = await supabase
+    .from('site_settings')
+    .select('id, setting_key, setting_value')
+    .limit(1)
+    .maybeSingle()
+
+  if (selectError) {
+    throw selectError
+  }
+
+  const payload = {
+    ...(existingRow?.id ? { id: existingRow.id } : {}),
+    setting_key: existingRow?.setting_key || 'global',
+    setting_value: existingRow?.setting_value || 'global',
+    property_listing: sharedUnlockCost,
+    contact_view: sharedUnlockCost,
+    photo_view: sharedUnlockCost
+  }
+
+  const { data, error } = await supabase
+    .from('site_settings')
+    .upsert(payload)
     .select()
 
   if (error) {
@@ -1655,20 +2239,33 @@ export const getCreditCosts = async () => {
   try {
     return await getCreditCostsFromTable()
   } catch (error) {
-    console.error('Error getting credit costs:', error)
-    return { ...DEFAULT_CREDIT_COSTS }
+    if (!isMissingTableError(error)) {
+      console.error('Error getting credit costs from credit_settings:', error)
+    }
+
+    try {
+      return await getCreditCostsFromSiteSettings()
+    } catch (siteSettingsError) {
+      if (!isMissingTableError(siteSettingsError)) {
+        console.error('Error getting credit costs from site_settings:', siteSettingsError)
+      }
+
+      return { ...DEFAULT_CREDIT_COSTS }
+    }
   }
 }
 
 export const saveCreditCosts = async (costs) => {
+  const sharedUnlockCost = normalizeSharedUnlockCost(costs)
   const normalizedCosts = {
-    property_listing: Number(costs.property_listing ?? DEFAULT_CREDIT_COSTS.property_listing),
-    contact_view: Number(costs.contact_view ?? DEFAULT_CREDIT_COSTS.contact_view),
-    photo_view: Number(costs.photo_view ?? DEFAULT_CREDIT_COSTS.photo_view)
+    property_listing: sharedUnlockCost,
+    contact_view: sharedUnlockCost,
+    photo_view: sharedUnlockCost
   }
 
   try {
     await saveCreditCostsToTable(normalizedCosts)
+    await saveCreditCostsToSiteSettings(normalizedCosts)
     return { success: true, error: null }
   } catch (error) {
     console.error('Error saving credit costs:', error)
@@ -1930,5 +2527,70 @@ export const toggleAutoApproveProperties = async (enabled) => {
         missingTable: isMissingTableError(error)
       }
     }
+  }
+}
+
+const normalizeContactUnlockRefundRequest = (record) => ({
+  ...record,
+  credits_restored: Number(record?.credits_restored || 0),
+  contact_view: record?.contact_view || null,
+  user: record?.user || null,
+  property: record?.property || null,
+})
+
+export const getAdminContactUnlockRefundRequests = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('contact_unlock_refund_requests')
+      .select(`
+        *,
+        contact_view:contact_views(id, viewed_at, credits_spent),
+        user:users(id, name, email, phone),
+        property:properties(id, property_id_number, category, area, state_district)
+      `)
+      .order('requested_at', { ascending: false })
+
+    if (error) {
+      const handled = handleTableNotFoundError(error, 'contact_unlock_refund_requests')
+      if (handled.data !== null) {
+        return []
+      }
+      throw error
+    }
+
+    return (data || []).map(normalizeContactUnlockRefundRequest)
+  } catch (error) {
+    console.error('Error fetching contact unlock refund requests:', error)
+    return []
+  }
+}
+
+export const reviewContactUnlockRefundRequest = async (
+  requestId,
+  status,
+  adminNote = ''
+) => {
+  if (!requestId || !status) {
+    return { data: null, error: new Error('Refund request and status are required.') }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('review_contact_unlock_refund_request', {
+      p_request_id: requestId,
+      p_status: status,
+      p_admin_note: adminNote || null,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return {
+      data: normalizeContactUnlockRefundRequest(Array.isArray(data) ? data[0] : data),
+      error: null,
+    }
+  } catch (error) {
+    console.error('Error reviewing contact unlock refund request:', error)
+    return { data: null, error }
   }
 }

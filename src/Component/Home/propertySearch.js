@@ -1,6 +1,13 @@
 import locationData from '../../thetolet_locations_bundle.json'
 import { HOME_CATEGORIES } from './categoryConfig'
 import { buildPageHref, canonicalizeInternalHref } from '../../lib/routePaths.js'
+import { matchesPropertyCategory } from '../../lib/propertyCategories'
+import {
+  DEFAULT_SEARCH_FILTERS,
+  matchesKeywordSearch,
+} from './propertySearchCore'
+export { DEFAULT_SEARCH_FILTERS } from './propertySearchCore'
+export { normalizeSearchQuery } from './propertySearchCore'
 
 export const PROPERTY_TYPE_OPTIONS = [
   'Apartment',
@@ -20,19 +27,26 @@ export const SORT_OPTIONS = [
   { value: 'price_high', label: 'Price: High to Low' },
 ]
 
-export const DEFAULT_SEARCH_FILTERS = {
-  search: '',
-  division: '',
-  district: '',
-  upazilla: '',
-  subArea: '',
-  category: 'All',
-  propertyType: 'All',
-  minPrice: '',
-  maxPrice: '',
-  rooms: '',
-  sort: 'newest',
-}
+const LEGACY_PROPERTY_LIST_PATH = '/bd/property-listing'
+const LEGACY_PROPERTY_DIVISION_PREFIX = '/bd/property-division'
+const LEGACY_DIVISION_SLUGS = Object.freeze({
+  Barishal: 'barishal',
+  Chattogram: 'chittagong',
+  Dhaka: 'dhaka',
+  Khulna: 'khulna',
+  Mymensingh: 'mymensingh',
+  Rajshahi: 'rajshahi',
+  Rangpur: 'rangpur',
+  Sylhet: 'sylhet',
+})
+const LEGACY_DIVISION_NAMES = Object.freeze(
+  Object.entries(LEGACY_DIVISION_SLUGS).reduce((accumulator, [division, slug]) => {
+    accumulator[slug] = division
+    return accumulator
+  }, {
+    chattogram: 'Chattogram',
+  })
+)
 
 const SEARCH_PARAM_KEYS = [
   'search',
@@ -118,6 +132,67 @@ const getValue = (paramsLike, key) => {
   return paramsLike[key] || ''
 }
 
+const normalizePathname = (pathname = '') => {
+  if (!pathname) {
+    return ''
+  }
+
+  return pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname
+}
+
+const getRouteParamValue = (routeParams, key) => {
+  const rawValue = routeParams?.[key]
+
+  if (Array.isArray(rawValue)) {
+    return rawValue[0] || ''
+  }
+
+  return rawValue || ''
+}
+
+export const getLegacyDivisionSlug = (division = '') =>
+  LEGACY_DIVISION_SLUGS[division] || normalizeText(division).replace(/\s+/g, '-')
+
+export const getDivisionFromLegacySlug = (slug = '') =>
+  LEGACY_DIVISION_NAMES[normalizeText(slug)] || ''
+
+export const buildLegacyPropertyListHref = () => LEGACY_PROPERTY_LIST_PATH
+
+export const buildLegacyPropertyDivisionHref = (division = '') => {
+  const slug = getLegacyDivisionSlug(division)
+  return canonicalizeInternalHref(`${LEGACY_PROPERTY_DIVISION_PREFIX}/${slug}`)
+}
+
+export const getSearchRouteContext = (pathname = '', routeParams = {}) => {
+  const normalizedPathname = normalizePathname(pathname)
+
+  if (normalizedPathname === LEGACY_PROPERTY_LIST_PATH) {
+    return {
+      pathname: normalizedPathname,
+      isLegacyPropertyList: true,
+      division: '',
+    }
+  }
+
+  if (normalizedPathname.startsWith(`${LEGACY_PROPERTY_DIVISION_PREFIX}/`)) {
+    const divisionSlug =
+      getRouteParamValue(routeParams, 'divisionSlug') ||
+      normalizedPathname.slice(`${LEGACY_PROPERTY_DIVISION_PREFIX}/`.length)
+
+    return {
+      pathname: normalizedPathname,
+      isLegacyPropertyList: true,
+      division: getDivisionFromLegacySlug(divisionSlug),
+    }
+  }
+
+  return {
+    pathname: normalizedPathname || '/propertylist2',
+    isLegacyPropertyList: false,
+    division: '',
+  }
+}
+
 const buildLocationTrail = (filters) => {
   const nextFilters = { ...DEFAULT_SEARCH_FILTERS, ...filters }
 
@@ -151,13 +226,10 @@ const buildLocationTrail = (filters) => {
   return nextFilters
 }
 
-export const normalizeSearchQuery = (searchQuery = '') =>
-  searchQuery.toLowerCase().replace('#', '').trim()
-
-export const parseSearchFilters = (paramsLike) => {
+export const parseSearchFilters = (paramsLike, routeContext = null) => {
   const nextFilters = {
     search: getValue(paramsLike, 'search').trim(),
-    division: getValue(paramsLike, 'division').trim(),
+    division: routeContext?.division || getValue(paramsLike, 'division').trim(),
     district: getValue(paramsLike, 'district').trim(),
     upazilla: getValue(paramsLike, 'upazilla').trim(),
     subArea: getValue(paramsLike, 'subArea').trim(),
@@ -261,8 +333,23 @@ export const buildSearchParams = (filters, existingSearchParams) => {
   return params
 }
 
-export const buildSearchHref = (filters, pathname = '/propertylist2') => {
-  const params = buildSearchParams(filters)
+export const buildSearchHref = (filters, routeContext = '/propertylist2') => {
+  const normalizedFilters = buildLocationTrail({ ...DEFAULT_SEARCH_FILTERS, ...filters })
+  const params = buildSearchParams(normalizedFilters)
+  const pathname =
+    typeof routeContext === 'string'
+      ? routeContext
+      : routeContext?.pathname || '/propertylist2'
+
+  if (typeof routeContext === 'object' && routeContext?.isLegacyPropertyList) {
+    params.delete('division')
+    const basePath = normalizedFilters.division
+      ? buildLegacyPropertyDivisionHref(normalizedFilters.division)
+      : buildLegacyPropertyListHref()
+    const queryString = params.toString()
+
+    return canonicalizeInternalHref(queryString ? `${basePath}?${queryString}` : basePath)
+  }
 
   if (!pathname || pathname === '/propertylist2') {
     const nextParams = Object.fromEntries(params.entries())
@@ -274,52 +361,46 @@ export const buildSearchHref = (filters, pathname = '/propertylist2') => {
   return canonicalizeInternalHref(href)
 }
 
-const getPropertyPrice = (item) => Number(item?.pricing?.rent_amount_bdt || 0)
+const getPropertyPrice = (item) => {
+  const amount = Number(item?.pricing?.rent_amount_bdt)
+  return Number.isFinite(amount) && amount > 0 ? amount : null
+}
 const getPropertyRooms = (item) =>
   Number(item?.total_rooms ?? item?.specifications?.total_rooms ?? 0)
 
-const getPropertyDivision = (item) => {
-  const district = normalizeText(item?.location?.state_district)
+const resolvePropertyLocation = (item) => {
+  const stateDistrict = normalizeText(item?.location?.state_district)
   const area = normalizeText(item?.location?.area)
+  const subArea = normalizeText(item?.location?.sub_area)
 
-  return (
-    LOCATION_INDEX.districtToDivision[district] ||
-    LOCATION_INDEX.upazillaToDivision[area] ||
-    ''
-  )
-}
+  let division = ''
+  let district = ''
 
-const getPropertyDistrict = (item) => {
-  const district = normalizeText(item?.location?.state_district)
-  const area = normalizeText(item?.location?.area)
-
-  return district || LOCATION_INDEX.upazillaToDistrict[area] || ''
-}
-
-const matchesKeywordSearch = (item, searchQuery = '') => {
-  const normalizedSearch = normalizeSearchQuery(searchQuery)
-
-  if (!normalizedSearch) {
-    return true
+  if (stateDistrict) {
+    if (LOCATION_INDEX.divisions.some((entry) => normalizeText(entry) === stateDistrict)) {
+      division = stateDistrict
+    } else if (LOCATION_INDEX.districtToDivision[stateDistrict]) {
+      district = stateDistrict
+      division = normalizeText(LOCATION_INDEX.districtToDivision[stateDistrict])
+    }
   }
 
-  const priceText = getPropertyPrice(item).toString()
-  const searchableValues = [
-    item?.property_id_number,
-    item?.category,
-    item?.property_type,
-    item?.location?.area,
-    item?.location?.state_district,
-    item?.location?.sub_area,
-    item?.location?.sector,
-    item?.location?.road,
-    item?.location?.house_plot,
-    item?.location?.short_description,
-  ]
-    .filter(Boolean)
-    .map((value) => normalizeText(value))
+  if (area && !district && LOCATION_INDEX.districtToDivision[area]) {
+    district = area
+    division = normalizeText(LOCATION_INDEX.districtToDivision[area])
+  }
 
-  return searchableValues.some((value) => value.includes(normalizedSearch)) || priceText.includes(normalizedSearch)
+  if (area && LOCATION_INDEX.upazillaToDistrict[area]) {
+    district = normalizeText(LOCATION_INDEX.upazillaToDistrict[area])
+    division = normalizeText(LOCATION_INDEX.upazillaToDivision[area])
+  }
+
+  return {
+    division,
+    district,
+    upazilla: area,
+    subArea: subArea,
+  }
 }
 
 const matchesLocationFilters = (item, filters) => {
@@ -328,28 +409,25 @@ const matchesLocationFilters = (item, filters) => {
   const selectedUpazilla = normalizeText(filters.upazilla)
   const selectedSubArea = normalizeText(filters.subArea)
 
-  const propertyDivision = getPropertyDivision(item)
-  const propertyDistrict = getPropertyDistrict(item)
-  const propertyArea = normalizeText(item?.location?.area)
-  const propertySubArea = normalizeText(item?.location?.sub_area)
+  const propertyLocation = resolvePropertyLocation(item)
 
-  if (selectedDivision && propertyDivision && propertyDivision !== selectedDivision) {
+  if (selectedDivision && propertyLocation.division && propertyLocation.division !== selectedDivision) {
     return false
   }
 
-  if (selectedDivision && !propertyDivision) {
+  if (selectedDivision && !propertyLocation.division) {
     return false
   }
 
-  if (selectedDistrict && propertyDistrict !== selectedDistrict) {
+  if (selectedDistrict && propertyLocation.district !== selectedDistrict) {
     return false
   }
 
-  if (selectedUpazilla && propertyArea !== selectedUpazilla) {
+  if (selectedUpazilla && propertyLocation.upazilla !== selectedUpazilla) {
     return false
   }
 
-  if (selectedSubArea && propertySubArea !== selectedSubArea) {
+  if (selectedSubArea && propertyLocation.subArea !== selectedSubArea) {
     return false
   }
 
@@ -360,6 +438,10 @@ const matchesBudgetFilters = (item, filters) => {
   const price = getPropertyPrice(item)
   const minPrice = filters.minPrice ? Number(filters.minPrice) : null
   const maxPrice = filters.maxPrice ? Number(filters.maxPrice) : null
+
+  if (price === null && (minPrice !== null || maxPrice !== null)) {
+    return false
+  }
 
   if (minPrice !== null && price < minPrice) {
     return false
@@ -388,7 +470,7 @@ export const matchesPropertySearch = (item, searchInput = '') => {
   const filters = { ...DEFAULT_SEARCH_FILTERS, ...searchInput }
 
   return (
-    (!filters.category || filters.category === 'All' || item?.category === filters.category) &&
+    matchesPropertyCategory(item, filters.category) &&
     (!filters.propertyType || filters.propertyType === 'All' || item?.property_type === filters.propertyType) &&
     matchesBudgetFilters(item, filters) &&
     matchesRoomFilter(item, filters) &&
@@ -401,11 +483,11 @@ export const sortProperties = (properties, sort = DEFAULT_SEARCH_FILTERS.sort) =
   const nextProperties = [...properties]
 
   if (sort === 'price_low') {
-    return nextProperties.sort((left, right) => getPropertyPrice(left) - getPropertyPrice(right))
+    return nextProperties.sort((left, right) => (getPropertyPrice(left) ?? Number.MAX_SAFE_INTEGER) - (getPropertyPrice(right) ?? Number.MAX_SAFE_INTEGER))
   }
 
   if (sort === 'price_high') {
-    return nextProperties.sort((left, right) => getPropertyPrice(right) - getPropertyPrice(left))
+    return nextProperties.sort((left, right) => (getPropertyPrice(right) ?? -1) - (getPropertyPrice(left) ?? -1))
   }
 
   return nextProperties.sort(

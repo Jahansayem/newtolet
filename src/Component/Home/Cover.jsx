@@ -1,65 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
+import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
-import 'swiper/css/effect-fade';
 import { getActiveCoverPhotos, getActiveCoverPhotosCacheKey } from '../../services/coverPhotoService';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
-import { getOptimizedImageUrl, isSupabaseImage } from '../../utils/imageOptimization';
 import './Cover.css';
 
 const COVER_PHOTO_LIMIT = 6;
 
 const mapSlides = (photos = []) =>
-    photos.map((photo) => ({
-        id: photo.id,
-        image: photo.image_url,
-        title: 'Find Your Dream Home',
-        description: 'Discover the perfect property that suits your lifestyle',
-        buttonText: 'Browse Properties'
-    }));
-
-const buildCoverImageSources = (imageUrl) => {
-    if (!imageUrl) {
-        return {
-            src: '',
-            srcSet: undefined,
-            sizes: undefined
-        };
-    }
-
-    if (!isSupabaseImage(imageUrl)) {
-        return {
-            src: imageUrl,
-            srcSet: undefined,
-            sizes: undefined
-        };
-    }
-
-    const widths = [1280, 1920, 2560];
-
-    return {
-        src: getOptimizedImageUrl(imageUrl, {
-            width: 1920,
-            format: 'webp',
-            quality: 92,
-            resize: 'cover'
-        }),
-        srcSet: widths
-            .map((width) => (
-                `${getOptimizedImageUrl(imageUrl, {
-                    width,
-                    format: 'webp',
-                    quality: 92,
-                    resize: 'cover'
-                })} ${width}w`
-            ))
-            .join(', '),
-        sizes: '(min-width: 1280px) 1250px, 100vw'
-    };
-};
+    photos
+        .filter((photo) => typeof photo?.image_url === 'string' && photo.image_url.trim() !== '')
+        .map((photo) => ({
+            id: photo.id,
+            image: photo.image_url.trim(),
+        }));
 
 const Cover = () => {
     const {
@@ -112,8 +70,8 @@ const Cover = () => {
     // Show loading state
     if (loading) {
         return (
-            <div className='w-full   animate-fade-in-up'>
-                <div className="w-full h-[180px] sm:h-[220px] md:h-[300px] lg:h-[400px] bg-gray-200 rounded-lg md:rounded-xl flex items-center justify-center">
+            <div className='w-full animate-fade-in-up'>
+                <div className="site-card-strong flex h-[220px] w-full items-center justify-center overflow-hidden rounded-[28px] bg-gray-200 sm:h-[260px] md:h-[340px] lg:h-[420px]">
                     <div className="text-gray-500 text-sm md:text-base">Loading cover photos...</div>
                 </div>
             </div>
@@ -123,11 +81,14 @@ const Cover = () => {
     // Show message if no admin photos exist
     if (slides.length === 0) {
         return (
-            <div className='w-full  animate-fade-in-up'>
-                <div className="w-full h-[180px] sm:h-[220px] md:h-[300px] lg:h-[400px] bg-gradient-to-r from-[#1E73B8] to-[#1665a0] rounded-lg md:rounded-xl flex items-center justify-center shadow-lg md:shadow-xl">
-                    <div className="text-center text-white px-4">
-                        <h2 className="text-xl sm:text-2xl md:text-4xl font-bold mb-1 md:mb-2">Welcome to NewTolet.Com</h2>
-                        <p className="text-xs sm:text-sm md:text-lg opacity-90">Find your perfect rental property in Bangladesh</p>
+            <div className='w-full animate-fade-in-up'>
+                <div className="site-card-strong relative flex h-[240px] w-full items-end overflow-hidden rounded-[28px] bg-gradient-to-r from-[#1E73B8] to-[#1665a0] px-5 py-6 shadow-lg sm:h-[300px] sm:px-8 sm:py-8 md:h-[380px]">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%),linear-gradient(135deg,rgba(30,115,184,0.98),rgba(11,37,64,0.92))]" />
+                    <div className="relative max-w-2xl text-white">
+                        <h2 className="text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">Welcome to NewTolet.Com</h2>
+                        <Link to="/propertylist2" className="site-button-primary mt-5">
+                            Browse Properties
+                        </Link>
                     </div>
                 </div>
             </div>
@@ -135,10 +96,10 @@ const Cover = () => {
     }
 
     return (
-        <div className='w-full  animate-fade-in-up'>
-            <div className="relative w-full">
+        <div className='w-full animate-fade-in-up'>
+            <div className="relative mx-auto w-full">
                 <Swiper
-                    modules={[Navigation, Pagination, Autoplay, EffectFade]}
+                    modules={[Navigation, Pagination, Autoplay]}
                     navigation={{
                         nextEl: '.swiper-button-next-custom',
                         prevEl: '.swiper-button-prev-custom',
@@ -150,45 +111,52 @@ const Cover = () => {
                         dynamicMainBullets: 3
                     }}
                     autoplay={{ delay: 5000, disableOnInteraction: false }}
-                    effect="fade"
                     loop
-                    className="w-full h-[140px] md:h-[280px] lg:h-[370px] relative group rounded-lg md:rounded-xl overflow-hidden shadow-lg md:shadow-xl"
+                    className="site-card-strong relative h-[260px] w-full overflow-hidden rounded-[28px] shadow-lg group sm:h-[320px] md:h-[420px] xl:h-[500px]"
                 >
                     {slides.map((slide, index) => {
-                        const imageProps = buildCoverImageSources(slide.image);
-
                         return (
                         <SwiperSlide key={slide.id}>
                             <div className="relative h-full w-full">
-                                {/* Background Image with zoom effect */}
                                 <img
-                                    src={imageProps.src}
-                                    srcSet={imageProps.srcSet}
-                                    sizes={imageProps.sizes}
-                                    alt={slide.title}
-                                    className="h-full w-full object-cover [transform:translateZ(0)] transition-transform duration-[8000ms] ease-out md:group-hover:scale-[1.03]"
+                                    src={slide.image}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="absolute inset-0 h-full w-full object-cover"
                                     loading={index === 0 ? 'eager' : 'lazy'}
                                     fetchPriority={index === 0 ? 'high' : 'auto'}
                                     decoding="async"
                                     draggable={false}
-                                    onError={(e) => {
-                                        console.error('Failed to load cover photo:', slide.image);
-                                    }}
                                     style={{
-                                        objectPosition: 'center center'
+                                        objectPosition: 'center center',
+                                        filter: 'blur(18px)',
+                                        transform: 'scale(1.08)'
                                     }}
                                 />
 
-                                {/* Gradient Overlay - adjusted for mobile */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent md:from-black/50 md:via-black/15"></div>
+                                <img
+                                    src={slide.image}
+                                    alt="Cover photo"
+                                    className="relative z-[1] mx-auto h-full max-h-full w-auto max-w-full object-contain"
+                                    loading={index === 0 ? 'eager' : 'lazy'}
+                                    fetchPriority={index === 0 ? 'high' : 'auto'}
+                                    decoding="async"
+                                    draggable={false}
+                                    style={{
+                                        objectPosition: 'center center',
+                                        imageRendering: 'auto'
+                                    }}
+                                />
+
+                                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/72 via-slate-950/28 to-transparent"></div>
                             </div>
                         </SwiperSlide>
                     )})}
                 </Swiper>
 
                 {/* Custom Navigation Buttons - Hidden on Mobile */}
-                <div className="swiper-button-prev-custom hidden md:flex absolute left-2 md:left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 md:w-12 md:h-12 bg-white/80 hover:bg-white text-gray-800 rounded-full shadow-lg cursor-pointer items-center justify-center transition-all duration-300 hover:scale-110 after:content-['←'] after:text-xl after:font-bold"></div>
-                <div className="swiper-button-next-custom hidden md:flex absolute right-2 md:right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 md:w-12 md:h-12 bg-white/80 hover:bg-white text-gray-800 rounded-full shadow-lg cursor-pointer items-center justify-center transition-all duration-300 hover:scale-110 after:content-['→'] after:text-xl after:font-bold"></div>
+                <div className="swiper-button-prev-custom absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-gray-800 shadow-lg transition-all duration-300 hover:scale-105 hover:bg-white after:content-['<'] after:text-lg after:font-bold md:left-4 md:flex md:h-11 md:w-11"></div>
+                <div className="swiper-button-next-custom absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-gray-800 shadow-lg transition-all duration-300 hover:scale-105 hover:bg-white after:content-['>'] after:text-lg after:font-bold md:right-4 md:flex md:h-11 md:w-11"></div>
             </div>
         </div>
     );

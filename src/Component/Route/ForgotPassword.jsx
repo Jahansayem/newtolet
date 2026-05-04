@@ -39,7 +39,7 @@ const ForgotPassword = () => {
     };
 
     return (
-        <div className='relative min-h-[80vh] flex items-center overflow-hidden bg-gradient-to-br from-white via-blue-50 to-white'>
+        <div className='auth-shell'>
             {/* Animated Wave Background */}
             <div className='absolute inset-0 overflow-hidden'>
                 <svg className='absolute w-full h-full' xmlns='http://www.w3.org/2000/svg'>
@@ -65,25 +65,25 @@ const ForgotPassword = () => {
             <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
             <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className='relative z-10 w-full flex items-center justify-center'>
-                <div className='flex flex-col gap-3 m-auto items-start p-8 min-w-[340px] sm:min-w-96 border-2 rounded-2xl login-card-border text-sm shadow-xl bg-white'>
-                    <p className='text-2xl font-semibold mx-auto w-full text-center'>Forgot Password?</p>
-                <p className='text-gray-600 text-center w-full text-sm'>Enter your email address and we'll send you a link to reset your password.</p>
+            <form onSubmit={handleSubmit(onSubmit)} className='auth-form-shell'>
+                <div className='auth-card login-card-border text-sm'>
+                    <p className='auth-title'>Forgot Password?</p>
+                <p className='auth-subtitle'>Enter your email address and we&apos;ll send you a secure reset link.</p>
 
                 {successMessage && (
-                    <div className='w-full bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded'>
+                    <div className='auth-message auth-message-success'>
                         {successMessage}
                     </div>
                 )}
 
                 {errorMessage && (
-                    <div className='w-full bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded'>
+                    <div className='auth-message auth-message-error'>
                         {errorMessage}
                     </div>
                 )}
 
                 <div className='w-full'>
-                    <p className='text-zinc-700 font-medium'>Email</p>
+                    <p className='auth-label'>Email</p>
                     <input
                         type="email"
                         placeholder='Enter your registered email'
@@ -94,7 +94,7 @@ const ForgotPassword = () => {
                                 message: "Invalid email address"
                             }
                         })}
-                        className='w-full border border-gray-300 rounded p-2 my-2 focus:outline-none focus:border-[#1E73B8]'
+                        className='auth-input my-2'
                         disabled={isLoading}
                     />
                     {errors.email && <p className='text-red-700 text-xs'>{errors.email.message}</p>}
@@ -102,7 +102,7 @@ const ForgotPassword = () => {
 
                 <button
                     type="submit"
-                    className='w-full bg-[#1E73B8] py-2 rounded text-white font-medium cursor-pointer hover:bg-[#1665a0] transition disabled:opacity-50 disabled:cursor-not-allowed'
+                    className='auth-submit disabled:cursor-not-allowed disabled:opacity-50'
                     disabled={isLoading}
                 >
                     {isLoading ? "Sending..." : "Send Reset Link"}

@@ -11,8 +11,10 @@ import JobFeedSection from '../../components/JobFeedSection';
 import { logCustomerSearch } from '../../services/searchHistoryService';
 import { getPublicJobFeedOrders } from '../../services/jobFeedService';
 import { HOME_CATEGORIES } from './categoryConfig';
-import { matchesPropertySearch } from './propertySearch';
+import { matchesKeywordSearch } from './propertySearchCore';
 import PropertyListingCard from '../../components/PropertyListingCard';
+import { matchesPropertyCategory } from '../../lib/propertyCategories';
+import { HOME_CHROME_SCROLL_EVENT } from '../../lib/homeScrollChrome';
 
 const About = dynamic(() => import('./About'));
 const Feedback = dynamic(() => import('./Feadback'));
@@ -52,12 +54,17 @@ const Home = () => {
     const searchQuery = (searchParams.get('search') || '').trim();
     const lastLoggedSignatureRef = useRef('');
     const sectionRefs = useRef({});
+    const stickyBarRef = useRef(null);
+    const stickySentinelRef = useRef(null);
+    const lastScrollYRef = useRef(0);
     const [activeCategorySection, setActiveCategorySection] = useState(HOME_CATEGORIES[0]);
+    const [isCategoryPinned, setIsCategoryPinned] = useState(false);
+    const [isHomeNavVisible, setIsHomeNavVisible] = useState(true);
 
     const categorySections = useMemo(() => (
         HOME_CATEGORIES.map((category) => {
             const items = list
-                .filter((item) => item.category === category && matchesPropertySearch(item, searchQuery))
+                .filter((item) => matchesPropertyCategory(item, category) && matchesKeywordSearch(item, searchQuery))
                 .slice(0, 6);
 
             return { category, items };
@@ -131,6 +138,74 @@ const Home = () => {
         searchSignature,
     ]);
 
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return undefined;
+        }
+
+        const getNavbarOffset = () => (window.innerWidth >= 768 ? 118 : 72);
+
+        const syncHomeChrome = () => {
+            const sentinelTop = stickySentinelRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
+            const scrollY = window.scrollY || 0;
+            const navbarOffset = getNavbarOffset();
+            const pinned = sentinelTop <= navbarOffset;
+            const delta = scrollY - lastScrollYRef.current;
+
+            setIsCategoryPinned((currentPinned) => (currentPinned === pinned ? currentPinned : pinned));
+
+            setIsHomeNavVisible((currentVisible) => {
+                let nextVisible = currentVisible;
+
+                if (!pinned || scrollY <= 16) {
+                    nextVisible = true;
+                } else if (delta > 4) {
+                    nextVisible = false;
+                } else if (delta < -4) {
+                    nextVisible = true;
+                }
+
+                return nextVisible;
+            });
+
+            lastScrollYRef.current = scrollY;
+        };
+
+        lastScrollYRef.current = window.scrollY || 0;
+        syncHomeChrome();
+
+        window.addEventListener('scroll', syncHomeChrome, { passive: true });
+        window.addEventListener('resize', syncHomeChrome);
+
+        return () => {
+            window.removeEventListener('scroll', syncHomeChrome);
+            window.removeEventListener('resize', syncHomeChrome);
+            window.dispatchEvent(
+                new CustomEvent(HOME_CHROME_SCROLL_EVENT, {
+                    detail: {
+                        navVisible: true,
+                        categoryPinned: false,
+                    },
+                })
+            );
+        };
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        window.dispatchEvent(
+            new CustomEvent(HOME_CHROME_SCROLL_EVENT, {
+                detail: {
+                    navVisible: isHomeNavVisible,
+                    categoryPinned: isCategoryPinned,
+                },
+            })
+        );
+    }, [isCategoryPinned, isHomeNavVisible]);
+
     const handleCategoryJump = (category) => {
         setActiveCategorySection(category);
 
@@ -139,7 +214,11 @@ const Home = () => {
             return;
         }
 
-        const topOffset = window.innerWidth >= 768 ? 190 : 150;
+        const stickyBarHeight = stickyBarRef.current?.getBoundingClientRect().height || 0;
+        const navbarOffset = isCategoryPinned && !isHomeNavVisible
+            ? 0
+            : (window.innerWidth >= 768 ? 118 : 72);
+        const topOffset = navbarOffset + stickyBarHeight + 24;
         const targetTop = targetSection.getBoundingClientRect().top + window.scrollY - topOffset;
         window.scrollTo({ top: targetTop, behavior: 'smooth' });
     };
@@ -151,39 +230,47 @@ const Home = () => {
     };
 
     return (
-        <div className='min-h-screen max-w-[1250px] mx-auto bg-gray-50 px-3 py-8 md:px-6 xl:px-0'>
-            <div className='sticky top-[72px] z-40 -mx-3 mb-6 border-b border-gray-200/80 bg-gray-50/95 px-3 py-3 backdrop-blur md:top-[118px] md:-mx-6 md:px-6 xl:mx-0 xl:px-0'>
+        <div className='site-shell-wide min-h-screen bg-gray-50 py-6 md:py-8'>
+            <div ref={stickySentinelRef} className='h-0 w-full' aria-hidden='true' />
+            <div
+                ref={stickyBarRef}
+                className={`sticky z-40 -mx-4 mb-6 border-b border-gray-200/80 bg-gray-50/95 px-4 py-3 backdrop-blur transition-[top] duration-300 sm:-mx-5 sm:px-5 lg:-mx-8 lg:px-8 ${
+                    isCategoryPinned && !isHomeNavVisible
+                        ? 'top-0'
+                        : 'top-[72px] md:top-[118px]'
+                } xl:mx-0 xl:px-0`}
+            >
                 <CategoryFilterBar
                     selectedCategory={activeCategorySection}
                     onCategorySelect={handleCategoryJump}
                 />
             </div>
 
-            <div className='mb-10'>
+            <div className='mb-10 md:mb-12'>
                 <Cover />
-                <div className='px-4 pt-6 text-center'>
-                    <p className='text-sm font-bold uppercase tracking-[0.35em] text-gray-900 sm:text-base md:text-lg'>
+                <div className='px-2 pt-6 text-center'>
+                    <p className='text-xs font-bold uppercase tracking-[0.32em] text-gray-900 sm:text-sm md:text-base'>
                         NEW TOLET - HOUSE RENT SOLUTION
                     </p>
                 </div>
             </div>
-
-            <JobFeedSection orders={jobFeedOrders} isLoading={jobFeedLoading} />
 
             <DeferredSection
                 className='pb-12'
                 fallback={<CategorySectionsFallback />}
                 rootMargin='0px 0px 120px 0px'
             >
-                <section className='space-y-4'>
-                    <div className='text-center'>
-                        <p className='text-xs font-semibold uppercase tracking-[0.35em] text-[#1E73B8]'>Recently Published Properties</p>
-                        <h1 className='mt-3 text-3xl font-bold text-gray-800 md:text-4xl'>Check out the latest property listings</h1>
-                        <p className='mt-2 text-sm text-gray-500 md:text-base'>
-                            Browse the newest approved property listings below the job feed.
+                <section className='space-y-5'>
+                    <div className='mx-auto max-w-3xl text-center'>
+                        <p className='site-kicker'>Recently Published Properties</p>
+                        <h1 className='mt-3 text-balance text-3xl font-bold text-gray-800 md:text-4xl lg:text-[2.8rem]'>
+                            Check out the latest property listings
+                        </h1>
+                        <p className='mt-3 text-sm leading-7 text-gray-500 md:text-base'>
+                            Browse the newest approved property listings curated across the latest categories.
                         </p>
                         {searchQuery && (
-                            <div className='mt-4 inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-white'>
+                            <div className='mt-5 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-white'>
                                 <span className='text-sm'>Search: {searchQuery}</span>
                                 <button
                                     onClick={clearSearch}
@@ -202,7 +289,7 @@ const Home = () => {
                             <p className='mt-2 text-sm text-gray-500'>Try a different search term to browse more properties.</p>
                         </div>
                     ) : (
-                        <div className='space-y-14'>
+                        <div className='space-y-12 md:space-y-14'>
                             {categorySections.map(({ category, items }) => (
                                 <section
                                     key={category}
@@ -211,20 +298,20 @@ const Home = () => {
                                     }}
                                     className='scroll-mt-[220px] space-y-5'
                                 >
-                                    <div className='flex flex-col gap-3 border-b border-gray-200 pb-4 sm:flex-row sm:items-center sm:justify-between'>
+                                    <div className='flex flex-col gap-4 border-b border-gray-200 pb-4 sm:flex-row sm:items-center sm:justify-between'>
                                         <div>
-                                            <h2 className='text-2xl font-bold text-gray-800'>{category}</h2>
-                                            <p className='text-sm text-gray-500'>Top {items.length} featured {category.toLowerCase()} listings.</p>
+                                            <h2 className='text-2xl font-bold text-gray-800 md:text-[1.8rem]'>{category}</h2>
+                                            <p className='text-sm leading-6 text-gray-500'>Top {items.length} featured {category.toLowerCase()} listings.</p>
                                         </div>
                                         <Link
                                             to={`/propertylist2?category=${encodeURIComponent(category)}`}
-                                            className='inline-flex items-center justify-center rounded-full border border-[#1E73B8] px-5 py-2 text-sm font-semibold text-[#1E73B8] transition-colors hover:bg-[#1E73B8] hover:text-white'
+                                            className='site-button-secondary text-sm'
                                         >
                                             See more {category.toLowerCase()} property
                                         </Link>
                                     </div>
 
-                                    <div className='grid grid-cols-2 gap-4 gap-y-8 md:grid-cols-3 xl:grid-cols-6'>
+                                    <div className='grid grid-cols-1 gap-4 gap-y-6 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6'>
                                         {items.map((item, index) => (
                                             <PropertyListingCard
                                                 key={item.id || `${category}-${index}`}
@@ -239,6 +326,8 @@ const Home = () => {
                     )}
                 </section>
             </DeferredSection>
+
+            <JobFeedSection orders={jobFeedOrders} isLoading={jobFeedLoading} />
 
             <DeferredSection
                 className='px-0 md:px-4 xl:px-8'

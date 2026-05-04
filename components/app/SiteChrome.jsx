@@ -7,7 +7,19 @@ import Footer from '../../src/Component/Home/Footer.jsx'
 import FloatingQuickRail from './FloatingQuickRail.jsx'
 import { getRoutePage } from '../../src/lib/routePaths.js'
 
-const STANDALONE_PAGES = new Set(['dashboard', 'admin', 'admin-dashboard', 'payment-confirm'])
+const STANDALONE_PAGES = new Set([
+  'dashboard',
+  'admin',
+  'admin-dashboard',
+  'book-buy-credits',
+  'payment-confirm',
+  'login',
+  'registration',
+  'forgot-password',
+  'reset-password',
+  'my-orders',
+  'my-properties',
+])
 
 export default function SiteChrome({ children }) {
   const pathname = usePathname()

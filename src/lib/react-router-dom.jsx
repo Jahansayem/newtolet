@@ -148,12 +148,6 @@ export function useSearchParams() {
           : nextInit
 
       const nextParams = new URLSearchParams(nextValue)
-      const currentPage = searchParams?.get('page')
-
-      if (pathname === '/' && currentPage && !nextParams.has('page')) {
-        nextParams.set('page', currentPage)
-      }
-
       const queryString = nextParams.toString()
       const href = queryString ? `${pathname}?${queryString}` : pathname
 

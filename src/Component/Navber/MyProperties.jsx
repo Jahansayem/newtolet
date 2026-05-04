@@ -10,6 +10,7 @@ import { deleteProperty, getUserProperties } from '../../services/propertyServic
 import { getPropertyAnalytics, updatePropertyPanelState } from '../../services/userPanelService'
 import UserPanelShell from '../../components/user-panel/UserPanelShell.jsx'
 import { EmptyState, formatPanelDate, PanelCard, PanelCardHeader } from '../../components/user-panel/UserPanelPrimitives.jsx'
+import { PropertyThumbnailImage } from '../../components/PropertyCardMedia.jsx'
 
 const STATUS_FILTERS = ['All', 'Active', 'Deactivated']
 
@@ -93,8 +94,10 @@ const MyProperties = () => {
     refreshKey,
   })
 
+  const propertyList = useMemo(() => (Array.isArray(properties) ? properties : []), [properties])
+
   const filteredProperties = useMemo(() => {
-    return properties.filter((property) => {
+    return propertyList.filter((property) => {
       const statusMatch =
         statusFilter === 'All' ||
         (statusFilter === 'Active' ? property.is_active !== false : property.is_active === false)
@@ -115,7 +118,7 @@ const MyProperties = () => {
 
       return statusMatch && searchMatch
     })
-  }, [properties, search, statusFilter])
+  }, [propertyList, search, statusFilter])
 
   const handleDeactivateToggle = async (property) => {
     const nextIsActive = property.is_active === false
@@ -232,13 +235,13 @@ const MyProperties = () => {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
                       <div className="h-28 w-32 shrink-0 overflow-hidden rounded-2xl bg-slate-100">
-                        {property.primary_image ? (
-                          <img
-                            src={property.primary_image}
-                            alt={property.category}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
+                        <PropertyThumbnailImage
+                          src={property.primary_image}
+                          alt={property.category}
+                          propertyType={property.property_type}
+                          category={property.category}
+                          pricing={property.pricing}
+                        />
                       </div>
 
                       <div className="min-w-0">

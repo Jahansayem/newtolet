@@ -821,11 +821,10 @@ export const buildReferralLink = (username) => {
   }
 
   if (typeof window === 'undefined') {
-    return `/?page=registration&ref=${normalized}`
+    return `/registration?ref=${normalized}`
   }
 
-  const url = new URL(window.location.origin)
-  url.searchParams.set('page', 'registration')
+  const url = new URL('/registration', window.location.origin)
   url.searchParams.set('ref', normalized)
   return url.toString()
 }

@@ -69,10 +69,23 @@ const buildCategoryHref = (category) => {
   return `/propertylist2?category=${encodedCategory}`
 }
 
-export default function JobFeedSection({ orders = [], isLoading = false }) {
-  if (!isLoading && orders.length === 0) {
-    return null
+const buildThumbnailLabel = (order) => {
+  const category = order.category?.trim() || 'Home'
+  const location = order.district?.trim() || order.division?.trim() || 'Bangladesh'
+  const needFrom = formatOrderNeedFrom(order.property_need_from) || 'Flexible'
+  const budget = formatCurrency(order.max_budget)
+
+  return {
+    category,
+    location,
+    rooms: order.rooms || 'Flexible',
+    needFrom,
+    budget,
   }
+}
+
+export default function JobFeedSection({ orders = [], isLoading = false }) {
+  const visibleOrders = orders.slice(0, 4)
 
   return (
     <section className='mb-14 rounded-[32px] border border-gray-200 bg-white px-4 py-8 shadow-sm md:px-6 md:py-10'>
@@ -85,22 +98,17 @@ export default function JobFeedSection({ orders = [], isLoading = false }) {
             Order Home job feed from confirmed customer requests
           </h2>
           <p className='mt-2 text-sm text-gray-500 md:text-base'>
-            This upper feed highlights confirmed Order Home requests that admins choose to publish.
+            This feed highlights confirmed Order Home requests that admins choose to publish.
           </p>
         </div>
-        {orders.length > 0 && (
-          <div className='inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white'>
-            <BiBriefcaseAlt2 className='text-base' />
-            <span>{orders.length} confirmed jobs</span>
-          </div>
-        )}
       </div>
 
       {isLoading ? (
-        <div className='grid grid-cols-1 gap-5 pt-6 lg:grid-cols-2 xl:grid-cols-3'>
-          {Array.from({ length: 3 }).map((_, index) => (
+        <div className='grid grid-cols-1 gap-5 pt-6 sm:grid-cols-2 xl:grid-cols-3'>
+          {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className='animate-pulse rounded-3xl border border-gray-200 p-6'>
-              <div className='h-4 w-28 rounded-full bg-gray-200' />
+              <div className='h-32 rounded-[28px] bg-gray-100' />
+              <div className='mt-4 h-4 w-28 rounded-full bg-gray-200' />
               <div className='mt-4 h-8 w-3/4 rounded-full bg-gray-200' />
               <div className='mt-3 h-20 rounded-2xl bg-gray-100' />
               <div className='mt-4 grid grid-cols-2 gap-3'>
@@ -110,91 +118,79 @@ export default function JobFeedSection({ orders = [], isLoading = false }) {
             </div>
           ))}
         </div>
-      ) : (
-        <div className='grid grid-cols-1 gap-5 pt-6 lg:grid-cols-2 xl:grid-cols-3'>
-          {orders.map((order) => {
+      ) : visibleOrders.length > 0 ? (
+        <div className='grid grid-cols-1 gap-5 pt-6 sm:grid-cols-2 xl:grid-cols-4'>
+          {visibleOrders.map((order) => {
             const title = order.job_feed_title?.trim() || buildFallbackTitle(order)
             const description =
               order.job_feed_description?.trim() || buildFallbackDescription(order)
             const location = formatLocation(order)
+            const thumbnail = buildThumbnailLabel(order)
+            const href = buildCategoryHref(order.category)
 
             return (
-              <article
+              <Link
                 key={order.id}
-                className='rounded-3xl border border-gray-200 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-sm transition-shadow duration-300 hover:shadow-lg'
+                to={href}
+                className='block rounded-xl border border-gray-200 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-sm transition-shadow duration-300 hover:shadow-lg'
               >
-                <div className='flex items-start justify-between gap-4'>
-                  <div className='inline-flex items-center gap-2 rounded-full bg-[#1E73B8]/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#1E73B8]'>
-                    <BiBriefcaseAlt2 className='text-sm' />
-                    <span>Ordered Home</span>
-                  </div>
-                  <div className='inline-flex items-center gap-1 text-xs font-medium text-gray-500'>
-                    <FiClock className='text-sm' />
-                    <span>{formatPostedDate(order.job_feed_posted_at || order.created_at)}</span>
-                  </div>
-                </div>
-
-                <h3 className='mt-5 text-xl font-bold leading-8 text-gray-900'>{title}</h3>
-                <p className='mt-3 min-h-[72px] text-sm leading-6 text-gray-600'>{description}</p>
-
-                <div className='mt-5 space-y-3'>
-                  <div className='flex items-start gap-2 text-sm text-gray-600'>
-                    <FiMapPin className='mt-0.5 flex-shrink-0 text-[#1E73B8]' />
-                    <span>{location || 'Location not specified'}</span>
-                  </div>
-
-                  <div className='grid grid-cols-2 gap-3'>
-                    <div className='rounded-2xl bg-[#1E73B8]/5 p-4'>
-                      <p className='text-xs font-semibold uppercase tracking-[0.18em] text-[#1E73B8]'>
-                        Category
-                      </p>
-                      <p className='mt-2 text-sm font-semibold text-gray-900'>
-                        {order.category || 'N/A'}
-                      </p>
+                <div className='relative overflow-hidden rounded-xl bg-gradient-to-br from-[#1E73B8] via-sky-600 to-cyan-500 p-4 text-white'>
+                  <div className='absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.28),transparent_38%)]' />
+                  <div className='absolute -right-8 bottom-0 h-20 w-20 rounded-full border border-white/15 bg-white/10' />
+                  <div className='relative'>
+                    <div className='inline-flex items-center gap-2 rounded-xl bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white'>
+                      <BiBuildings className='text-sm' />
+                      <span>{thumbnail.category}</span>
                     </div>
-                    <div className='rounded-2xl bg-emerald-50 p-4'>
-                      <p className='text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700'>
-                        Rooms
-                      </p>
-                      <p className='mt-2 text-sm font-semibold text-gray-900'>
-                        {order.rooms || 'N/A'}
-                      </p>
-                    </div>
-                    <div className='rounded-2xl bg-amber-50 p-4'>
-                      <p className='text-xs font-semibold uppercase tracking-[0.18em] text-amber-700'>
-                        Budget
-                      </p>
-                      <p className='mt-2 text-sm font-semibold text-gray-900'>
-                        {formatCurrency(order.max_budget)}
-                      </p>
-                    </div>
-                    <div className='rounded-2xl bg-slate-100 p-4'>
-                      <p className='text-xs font-semibold uppercase tracking-[0.18em] text-slate-600'>
-                        Need From
-                      </p>
-                      <p className='mt-2 text-sm font-semibold text-gray-900'>
-                        {formatOrderNeedFrom(order.property_need_from) || 'Flexible'}
+                    <div className='mt-4'>
+                      <h3 className='text-xl font-bold leading-tight'>{thumbnail.location}</h3>
+                      <p className='mt-1 text-sm font-medium text-white/80'>
+                        {thumbnail.rooms} rooms required
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className='mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-5'>
-                  <div className='inline-flex items-center gap-2 text-sm font-medium text-gray-500'>
-                    <FiCalendar className='text-sm text-[#1E73B8]' />
-                    <span>Posted from Order Home</span>
+                
+
+               
+                
+
+                <div className='mt-4 space-y-3'>
+                 
+
+                  <div className='rounded-xl  border-gray-200 bg-white/90 p-3'>
+                    <div className='space-y-2 text-sm'>
+                      
+                      <div className='flex items-center justify-between gap-3 border-b border-dashed border-gray-200 pb-2'>
+                        <span className='font-semibold text-gray-500'>Need From:</span>
+                        <span className='text-right font-bold text-gray-900'>{thumbnail.needFrom}</span>
+                      </div>
+                      <div className='flex items-center justify-between gap-3'>
+                        <span className='font-semibold text-gray-500'>Budget:</span>
+                        <span className='text-right font-bold text-gray-900 line-clamp-1'>{thumbnail.budget}</span>
+                      </div>
+                    </div>
                   </div>
-                  <Link
-                    to={buildCategoryHref(order.category)}
-                    className='inline-flex items-center gap-2 rounded-full border border-[#1E73B8] px-4 py-2 text-sm font-semibold text-[#1E73B8] transition-colors duration-200 hover:bg-[#1E73B8] hover:text-white'
-                  >
-                    <BiBuildings className='text-base' />
-                    <span>Browse matching homes</span>
-                  </Link>
                 </div>
-              </article>
+
+                
+              </Link>
             )
           })}
+        </div>
+      ) : (
+        <div className='pt-6'>
+          <div className='rounded-3xl border border-dashed border-gray-200 bg-slate-50 px-6 py-12 text-center'>
+            <div className='inline-flex items-center gap-2 rounded-full bg-[#1E73B8]/10 px-4 py-2 text-sm font-semibold text-[#1E73B8]'>
+              <BiBriefcaseAlt2 className='text-base' />
+              <span>Job feed is ready</span>
+            </div>
+            <h3 className='mt-4 text-xl font-bold text-gray-900'>No job feed posts published yet</h3>
+            <p className='mt-2 text-sm leading-6 text-gray-500 md:text-base'>
+              Confirmed Order Home requests will appear here once admins publish them to the homepage job feed.
+            </p>
+          </div>
         </div>
       )}
     </section>

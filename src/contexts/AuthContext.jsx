@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { getCurrentUser, getSession, logoutUser, getStoredUser } from '../services/authService';
 
@@ -13,32 +13,59 @@ export const AuthProvider = ({ children }) => {
     const [session, setSession] = useState(null);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const syncRequestRef = useRef(null);
 
-    const syncAuthState = useCallback(async (sessionOverride = undefined) => {
-        try {
-            const nextSession = sessionOverride === undefined ? await getSession() : sessionOverride;
-            const storedUser = getStoredUser();
-
-            setSession(nextSession || null);
-
-            if (!nextSession?.user) {
-                setUser(null);
-                setIsAuthenticated(false);
-                return;
-            }
-
-            const currentUser = await getCurrentUser();
-            const resolvedUser = currentUser || storedUser || null;
-
-            setUser(resolvedUser);
-            setIsAuthenticated(Boolean(resolvedUser));
-        } catch (error) {
-            console.error('Error syncing auth state:', error);
-            setUser(null);
-            setSession(null);
-            setIsAuthenticated(false);
-        }
+    const applyAuthState = useCallback((nextUser, nextSession) => {
+        setSession(nextSession || null);
+        setUser(nextUser || null);
+        setIsAuthenticated(Boolean(nextUser));
     }, []);
+
+    const syncAuthState = useCallback(async ({ sessionOverride, userOverride } = {}) => {
+        const nextSession = sessionOverride === undefined ? await getSession() : sessionOverride;
+        const syncKey = nextSession?.access_token || nextSession?.user?.id || 'anonymous';
+
+        if (syncRequestRef.current?.key === syncKey) {
+            return syncRequestRef.current.promise;
+        }
+
+        const syncPromise = (async () => {
+            try {
+                if (!nextSession?.user) {
+                    applyAuthState(null, null);
+                    return null;
+                }
+
+                const fallbackUser = userOverride || getStoredUser();
+
+                if (fallbackUser?.id === nextSession.user.id) {
+                    applyAuthState(fallbackUser, nextSession);
+                    return fallbackUser;
+                }
+
+                const currentUser = await getCurrentUser();
+                const resolvedUser = currentUser || null;
+
+                applyAuthState(resolvedUser, nextSession);
+                return resolvedUser;
+            } catch (error) {
+                console.error('Error syncing auth state:', error);
+                applyAuthState(null, null);
+                return null;
+            } finally {
+                if (syncRequestRef.current?.key === syncKey) {
+                    syncRequestRef.current = null;
+                }
+            }
+        })();
+
+        syncRequestRef.current = {
+            key: syncKey,
+            promise: syncPromise
+        };
+
+        return syncPromise;
+    }, [applyAuthState]);
 
     useEffect(() => {
         let isMounted = true;
@@ -47,8 +74,7 @@ export const AuthProvider = ({ children }) => {
             try {
                 const storedUser = getStoredUser();
                 if (storedUser && isMounted) {
-                    setUser(storedUser);
-                    setIsAuthenticated(true);
+                    applyAuthState(storedUser, null);
                 }
 
                 await syncAuthState();
@@ -62,58 +88,42 @@ export const AuthProvider = ({ children }) => {
         initializeAuth();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-            void syncAuthState(nextSession).finally(() => {
+            const storedUser = getStoredUser();
+            const userOverride = storedUser?.id === nextSession?.user?.id ? storedUser : null;
+
+            void syncAuthState({ sessionOverride: nextSession, userOverride }).finally(() => {
                 if (isMounted) {
                     setIsLoading(false);
                 }
             });
         });
 
-        const handleLocalAuthChange = () => {
-            void syncAuthState().finally(() => {
-                if (isMounted) {
-                    setIsLoading(false);
-                }
-            });
-        };
-
-        window.addEventListener('userLogin', handleLocalAuthChange);
-        window.addEventListener('userLogout', handleLocalAuthChange);
-
         return () => {
             isMounted = false;
             subscription.unsubscribe();
-            window.removeEventListener('userLogin', handleLocalAuthChange);
-            window.removeEventListener('userLogout', handleLocalAuthChange);
         };
-    }, [syncAuthState]);
+    }, [applyAuthState, syncAuthState]);
 
     // Handle logout
     const handleLogout = useCallback(async () => {
         try {
             await logoutUser();
-            setUser(null);
-            setSession(null);
-            setIsAuthenticated(false);
+            applyAuthState(null, null);
         } catch (error) {
             console.error('Error during logout:', error);
         }
-    }, []);
+    }, [applyAuthState]);
 
     // Handle login (called from Login component)
     const handleLogin = useCallback((userData, sessionData) => {
-        setUser(userData);
-        setSession(sessionData);
-        setIsAuthenticated(true);
-    }, []);
+        applyAuthState(userData, sessionData);
+    }, [applyAuthState]);
 
     // Handle registration (called from Registration component)
     const handleRegistration = useCallback(() => {
         // Registration doesn't auto-login user, they need to verify email first
-        setUser(null);
-        setSession(null);
-        setIsAuthenticated(false);
-    }, []);
+        applyAuthState(null, null);
+    }, [applyAuthState]);
 
     // Update user profile
     const updateUserInContext = useCallback((updatedUserData) => {

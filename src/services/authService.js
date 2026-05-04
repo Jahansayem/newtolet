@@ -6,6 +6,65 @@ import { clearUserPanelCache } from './cacheService';
  * Handles user registration, login, logout, and session management with Supabase
  */
 
+const isMissingProfileError = (error) =>
+    error?.code === 'PGRST116' ||
+    error?.details?.includes('0 rows') ||
+    error?.message?.includes('JSON object requested, multiple (or no) rows returned');
+
+const fetchUserProfile = async (userId) => {
+    if (!userId) {
+        return { data: null, error: new Error('User ID is required') };
+    }
+
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (error) {
+        return { data: null, error };
+    }
+
+    return { data: data || null, error: null };
+};
+
+const ensureCurrentUserProfile = async () => {
+    const { data, error } = await supabase.rpc('ensure_current_user_profile');
+
+    if (error) {
+        throw new Error(error.message || 'Failed to repair missing user profile');
+    }
+
+    return data;
+};
+
+const getUserProfileWithRepair = async (userId) => {
+    const initialProfile = await fetchUserProfile(userId);
+
+    if (initialProfile.error && !isMissingProfileError(initialProfile.error)) {
+        throw initialProfile.error;
+    }
+
+    if (initialProfile.data) {
+        return initialProfile.data;
+    }
+
+    await ensureCurrentUserProfile();
+
+    const repairedProfile = await fetchUserProfile(userId);
+
+    if (repairedProfile.error) {
+        throw repairedProfile.error;
+    }
+
+    if (!repairedProfile.data) {
+        throw new Error('Failed to fetch user profile');
+    }
+
+    return repairedProfile.data;
+};
+
 // ============================================================================
 // USER REGISTRATION
 // ============================================================================
@@ -103,15 +162,7 @@ export const loginUser = async (email, password) => {
         }
 
         // Get user profile
-        const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
-
-        if (userError) {
-            throw new Error('Failed to fetch user profile');
-        }
+        const userData = await getUserProfileWithRepair(authData.user.id);
 
         // Store user in localStorage
         localStorage.setItem('user', JSON.stringify({
@@ -200,13 +251,7 @@ export const getCurrentUser = async () => {
         }
 
         // Get user profile
-        const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
-
-        return userData || null;
+        return await getUserProfileWithRepair(authData.user.id);
 
     } catch (error) {
         console.error('Error fetching current user:', error);

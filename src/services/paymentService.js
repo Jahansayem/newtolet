@@ -1,11 +1,12 @@
 import { supabase } from './supabaseClient'
-import { authenticatedJsonRequest } from './apiClient'
+import { getAccessToken } from './apiClient'
 import { getCreditPackages as getAdminCreditPackages } from './adminService'
 import {
   buildUserPanelCacheKey,
   invalidateUserPanelCache,
   revalidateUserPanelResource,
 } from './cacheService'
+import { invokeSupabaseFunction } from './functionClient'
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
 
 const PAYMENT_GATEWAYS = {
@@ -59,8 +60,15 @@ export const getPaymentGateways = () => Object.values(PAYMENT_GATEWAYS)
 
 export const createPaymentTransaction = async (packageId) => {
   try {
-    const response = await authenticatedJsonRequest('/api/payments/credits/checkout', {
-      method: 'POST',
+    const token = await getAccessToken()
+
+    if (!token) {
+      throw new Error('Authentication required')
+    }
+
+    const response = await invokeSupabaseFunction({
+      functionName: 'paymently-create-checkout',
+      token,
       body: {
         packageId,
       },
@@ -82,8 +90,15 @@ export const createPaymentTransaction = async (packageId) => {
 
 export const verifyPayment = async (invoiceId) => {
   try {
-    const response = await authenticatedJsonRequest('/api/payments/credits/verify', {
-      method: 'POST',
+    const token = await getAccessToken()
+
+    if (!token) {
+      throw new Error('Authentication required')
+    }
+
+    const response = await invokeSupabaseFunction({
+      functionName: 'paymently-verify',
+      token,
       body: { invoiceId },
     })
 

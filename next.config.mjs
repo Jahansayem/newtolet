@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 const configDir = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig = {
+  output: 'export',
   trailingSlash: true,
   turbopack: {
     root: configDir,

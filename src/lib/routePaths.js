@@ -3,10 +3,13 @@ const PAGE_BY_PATH = Object.freeze({
   '/addproperty': 'addproperty',
   '/admin': 'admin',
   '/admin-dashboard': 'admin-dashboard',
+  '/article': 'article',
   '/book': 'book',
   '/book/buy-credits': 'book-buy-credits',
+  '/career': 'career',
   '/contact': 'contact',
   '/dashboard': 'dashboard',
+  '/bd/property-listing': 'propertylist2',
   '/earnmoney': 'earnmoney',
   '/edit-property': 'edit-property',
   '/forgot-password': 'forgot-password',
@@ -24,6 +27,13 @@ const PAGE_BY_PATH = Object.freeze({
   '/reset-password': 'reset-password',
   '/terms': 'terms',
 })
+
+const PATH_BY_PAGE = Object.freeze(
+  Object.entries(PAGE_BY_PATH).reduce((accumulator, [pathname, page]) => {
+    accumulator[page] = pathname
+    return accumulator
+  }, {})
+)
 
 const EXTERNAL_PROTOCOL_PATTERN = /^[a-z][a-z\d+\-.]*:/i
 const INTERNAL_ORIGIN = 'https://newtolet.local'
@@ -62,17 +72,30 @@ const setParamValues = (params, values = {}) => {
   return params
 }
 
-export const buildPageHref = (page = '', params = {}, hash = '') => {
-  const searchParams = new URLSearchParams()
-
-  if (page) {
-    searchParams.set('page', page)
+const normalizeParamsInput = (paramsLike = {}) => {
+  if (paramsLike instanceof URLSearchParams) {
+    return new URLSearchParams(paramsLike.toString())
   }
 
-  setParamValues(searchParams, params)
+  if (typeof paramsLike?.entries === 'function') {
+    return new URLSearchParams(Array.from(paramsLike.entries()))
+  }
 
+  return setParamValues(new URLSearchParams(), paramsLike)
+}
+
+export const resolvePagePath = (page = '') => PATH_BY_PAGE[page] || '/'
+
+export const resolveLegacyPageHref = (page = '', paramsLike = {}, hash = '') => {
+  const pathname = resolvePagePath(page)
+  const searchParams = normalizeParamsInput(paramsLike)
   const queryString = searchParams.toString()
-  return appendHash(queryString ? `/?${queryString}` : '/', hash)
+
+  return appendHash(queryString ? `${pathname}?${queryString}` : pathname, hash)
+}
+
+export const buildPageHref = (page = '', params = {}, hash = '') => {
+  return resolveLegacyPageHref(page, params, hash)
 }
 
 export const getRoutePage = (pathname = '/', searchParamsLike = null) => {
@@ -85,7 +108,13 @@ export const getRoutePage = (pathname = '/', searchParamsLike = null) => {
     return String(explicitPage).trim()
   }
 
-  return PAGE_BY_PATH[normalizePathname(pathname)] || ''
+  const normalizedPath = normalizePathname(pathname)
+
+  if (normalizedPath.startsWith('/bd/property-division/')) {
+    return 'propertylist2'
+  }
+
+  return PAGE_BY_PATH[normalizedPath] || ''
 }
 
 export const canonicalizeInternalHref = (href) => {
@@ -109,20 +138,19 @@ export const canonicalizeInternalHref = (href) => {
 
   const resolvedUrl = new URL(trimmedHref, INTERNAL_ORIGIN)
   const normalizedPathname = normalizePathname(resolvedUrl.pathname)
-  const mappedPage = PAGE_BY_PATH[normalizedPathname]
+  const explicitPage = normalizedPathname === '/' ? resolvedUrl.searchParams.get('page') : null
 
-  if (!mappedPage) {
-    if (normalizedPathname === '/') {
-      return appendHash(resolvedUrl.search ? `/${resolvedUrl.search}` : '/', resolvedUrl.hash)
-    }
-
-    return appendHash(`${resolvedUrl.pathname}${resolvedUrl.search}`, resolvedUrl.hash)
+  if (explicitPage) {
+    const nextParams = new URLSearchParams(resolvedUrl.search)
+    nextParams.delete('page')
+    return resolveLegacyPageHref(explicitPage, nextParams, resolvedUrl.hash)
   }
 
-  const params = new URLSearchParams(resolvedUrl.search)
-  params.set('page', mappedPage)
+  if (normalizedPathname === '/') {
+    return appendHash(resolvedUrl.search ? `/${resolvedUrl.search}` : '/', resolvedUrl.hash)
+  }
 
-  return appendHash(`/?${params.toString()}`, resolvedUrl.hash)
+  return appendHash(`${resolvedUrl.pathname}${resolvedUrl.search}`, resolvedUrl.hash)
 }
 
 export const buildListDetailsHref = (id) => buildPageHref('listdetails', { id })
@@ -131,8 +159,8 @@ export const buildOrderhomeHref = (id) => buildPageHref('orderhome', { id })
 
 export const buildBookHref = (id) => buildPageHref('book', { id })
 
-export const buildEditPropertyHref = (propertyId) =>
-  buildPageHref('edit-property', { propertyId })
+export const buildEditPropertyHref = (propertyId, params = {}) =>
+  buildPageHref('edit-property', { propertyId, ...params })
 
 export const buildDashboardHref = (tab = 'dashboard') =>
   buildPageHref('dashboard', { tab })

@@ -4,6 +4,9 @@ const DOCUMENT_CACHE = `${CACHE_PREFIX}-documents`
 const STATIC_CACHE = `${CACHE_PREFIX}-static`
 const IMAGE_CACHE = `${CACHE_PREFIX}-images`
 const DATA_CACHE = `${CACHE_PREFIX}-data`
+const IS_LOCAL_DEV =
+  self.location.hostname === 'localhost' ||
+  self.location.hostname === '127.0.0.1'
 
 const CACHEABLE_DOCUMENT_PREFIXES = [
   '/',
@@ -116,6 +119,16 @@ const isSameOriginJsonRequest = (request, url) =>
   url.origin === self.location.origin &&
   url.pathname.endsWith('.json')
 
+const clearNewtoletCaches = async () => {
+  const cacheNames = await caches.keys()
+
+  await Promise.all(
+    cacheNames
+      .filter((cacheName) => cacheName.startsWith('newtolet-'))
+      .map((cacheName) => caches.delete(cacheName))
+  )
+}
+
 const putInCache = async (cacheName, request, response) => {
   if (!isCacheableResponse(response)) {
     return response
@@ -197,6 +210,12 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      if (IS_LOCAL_DEV) {
+        await clearNewtoletCaches()
+        await self.registration.unregister()
+        return
+      }
+
       const cacheNames = await caches.keys()
 
       await Promise.all(
@@ -211,6 +230,10 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', (event) => {
+  if (IS_LOCAL_DEV) {
+    return
+  }
+
   const { request } = event
 
   if (request.method !== 'GET') {

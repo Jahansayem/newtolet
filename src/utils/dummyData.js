@@ -16,6 +16,7 @@ export const DUMMY_PROPERTY_DATA = {
   // Screen 2: Pricing
   rent_amount_bdt: 25000,
   rent_period: 'Monthly',  // Matches rentPeriods array
+  is_rent_negotiable: false,
 
   // Screen 3: Location
   state_district: 'Dhaka',

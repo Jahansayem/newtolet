@@ -18,6 +18,11 @@ const menuItems = [
     icon: FiPlus,
   },
   {
+    href: buildPageHref('my-orders'),
+    label: 'Order Home',
+    icon: FiHome,
+  },
+  {
     href: buildPageHref('propertylist2'),
     label: 'Property List',
     icon: BiBuildings,
@@ -132,6 +137,24 @@ const FloatingQuickRail = () => {
         icon: FiHome,
         isActive: !page,
       },
+      ...(!page
+        ? [
+            {
+              key: 'add-property',
+              href: buildPageHref('addproperty'),
+              label: 'Add Property',
+              icon: FiPlus,
+              isActive: false,
+            },
+            {
+              key: 'order-home',
+              href: buildPageHref('my-orders'),
+              label: 'Order Home',
+              icon: FiHome,
+              isActive: false,
+            },
+          ]
+        : []),
       {
         key: 'properties',
         href: buildPageHref('propertylist2'),
@@ -160,17 +183,17 @@ const FloatingQuickRail = () => {
   )
 
   const railButtonClass = (active) =>
-    `relative flex h-12 w-12 items-center justify-center rounded-full border text-lg shadow-md transition-all duration-200 md:h-14 md:w-14 ${
+    `relative flex h-11 w-11 items-center justify-center rounded-full border text-base shadow-md transition-all duration-200 md:h-12 md:w-12 ${
       active
         ? 'border-[#1E73B8] bg-blue-50 text-[#1E73B8] shadow-lg'
-        : 'border-[#1E73B8] bg-white text-[#1E73B8] hover:-translate-y-0.5 hover:shadow-lg'
+        : 'border-[#1E73B8]/45 bg-white/98 text-[#1E73B8] hover:-translate-y-0.5 hover:shadow-lg'
     }`
 
   return (
     <>
       <div
         ref={desktopRailRef}
-        className="fixed right-2 top-1/2 z-40 hidden -translate-y-1/2 flex-col gap-4 sm:flex md:right-4 lg:right-6"
+        className="fixed bottom-6 right-3 z-40 hidden flex-col gap-3 sm:flex md:right-4 lg:right-6"
       >
         <button
           type="button"
@@ -215,7 +238,7 @@ const FloatingQuickRail = () => {
         )}
 
         {menuOpen ? (
-          <div className="absolute right-full top-0 mr-3 w-52 rounded-2xl border border-blue-100 bg-white p-3 shadow-2xl">
+          <div className="absolute bottom-0 right-full mr-3 w-52 rounded-2xl border border-blue-100 bg-white p-3 shadow-2xl">
             <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">
               Quick Access
             </p>
@@ -274,7 +297,7 @@ const FloatingQuickRail = () => {
             </>
           ) : null}
 
-          <div className="flex max-w-max items-center gap-3 rounded-full border border-blue-100 bg-white/95 px-3 py-2 shadow-xl backdrop-blur">
+          <div className="flex max-w-[calc(100vw-1.5rem)] items-center gap-2 overflow-x-auto rounded-full border border-blue-100 bg-white/95 px-2.5 py-2 shadow-xl backdrop-blur scrollbar-hide">
             <button
               type="button"
               aria-label="Open quick actions"

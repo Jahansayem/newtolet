@@ -6,6 +6,7 @@ import LocationPicker from '../../components/AddProperty/LocationPicker'
 import { submitPropertyListing } from '../../services/propertyService'
 import { validateScreen1, validateScreen2, validateScreen3, validateScreen4 } from '../../utils/formValidation'
 import { getStoredUser } from '../../services/authService'
+import RentDisplay from '../../components/RentDisplay'
 import locationData from '../../thetolet_locations_bundle.json'
 
 const categories = [
@@ -33,6 +34,11 @@ const floorLevels = [
   '13th Floor',
   '14th Floor',
   '15th Floor',
+  '16th Floor',
+  '17th Floor',
+  '18th Floor',
+  '19th Floor',
+  '20th Floor',
 ]
 
 const occupancies = [
@@ -119,6 +125,26 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
   )
 }
 
+const CheckboxInput = ({ label, checked, onChange, error, optional = false }) => (
+  <div>
+    <span className='block text-xs md:text-sm font-semibold text-black mb-1'>
+      {label} {!optional && '*'}
+    </span>
+    <label className='flex min-h-[42px] items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white cursor-pointer hover:bg-gray-50 transition-colors'>
+      <input
+        type='checkbox'
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className='h-4 w-4 rounded border-gray-300 text-[#1E73B8] focus:ring-[#1E73B8]'
+      />
+      <span className='text-sm md:text-base text-black'>
+        {checked ? 'Yes' : 'No'}
+      </span>
+    </label>
+    {error && <p className='text-red-500 text-xs mt-1'>{error}</p>}
+  </div>
+)
+
 const SizeInput = ({ label, value, onChange }) => {
   const handleDecrement = () => {
     const currentValue = parseInt(value) || 0
@@ -186,6 +212,7 @@ const AddPropertyContent = () => {
 
   const [submitError, setSubmitError] = useState(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [showLocationPicker, setShowLocationPicker] = useState(false)
   const [showOptionalLocation, setShowOptionalLocation] = useState(false)
 
@@ -205,14 +232,16 @@ const AddPropertyContent = () => {
     setSelectedDivision(division)
     setSelectedDistrict('')
     setSelectedUpazilla('')
-    updateFormData({ state_district: division })
+    setSelectedSubArea('')
+    updateFormData({ state_district: division, area: '', sub_area: '' })
   }
 
   // Handle district change
   const handleDistrictChange = (district) => {
     setSelectedDistrict(district)
     setSelectedUpazilla('')
-    updateFormData({ state_district: selectedDivision })
+    setSelectedSubArea('')
+    updateFormData({ state_district: district, area: '', sub_area: '' })
   }
 
   // Handle upazilla change
@@ -315,12 +344,15 @@ const AddPropertyContent = () => {
       )
 
       if (result.success) {
+        setSubmitSuccessMessage(
+          result.message || `Property listing #${result.propertyId} created successfully!`
+        )
         setSubmitSuccess(true)
         resetForm()
         setTimeout(() => {
           navigate('/my-properties', {
             state: {
-              message: `Property listing #${result.propertyId} created successfully!`,
+              message: result.message || `Property listing #${result.propertyId} created successfully!`,
             },
           })
         }, 2000)
@@ -354,7 +386,7 @@ const AddPropertyContent = () => {
           </div>
           <h2 className='text-2xl font-bold text-green-900 mb-2'>Success!</h2>
           <p className='text-green-700 mb-4'>
-            Your property listing has been submitted successfully!
+            {submitSuccessMessage || 'Your property listing has been submitted successfully!'}
           </p>
           <p className='text-sm text-gray-600'>Redirecting to your properties...</p>
         </div>
@@ -453,10 +485,10 @@ const AddPropertyContent = () => {
                   error={errors.dining_rooms}
                   optional
                 />
-                <CounterInput
-                  label='Living Rooms'
-                  value={formData.living_rooms || 0}
-                  onChange={(val) => updateFormData({ living_rooms: val })}
+                <CheckboxInput
+                  label='Drawing Room'
+                  checked={Number(formData.living_rooms || 0) > 0}
+                  onChange={(checked) => updateFormData({ living_rooms: checked ? 1 : 0 })}
                   error={errors.living_rooms}
                   optional
                 />
@@ -552,7 +584,7 @@ const AddPropertyContent = () => {
               {/* Rent Amount */}
               <div>
                 <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                  Rent Amount (BDT) *
+                  Rent Amount (BDT) {formData.is_rent_negotiable ? '' : '*'}
                 </label>
                 <div className='relative'>
                   <span className='absolute left-3 md:left-4 top-2.5 md:top-3 text-lg md:text-xl font-semibold text-gray-600'>
@@ -573,6 +605,19 @@ const AddPropertyContent = () => {
                 </div>
                 {errors.rent_amount_bdt && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_amount_bdt}</p>}
               </div>
+
+              <label className='flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer'>
+                <input
+                  type='checkbox'
+                  checked={Boolean(formData.is_rent_negotiable)}
+                  onChange={(e) => updateFormData({ is_rent_negotiable: e.target.checked })}
+                  className='mt-1 h-4 w-4 text-[#1E73B8] bg-white'
+                />
+                <span>
+                  <span className='block text-sm md:text-base font-semibold text-black'>Rent is negotiable</span>
+                  <span className='block text-xs md:text-sm text-gray-600'>Tenants will see this listing as negotiable. You can leave the amount empty.</span>
+                </span>
+              </label>
 
               {/* Rent Period */}
               <div>
@@ -605,10 +650,18 @@ const AddPropertyContent = () => {
                 {errors.rent_period && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_period}</p>}
               </div>
 
-              {formData.rent_amount_bdt && formData.rent_period && (
+              {(formData.rent_amount_bdt || formData.is_rent_negotiable) && formData.rent_period && (
                 <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
                   <p className='text-sm md:text-base text-green-800'>
-                    <strong>Price:</strong> ৳ {formData.rent_amount_bdt.toLocaleString('en-BD')} per {formData.rent_period.toLowerCase()}
+                    <strong>Price:</strong>{' '}
+                    <RentDisplay
+                      pricing={{
+                        rent_amount_bdt: formData.rent_amount_bdt,
+                        is_rent_negotiable: formData.is_rent_negotiable,
+                      }}
+                      prefix='৳ '
+                      suffix={!formData.is_rent_negotiable || formData.rent_amount_bdt ? `per ${formData.rent_period.toLowerCase()}` : ''}
+                    />
                   </p>
                 </div>
               )}
@@ -857,23 +910,6 @@ const AddPropertyContent = () => {
                   onImagesChange={handleImagesChange}
                   error={errors.images}
                 />
-              </div>
-
-              {/* Summary */}
-              <div className='bg-gradient-to-r from-[#1E73B8]/5 to-[#1E73B8]/10 border border-[#1E73B8]/30 rounded-lg p-4 md:p-6'>
-                <h4 className='font-bold text-black text-base md:text-lg mb-3'>📋 Submission Summary</h4>
-                <div className='space-y-1.5 md:space-y-2 text-xs md:text-sm text-black'>
-                  <p><strong>Category:</strong> {formData.category || '-'}</p>
-                  <p><strong>Price:</strong> {formData.rent_amount_bdt ? `৳${formData.rent_amount_bdt.toLocaleString('en-BD')} per ${formData.rent_period}` : '-'}</p>
-                  <p><strong>Location:</strong> {formData.area ? `${formData.area}, ${formData.state_district}` : '-'}</p>
-                  <p><strong>Images:</strong> {formData.images.length} / 10</p>
-                  <p><strong>Amenities:</strong> {formData.amenities.length > 0 ? formData.amenities.join(', ') : 'None selected'}</p>
-                </div>
-                <div className='bg-amber-50 border border-amber-200 rounded p-2.5 md:p-3 mt-3 md:mt-4'>
-                  <p className='text-xs md:text-sm text-amber-800'>
-                    <strong>⚠️ Cost:</strong> This listing will cost you <strong>20 credits</strong> to submit.
-                  </p>
-                </div>
               </div>
             </div>
           </div>

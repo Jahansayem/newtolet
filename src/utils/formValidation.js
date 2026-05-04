@@ -36,8 +36,12 @@ export const validateScreen1 = (data) => {
 
 export const validateScreen2 = (data) => {
   const errors = {}
+  const hasRentAmount = data.rent_amount_bdt !== '' && data.rent_amount_bdt !== null && data.rent_amount_bdt !== undefined
+  const isNegotiable = data.is_rent_negotiable === true || data.is_rent_negotiable === 'true'
 
-  if (!data.rent_amount_bdt || data.rent_amount_bdt <= 0) {
+  if (!isNegotiable && !hasRentAmount) {
+    errors.rent_amount_bdt = 'Please enter rent amount or mark it as negotiable'
+  } else if (hasRentAmount && Number(data.rent_amount_bdt) <= 0) {
     errors.rent_amount_bdt = 'Please enter valid rent amount (must be greater than 0)'
   }
 

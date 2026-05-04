@@ -10,7 +10,7 @@ import {
 } from './propertySearch'
 
 const baseInputClassName =
-  'w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/15'
+  'site-field text-sm'
 
 const PropertySearchForm = ({
   filters = DEFAULT_SEARCH_FILTERS,
@@ -42,7 +42,7 @@ const PropertySearchForm = ({
               type='text'
               value={filters.search}
               onChange={handleChange('search')}
-              placeholder='Search by area, property ID, road or keyword'
+              placeholder='Search by area, sub-area, property ID or keyword'
               className={`${baseInputClassName} pl-11`}
             />
           </div>
@@ -205,17 +205,17 @@ const PropertySearchForm = ({
         )}
       </div>
 
-      <div className='flex flex-wrap items-center gap-3'>
+      <div className='flex flex-wrap items-center gap-3 pt-1'>
         <button
           type='submit'
-          className='inline-flex items-center justify-center rounded-full bg-[#1E73B8] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#17639c]'
+          className='site-button-primary text-sm'
         >
           {submitLabel}
         </button>
         <button
           type='button'
           onClick={onReset}
-          className='inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-semibold text-gray-700 transition hover:border-gray-300 hover:bg-gray-50'
+          className='site-button-secondary text-sm'
         >
           {resetLabel}
         </button>

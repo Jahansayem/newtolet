@@ -91,6 +91,18 @@ const PaymentMonitoring = () => {
     const items = result.data || []
     setTransactions(items)
     setFilteredTransactions(items)
+    if (result.error) {
+      setFeedback({
+        type: 'error',
+        text: result.error?.message || 'Unable to load payment transactions.',
+      })
+    } else {
+      setFeedback((current) =>
+        current.type === 'error' && current.text === 'Unable to load payment transactions.'
+          ? { type: '', text: '' }
+          : current
+      )
+    }
     setLoading(false)
   }, [])
 

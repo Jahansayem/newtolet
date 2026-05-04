@@ -34,6 +34,7 @@ const CREDIT_TRANSACTION_LABELS = {
   referral_bonus: 'Referral Bonus',
   property_listing: 'Property Listing',
   contact_view: 'Contact Unlock',
+  contact_view_refund: 'Contact Unlock Refund',
   photo_view: 'Photo Unlock',
 }
 

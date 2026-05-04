@@ -1,8 +1,1 @@
-export const HOME_CATEGORIES = [
-    'Family',
-    'Bachelor',
-    'Office',
-    'Sublet',
-    'Hostel',
-    'Shop',
-];
+export { HOME_CATEGORIES } from '../../lib/propertyCategories'

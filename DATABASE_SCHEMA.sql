@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS public.properties (
   floor_level TEXT,
   occupancy TEXT,
   room_size_sqft INTEGER,
-  rent_amount_bdt INTEGER NOT NULL,
+  rent_amount_bdt INTEGER,
   rent_period TEXT NOT NULL,
   state_district TEXT NOT NULL,
   area TEXT NOT NULL,
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS public.properties (
   property_id_number TEXT,
   dining_rooms INTEGER DEFAULT 0,
   living_rooms INTEGER DEFAULT 0,
-  is_rent_negotiable BOOLEAN DEFAULT false
+  is_rent_negotiable BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS public.property_images (
@@ -332,7 +332,12 @@ ALTER TABLE IF EXISTS public.properties
   ADD COLUMN IF NOT EXISTS property_id_number TEXT,
   ADD COLUMN IF NOT EXISTS dining_rooms INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS living_rooms INTEGER DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS is_rent_negotiable BOOLEAN DEFAULT false;
+  ADD COLUMN IF NOT EXISTS is_rent_negotiable BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE IF EXISTS public.properties
+  ALTER COLUMN rent_amount_bdt DROP NOT NULL,
+  ALTER COLUMN is_rent_negotiable SET DEFAULT false,
+  ALTER COLUMN is_rent_negotiable SET NOT NULL;
 
 ALTER TABLE IF EXISTS public.property_images
   ADD COLUMN IF NOT EXISTS is_thumbnail BOOLEAN DEFAULT false,

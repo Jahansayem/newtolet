@@ -25,6 +25,7 @@ const SAVED_PROPERTIES_EVENT = 'saved-properties-updated'
 const FAVORITES_TABLE = 'property_favorites'
 const VIEW_HISTORY_TABLE = 'property_view_history'
 const JOB_PARTICIPATIONS_TABLE = 'job_participations'
+const PUBLIC_PROPERTIES_VIEW = 'public_property_catalog'
 
 const getUserScopedCacheKey = (userId, resourceKey) =>
   buildUserPanelCacheKey(userId || 'guest', resourceKey)
@@ -34,6 +35,8 @@ const getGlobalCacheKey = (resourceKey) =>
 
 const getPropertyAnalyticsCacheKey = (propertyId) =>
   getUserScopedCacheKey('global', `property-analytics:${propertyId}`)
+
+const CONTACT_UNLOCK_REFUND_WINDOW_MS = 72 * 60 * 60 * 1000
 
 const fetchWithUserPanelCache = async ({
   userId,
@@ -58,6 +61,74 @@ const isMissingResourceError = (error) =>
   error?.message?.includes('Could not find the table') ||
   error?.message?.includes('does not exist')
 
+const isEmptyPlainObjectError = (error) =>
+  error &&
+  Object.keys(error).length === 0 &&
+  error.constructor === Object
+
+const isSavedPropertyFallbackError = (error) => {
+  if (!error) {
+    return true
+  }
+
+  const message = String(error?.message || '').toLowerCase()
+  const details = String(error?.details || '').toLowerCase()
+  const hint = String(error?.hint || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+
+  return (
+    isMissingResourceError(error) ||
+    isEmptyPlainObjectError(error) ||
+    code === '42501' ||
+    code === '401' ||
+    code === '403' ||
+    message.includes('permission denied') ||
+    message.includes('row-level security') ||
+    message.includes('violates row-level security') ||
+    message.includes('jwt') ||
+    message.includes('not authenticated') ||
+    message.includes('forbidden') ||
+    details.includes('row-level security') ||
+    hint.includes('row-level security')
+  )
+}
+
+const isMissingPublicCatalogError = (error) =>
+  error?.code === 'PGRST205' ||
+  error?.code === '42P01' ||
+  error?.message?.includes(`Could not find the table '${PUBLIC_PROPERTIES_VIEW}'`) ||
+  error?.message?.includes('does not exist')
+
+const isSuppressiblePropertyViewError = (error) => {
+  if (!error) {
+    return true
+  }
+
+  const message = String(error?.message || '').toLowerCase()
+  const details = String(error?.details || '').toLowerCase()
+  const hint = String(error?.hint || '').toLowerCase()
+  const code = String(error?.code || '').toLowerCase()
+
+  return (
+    isMissingResourceError(error) ||
+    code === '42501' ||
+    code === '401' ||
+    code === '403' ||
+    code === '23505' ||
+    message.includes('permission denied') ||
+    message.includes('row-level security') ||
+    message.includes('violates row-level security') ||
+    message.includes('duplicate key') ||
+    message.includes('jwt') ||
+    message.includes('not authenticated') ||
+    message.includes('forbidden') ||
+    details.includes('row-level security') ||
+    details.includes('duplicate key') ||
+    hint.includes('row-level security') ||
+    isEmptyPlainObjectError(error)
+  )
+}
+
 const normalizePropertyRow = (property, imageMap = new Map()) => ({
   id: property.id,
   property_id_number: property.property_id_number,
@@ -66,12 +137,12 @@ const normalizePropertyRow = (property, imageMap = new Map()) => ({
   pricing: {
     rent_amount_bdt: property.rent_amount_bdt,
     rent_period: property.rent_period,
+    is_rent_negotiable: Boolean(property.is_rent_negotiable),
   },
   location: {
     state_district: property.state_district,
     area: property.area,
     sub_area: property.sub_area || null,
-    contact_number: property.contact_number || null,
     short_description: property.short_description || '',
   },
   specifications: {
@@ -136,12 +207,28 @@ const fetchPropertiesWithImages = async (propertyIds = []) => {
     return []
   }
 
-  const { data: properties, error: propertyError } = await supabase
-    .from('properties')
+  let properties = []
+  const { data: publicProperties, error: propertyError } = await supabase
+    .from(PUBLIC_PROPERTIES_VIEW)
     .select('*')
     .in('id', propertyIds)
 
-  if (propertyError) {
+  if (!propertyError) {
+    properties = publicProperties || []
+  } else if (isMissingPublicCatalogError(propertyError)) {
+    const { data: legacyProperties, error: legacyPropertyError } = await supabase
+      .from('properties')
+      .select('*')
+      .in('id', propertyIds)
+      .eq('status', 'approved')
+      .neq('is_active', false)
+
+    if (legacyPropertyError) {
+      throw legacyPropertyError
+    }
+
+    properties = legacyProperties || []
+  } else {
     throw propertyError
   }
 
@@ -191,7 +278,10 @@ export const getSavedPropertyIds = async (userId) => {
       },
     })
   } catch (error) {
-    console.error('Error fetching saved property ids:', error)
+    if (!isSavedPropertyFallbackError(error)) {
+      console.warn('Falling back to local saved property ids:', error)
+    }
+
     return readLocalSavedPropertyIds()
   }
 }
@@ -281,6 +371,18 @@ export const recordPropertyView = async (userId, propertyId) => {
   }
 
   try {
+    const { error: rpcError } = await supabase.rpc('record_property_view', {
+      p_property_id: propertyId,
+    })
+
+    if (!rpcError) {
+      return
+    }
+
+    if (!isMissingResourceError(rpcError)) {
+      throw rpcError
+    }
+
     const { data: existing, error: readError } = await supabase
       .from(VIEW_HISTORY_TABLE)
       .select('id, view_count')
@@ -319,11 +421,13 @@ export const recordPropertyView = async (userId, propertyId) => {
       view_count: 1,
     })
 
-    if (insertError && !isMissingResourceError(insertError)) {
+    if (insertError && !isSuppressiblePropertyViewError(insertError)) {
       throw insertError
     }
   } catch (error) {
-    console.error('Error recording property view:', error)
+    if (!isSuppressiblePropertyViewError(error)) {
+      console.error('Error recording property view:', error)
+    }
   } finally {
     invalidateUserResource(userId, 'recently-viewed')
   }
@@ -381,9 +485,9 @@ export const getUnlockedProperties = async (userId) => {
       userId,
       resourceKey: 'unlocked-properties',
       fetcher: async () => {
-        const { data, error } = await supabase
+        const { data: unlockRows, error } = await supabase
           .from('contact_views')
-          .select('property_id, viewed_at, credits_spent')
+          .select('id, property_id, viewed_at, credits_spent')
           .eq('user_id', userId)
           .order('viewed_at', { ascending: false })
 
@@ -391,14 +495,69 @@ export const getUnlockedProperties = async (userId) => {
           throw error
         }
 
-        const propertyIds = (data || []).map((entry) => entry.property_id).filter(Boolean)
+        const propertyIds = (unlockRows || []).map((entry) => entry.property_id).filter(Boolean)
+        const contactViewIds = (unlockRows || []).map((entry) => entry.id).filter(Boolean)
         const properties = await fetchPropertiesWithImages(propertyIds)
-        const metadataByPropertyId = new Map((data || []).map((entry) => [entry.property_id, entry]))
+        const metadataByPropertyId = new Map(
+          (unlockRows || []).map((entry) => [entry.property_id, entry])
+        )
+        let refundRows = []
+
+        if (contactViewIds.length) {
+          const { data: refunds, error: refundError } = await supabase
+            .from('contact_unlock_refund_requests')
+            .select(`
+              contact_view_id,
+              reason_code,
+              status,
+              requested_at,
+              reviewed_at,
+              credited_at,
+              credits_restored
+            `)
+            .in('contact_view_id', contactViewIds)
+
+          if (refundError && !isMissingResourceError(refundError)) {
+            throw refundError
+          }
+
+          refundRows = refunds || []
+        }
+
+        const refundByContactViewId = new Map(
+          refundRows.map((entry) => [entry.contact_view_id, entry])
+        )
 
         return properties.map((property) => ({
           ...property,
+          contact_view_id: metadataByPropertyId.get(property.id)?.id || null,
           unlocked_at: metadataByPropertyId.get(property.id)?.viewed_at || null,
-          credits_spent: metadataByPropertyId.get(property.id)?.credits_spent || 0,
+          credits_spent: Number(metadataByPropertyId.get(property.id)?.credits_spent || 0),
+          refund_status:
+            refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id)?.status || null,
+          refund_reason_code:
+            refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id)?.reason_code ||
+            null,
+          refund_requested_at:
+            refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id)?.requested_at ||
+            null,
+          refund_reviewed_at:
+            refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id)?.reviewed_at ||
+            null,
+          refund_credited_at:
+            refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id)?.credited_at ||
+            null,
+          credits_restored: Number(
+            refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id)
+              ?.credits_restored || 0
+          ),
+          can_claim_refund:
+            !refundByContactViewId.get(metadataByPropertyId.get(property.id)?.id) &&
+            Boolean(metadataByPropertyId.get(property.id)?.id) &&
+            Boolean(metadataByPropertyId.get(property.id)?.viewed_at) &&
+            Date.now() -
+              new Date(metadataByPropertyId.get(property.id)?.viewed_at).getTime() <=
+              CONTACT_UNLOCK_REFUND_WINDOW_MS,
         }))
       },
     })
@@ -729,27 +888,20 @@ export const getPropertyAnalytics = async (propertyId) => {
       resourceKey: `property-analytics:${propertyId}`,
       cacheKey: getPropertyAnalyticsCacheKey(propertyId),
       fetcher: async () => {
-        const [{ count: contactUnlocks }, { data: recentViews }] = await Promise.all([
-          supabase
-            .from('contact_views')
-            .select('id', { count: 'exact', head: true })
-            .eq('property_id', propertyId),
-          supabase
-            .from(VIEW_HISTORY_TABLE)
-            .select('view_count')
-            .eq('property_id', propertyId),
-        ])
+        const { data, error } = await supabase.rpc('get_property_contact_unlock_analytics', {
+          p_property_id: propertyId,
+        })
 
-        const totalCreditsSpent = 10 * Number(contactUnlocks || 0)
-        const recentViewCount = (recentViews || []).reduce(
-          (sum, entry) => sum + Number(entry.view_count || 0),
-          0
-        )
+        if (error) {
+          throw error
+        }
+
+        const analytics = Array.isArray(data) ? data[0] : data
 
         return {
-          contactUnlocks: Number(contactUnlocks || 0),
-          totalCreditsSpent,
-          recentViewCount,
+          contactUnlocks: Number(analytics?.contact_unlocks || 0),
+          totalCreditsSpent: Number(analytics?.total_credits_spent || 0),
+          recentViewCount: Number(analytics?.recent_view_count || 0),
         }
       },
     })
@@ -821,5 +973,41 @@ export const getWithdrawalsPanelData = async (userId) =>
       }
     },
   })
+
+export const createContactUnlockRefundRequest = async (contactViewId, reasonCode, details = '') => {
+  if (!contactViewId || !reasonCode) {
+    return { data: null, error: new Error('Unlock record and reason are required.') }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('create_contact_unlock_refund_request', {
+      p_contact_view_id: contactViewId,
+      p_reason_code: reasonCode,
+      p_details: details || null,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    return { data: Array.isArray(data) ? data[0] : data, error: null }
+  } catch (error) {
+    console.error('Error creating contact unlock refund request:', error)
+    return { data: null, error }
+  } finally {
+    try {
+      const user = await getCurrentUser()
+      if (user?.id) {
+        invalidateUserResource(user.id, 'unlocked-properties')
+        invalidateUserResource(user.id, 'dashboard')
+        invalidateUserResource(user.id, 'wallet-panel')
+        invalidateUserResource(user.id, 'credit-history')
+        invalidateUserResource(user.id, 'credit-balance')
+      }
+    } catch (invalidateError) {
+      console.warn('Unable to refresh user caches after refund request:', invalidateError)
+    }
+  }
+}
 
 export const SAVED_PROPERTIES_BROWSER_EVENT = SAVED_PROPERTIES_EVENT

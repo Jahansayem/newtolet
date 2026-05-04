@@ -45,6 +45,11 @@ const Screen1PropertyDetails = () => {
     '13th Floor',
     '14th Floor',
     '15th Floor',
+    '16th Floor',
+    '17th Floor',
+    '18th Floor',
+    '19th Floor',
+    '20th Floor',
   ]
 
   const occupancies = [
@@ -172,12 +177,25 @@ const Screen1PropertyDetails = () => {
           </div>
         </div>
 
-        {/* Living Rooms */}
+        {/* Drawing Room */}
         <div>
           <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-1'>
-            Living Rooms
+            Drawing Room
           </label>
-          <div className='flex items-center border border-gray-300 rounded-lg overflow-hidden'>
+          <label className='flex min-h-[42px] items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white cursor-pointer hover:bg-gray-50 transition-colors'>
+            <input
+              type='checkbox'
+              checked={Number(formData.living_rooms || 0) > 0}
+              onChange={(e) => {
+                updateFormData({ living_rooms: e.target.checked ? 1 : 0 })
+              }}
+              className='h-4 w-4 rounded border-gray-300 text-[#1E73B8] focus:ring-[#1E73B8]'
+            />
+            <span className='text-sm md:text-base text-gray-700'>
+              {Number(formData.living_rooms || 0) > 0 ? 'Yes' : 'No'}
+            </span>
+          </label>
+          <div className='hidden'>
             <button
               type='button'
               onClick={(e) => {
@@ -187,7 +205,7 @@ const Screen1PropertyDetails = () => {
                 updateFormData({ living_rooms: newValue })
               }}
               className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
-              aria-label='Decrease living rooms'
+              aria-label='Decrease drawing room'
               tabIndex={0}
             >
               −
@@ -201,7 +219,7 @@ const Screen1PropertyDetails = () => {
                 updateFormData({ living_rooms: newValue })
               }}
               className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
-              aria-label='Increase living rooms'
+              aria-label='Increase drawing room'
               tabIndex={0}
             >
               +

@@ -8,20 +8,35 @@ import {
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
 
 // Get credit costs from admin settings (with fallbacks)
-const getPropertyListingCostValue = async () => {
+const getSharedUnlockCostValue = async () => {
   const costs = await getCreditCosts()
-  return costs.property_listing || 20
+  return costs.contact_view || costs.property_listing || costs.photo_view || 20
+}
+
+const getPropertyListingCostValue = async () => {
+  return getSharedUnlockCostValue()
 }
 
 const getContactViewCostValue = async () => {
-  const costs = await getCreditCosts()
-  return costs.contact_view || 10
+  return getSharedUnlockCostValue()
 }
 
 const getPhotoViewCostValue = async () => {
-  const costs = await getCreditCosts()
-  return costs.photo_view || 10
+  return getSharedUnlockCostValue()
 }
+
+const isMissingUnlockRpcError = (error) =>
+  error?.code === 'PGRST202' ||
+  error?.code === '42883' ||
+  error?.message?.includes('Could not find the function public.unlock_property_contact') ||
+  error?.message?.toLowerCase?.().includes('schema cache')
+
+const normalizeUnlockResult = (result) => ({
+  success: Boolean(result?.success),
+  alreadyUnlocked: Boolean(result?.alreadyUnlocked ?? result?.already_unlocked),
+  creditsSpent: Number((result?.creditsSpent ?? result?.credits_spent) || 0),
+  remainingCredits: Number((result?.remainingCredits ?? result?.remaining_credits) || 0),
+})
 
 /**
  * Get user's current credit balance
@@ -241,32 +256,38 @@ export const unlockContactAccess = async (userId, propertyId) => {
     throw new Error('User ID and property ID are required')
   }
 
-  const alreadyUnlocked = await hasUnlockedContactView(userId, propertyId)
+  try {
+    let result = null
+    const { data, error } = await supabase.rpc('unlock_property_contact', {
+      p_property_id: propertyId,
+    })
 
-  if (alreadyUnlocked) {
-    return {
-      success: true,
-      alreadyUnlocked: true,
-      creditsSpent: 0,
-      remainingCredits: await getUserCredits(userId),
+    if (error && !isMissingUnlockRpcError(error)) {
+      throw error
     }
-  }
 
-  const creditsSpent = await getContactViewCostValue()
+    if (!error) {
+      result = Array.isArray(data) ? data[0] : data
+    }
 
-  await deductCredits(userId, creditsSpent, 'contact_view', propertyId)
+    if (!result) {
+      throw new Error('Unlock is temporarily unavailable. Please try again shortly.')
+    }
 
-  const tracked = await trackContactView(userId, propertyId)
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'credit-balance'))
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'credit-history'))
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'dashboard'))
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'wallet-panel'))
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'unlocked-properties'))
 
-  if (!tracked) {
-    throw new Error('Failed to record contact unlock')
-  }
-
-  return {
-    success: true,
-    alreadyUnlocked: false,
-    creditsSpent,
-    remainingCredits: await getUserCredits(userId),
+    return normalizeUnlockResult(result)
+  } catch (error) {
+    console.error('Error unlocking property contact:', error)
+    throw new Error(
+      isMissingUnlockRpcError(error)
+        ? 'Unlock is temporarily unavailable. Please try again shortly.'
+        : error.message || 'Failed to unlock contact information.'
+    )
   }
 }
 

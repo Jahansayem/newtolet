@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
 import { validateScreen2 } from '../../utils/formValidation'
+import RentDisplay from '../RentDisplay'
 
 const Screen2Pricing = () => {
   const { formData, updateFormData, errors, setFormErrors, clearErrors, nextStep } =
@@ -37,7 +38,7 @@ const Screen2Pricing = () => {
       {/* Rent Amount */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-          Monthly Rent Amount (BDT) *
+          Monthly Rent Amount (BDT) {formData.is_rent_negotiable ? '' : '*'}
         </label>
         <div className='relative'>
           <span className='absolute left-3 md:left-4 top-2.5 md:top-3 text-lg md:text-xl font-semibold text-gray-600'>
@@ -63,11 +64,30 @@ const Screen2Pricing = () => {
         )}
         {formData.rent_amount_bdt && (
           <p className='text-green-600 text-xs md:text-sm mt-2 font-medium'>
-            ৳ {formData.rent_amount_bdt.toLocaleString('en-BD')} per{' '}
-            {formData.rent_period?.toLowerCase() || 'period'}
+            <RentDisplay
+              pricing={{
+                rent_amount_bdt: formData.rent_amount_bdt,
+                is_rent_negotiable: formData.is_rent_negotiable,
+              }}
+              prefix='৳ '
+              suffix={`per ${formData.rent_period?.toLowerCase() || 'period'}`}
+            />
           </p>
         )}
       </div>
+
+      <label className='flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer'>
+        <input
+          type='checkbox'
+          checked={Boolean(formData.is_rent_negotiable)}
+          onChange={(e) => updateFormData({ is_rent_negotiable: e.target.checked })}
+          className='mt-1 h-4 w-4 text-blue-600 bg-white'
+        />
+        <span>
+          <span className='block text-sm md:text-base font-semibold text-gray-800'>Rent is negotiable</span>
+          <span className='block text-xs md:text-sm text-gray-600'>Tenants will see this listing as negotiable. You can leave the amount empty.</span>
+        </span>
+      </label>
 
       {/* Rent Period */}
       <div>
@@ -103,14 +123,40 @@ const Screen2Pricing = () => {
       </div>
 
       {/* Price Examples */}
+      {formData.is_rent_negotiable && !formData.rent_amount_bdt && formData.rent_period && (
+        <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
+          <h3 className='font-semibold text-sm md:text-base text-green-900 mb-2 md:mb-3'>Price Summary</h3>
+          <div className='space-y-1 md:space-y-2 text-green-800'>
+            <p className='text-xs md:text-sm'>
+              ðŸ“Œ <strong>Base Price:</strong>{' '}
+              <RentDisplay
+                pricing={{
+                  rent_amount_bdt: formData.rent_amount_bdt,
+                  is_rent_negotiable: formData.is_rent_negotiable,
+                }}
+                prefix='৳ '
+              />
+            </p>
+            <p className='text-xs'>
+              This price will be displayed to potential tenants.
+            </p>
+          </div>
+        </div>
+      )}
       {formData.rent_amount_bdt && formData.rent_period && (
         <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
           <h3 className='font-semibold text-sm md:text-base text-green-900 mb-2 md:mb-3'>Price Summary</h3>
           <div className='space-y-1 md:space-y-2 text-green-800'>
             <p className='text-xs md:text-sm'>
-              📌 <strong>Base Price:</strong> ৳{' '}
-              {formData.rent_amount_bdt.toLocaleString('en-BD')} per{' '}
-              {formData.rent_period.toLowerCase()}
+              📌 <strong>Base Price:</strong>{' '}
+              <RentDisplay
+                pricing={{
+                  rent_amount_bdt: formData.rent_amount_bdt,
+                  is_rent_negotiable: formData.is_rent_negotiable,
+                }}
+                prefix='৳ '
+                suffix={`per ${formData.rent_period.toLowerCase()}`}
+              />
             </p>
             <p className='text-xs'>
               This price will be displayed to potential tenants.

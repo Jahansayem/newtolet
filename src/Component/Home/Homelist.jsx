@@ -13,7 +13,7 @@ const Homelist = ({
     maxItems = null,
     onResultsChange = null,
     containerClassName = 'max-w-7xl',
-    gridClassName = 'grid-cols-2 md:grid-cols-4 lg:grid-cols-5',
+    gridClassName = 'grid-cols-1 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5',
     categoryOverride = null,
     searchFilters = null,
 }) => {
@@ -109,7 +109,7 @@ const Homelist = ({
                 </div>
             )}
 
-            <div className={`cursor-pointer grid ${gridClassName} gap-4 gap-y-8`}>
+            <div className={`grid ${gridClassName} gap-4 gap-y-6 md:gap-5 md:gap-y-8`}>
                 {visibleList.map((item, index) => (
                     <PropertyListingCard
                         key={item.id || index}

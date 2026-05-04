@@ -3,6 +3,7 @@ import {
   buildUserPanelCacheKey,
   invalidateUserPanelCache,
   invalidateUserPanelCacheByPrefix,
+  removeSnapshot,
   readSnapshot,
   revalidateUserPanelResource,
   writeSnapshot,
@@ -13,19 +14,123 @@ import {
   validateImageFile,
 } from './imageUploadService'
 import { hasUnlockedContactView } from './creditService'
-import { getAutoApproveProperties } from './adminService'
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
+import {
+  getAllProperties,
+  getAllPropertiesCacheKey,
+  getHomepageProperties,
+  getHomepagePropertiesCacheKey,
+  getSearchableProperties,
+  getSearchablePropertiesCacheKey,
+  invalidatePropertyCatalogSnapshots,
+} from './propertyCatalogService'
+import { getAutoApproveProperties } from './adminService'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
-const RELATED_RECORD_BATCH_SIZE = 100
+const PROPERTY_DETAIL_RPC = 'get_property_detail_for_viewer'
+const ADMIN_PROPERTY_FILTERS = ['all', 'pending', 'approved', 'rejected', 'duplicate_pending']
+const ADMIN_PROPERTY_PAGE_SIZE = 20
 
-export const getAllPropertiesCacheKey = (options = {}) => {
-  const limit =
-    Number.isInteger(options.limit) && options.limit > 0 ? options.limit : 'all'
-  const offset =
-    Number.isInteger(options.offset) && options.offset >= 0 ? options.offset : 0
+const invalidateAdminPropertySnapshots = () => {
+  ADMIN_PROPERTY_FILTERS.forEach((filter) => {
+    removeSnapshot(`admin-properties:${filter}:${ADMIN_PROPERTY_PAGE_SIZE}:root`)
+  })
+}
 
-  return `properties:all:${limit}:${offset}`
+const normalizeContactNumberForStorage = (value) => {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const digits = value.replace(/\D/g, '')
+
+  if (!digits) {
+    return ''
+  }
+
+  if (digits.startsWith('88')) {
+    return `+${digits}`
+  }
+
+  if (digits.startsWith('0')) {
+    return `+88${digits}`
+  }
+
+  return `+${digits}`
+}
+
+const resolvePropertyStatusForContactNumber = async (contactNumber, excludePropertyId = null) => {
+  const normalizedContactNumber = normalizeContactNumberForStorage(contactNumber)
+
+  if (!normalizedContactNumber) {
+    return {
+      normalizedContactNumber,
+      propertyStatus: 'pending',
+      hasDuplicatePhone: false,
+    }
+  }
+
+  let query = supabase
+    .from('properties')
+    .select('id')
+    .eq('contact_number', normalizedContactNumber)
+    .limit(1)
+
+  if (excludePropertyId) {
+    query = query.neq('id', excludePropertyId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    throw error
+  }
+
+  const hasDuplicatePhone = Array.isArray(data) && data.length > 0
+
+  return {
+    normalizedContactNumber,
+    propertyStatus: hasDuplicatePhone ? 'pending' : 'approved',
+    hasDuplicatePhone,
+  }
+}
+
+const resolveSubmittedPropertyStatus = async ({ contactNumber, excludePropertyId = null }) => {
+  const {
+    normalizedContactNumber,
+    hasDuplicatePhone,
+  } = await resolvePropertyStatusForContactNumber(contactNumber, excludePropertyId)
+
+  if (hasDuplicatePhone) {
+    return {
+      normalizedContactNumber,
+      propertyStatus: 'pending',
+      hasDuplicatePhone,
+      autoApproveEnabled: false,
+    }
+  }
+
+  const autoApproveResult = await getAutoApproveProperties()
+  const autoApproveEnabled = Boolean(autoApproveResult?.data?.auto_approve_properties)
+
+  return {
+    normalizedContactNumber,
+    propertyStatus: autoApproveEnabled ? 'approved' : 'pending',
+    hasDuplicatePhone,
+    autoApproveEnabled,
+  }
+}
+
+const getPropertySubmissionMessage = ({ propertyStatus, hasDuplicatePhone }) => {
+  if (hasDuplicatePhone) {
+    return 'Property listing created and sent to pending review because this phone number is already used in another listing.'
+  }
+
+  if (propertyStatus === 'approved') {
+    return 'Property listing created and approved successfully.'
+  }
+
+  return 'Property listing created and sent to pending review.'
 }
 
 export const getUserPropertiesCacheKey = (userId) =>
@@ -42,17 +147,21 @@ const getPropertyDetailViewerKey = (viewer = {}) => {
 export const getPropertyByIdCacheKey = (propertyId, viewer = {}) =>
   `properties:detail:${propertyId || 'unknown'}:${getPropertyDetailViewerKey(viewer)}`
 
-const maskProtectedPropertyFields = (property, shouldRevealProtectedFields) => ({
-  ...property,
-  contact_number: shouldRevealProtectedFields ? property.contact_number : null,
-  area: shouldRevealProtectedFields ? property.area : null,
-  sub_area: shouldRevealProtectedFields ? property.sub_area : null,
-  sector: shouldRevealProtectedFields ? property.sector : null,
-  road: shouldRevealProtectedFields ? property.road : null,
-  house_plot: shouldRevealProtectedFields ? property.house_plot : null,
-})
-
 const isPropertyVisible = (property) => property?.is_active !== false
+
+const isMissingPropertyDetailRpcError = (error) =>
+  error?.code === 'PGRST202' ||
+  error?.code === '42883' ||
+  error?.message?.includes(`Could not find the function public.${PROPERTY_DETAIL_RPC}`) ||
+  error?.message?.includes('does not exist')
+
+const logPropertyDetailFallback = () => {
+  console.warn(`Using property detail fallback because ${PROPERTY_DETAIL_RPC} is unavailable.`)
+}
+
+const invalidatePropertyCatalogCaches = () => {
+  invalidatePropertyCatalogSnapshots()
+}
 
 const normalizePropertyImageUrl = (value) => {
   if (typeof value !== 'string') {
@@ -107,48 +216,68 @@ const groupPropertyImages = (images) => {
   return imagesByProperty
 }
 
-const chunkArray = (items, chunkSize) => {
-  const chunks = []
+const maskProtectedPropertyFields = (property, shouldRevealProtectedFields) => ({
+  ...property,
+  contact_number: shouldRevealProtectedFields ? property.contact_number : null,
+  sector: shouldRevealProtectedFields ? property.sector : null,
+  road: shouldRevealProtectedFields ? property.road : null,
+  house_plot: shouldRevealProtectedFields ? property.house_plot : null,
+  protected_contact_unlocked: shouldRevealProtectedFields,
+})
 
-  for (let index = 0; index < items.length; index += chunkSize) {
-    chunks.push(items.slice(index, index + chunkSize))
-  }
-
-  return chunks
-}
-
-const fetchRelatedRowsInBatches = async ({
-  table,
-  select = '*',
-  matchColumn = 'property_id',
-  ids = [],
-  orderColumn = null,
-}) => {
-  if (!ids.length) {
-    return []
-  }
-
-  const batches = chunkArray(ids, RELATED_RECORD_BATCH_SIZE)
-  const rows = []
-
-  for (const batch of batches) {
-    let query = supabase.from(table).select(select).in(matchColumn, batch)
-
-    if (orderColumn) {
-      query = query.order(orderColumn)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      throw new Error(`Failed to fetch ${table}: ${error.message}`)
-    }
-
-    rows.push(...(data || []))
-  }
-
-  return rows
-}
+const normalizePropertyDetail = (propertyForViewer, images, amenities) => ({
+  id: propertyForViewer.id,
+  property_id_number: propertyForViewer.property_id_number,
+  category: propertyForViewer.category,
+  property_type: propertyForViewer.property_type,
+  dining_rooms: propertyForViewer.dining_rooms || 0,
+  living_rooms: propertyForViewer.living_rooms || 0,
+  total_bathrooms: propertyForViewer.total_bathrooms,
+  total_balcony: propertyForViewer.balcony,
+  total_kitchen: propertyForViewer.total_kitchen || null,
+  floor_level: propertyForViewer.floor_level,
+  room_size: propertyForViewer.room_size_sqft,
+  occupancy: propertyForViewer.occupancy || null,
+  protected_contact_unlocked: Boolean(propertyForViewer.protected_contact_unlocked),
+  specifications: {
+    dining_rooms: propertyForViewer.dining_rooms || 0,
+    living_rooms: propertyForViewer.living_rooms || 0,
+    total_bathrooms: propertyForViewer.total_bathrooms,
+    total_balcony: propertyForViewer.balcony,
+    total_kitchen: propertyForViewer.total_kitchen || null,
+    floor_level: propertyForViewer.floor_level,
+    room_size: propertyForViewer.room_size_sqft,
+  },
+  pricing: {
+    rent_amount_bdt: propertyForViewer.rent_amount_bdt,
+    rent_period: propertyForViewer.rent_period,
+    is_rent_negotiable: Boolean(propertyForViewer.is_rent_negotiable),
+  },
+  location: {
+    state_district: propertyForViewer.state_district,
+    area: propertyForViewer.area,
+    sub_area: propertyForViewer.sub_area || null,
+    contact_number: propertyForViewer.contact_number,
+    short_description: propertyForViewer.short_description,
+    sector: propertyForViewer.sector,
+    road: propertyForViewer.road,
+    house_plot: propertyForViewer.house_plot,
+  },
+  amenities: (amenities || []).map((a) => a.amenity_type),
+  availability: {
+    available_from: propertyForViewer.available_from,
+    deadline: propertyForViewer.deadline,
+  },
+  images: getNormalizedImages(images),
+  primary_image: getNormalizedImages(images)[0] || null,
+  lat: propertyForViewer.lat,
+  lng: propertyForViewer.lng,
+  status: propertyForViewer.status,
+  is_active: propertyForViewer.is_active !== false,
+  is_pinned: Boolean(propertyForViewer.is_pinned),
+  created_at: propertyForViewer.created_at,
+  createdAt: propertyForViewer.created_at,
+})
 
 /**
  * Generate a unique property ID number
@@ -243,16 +372,14 @@ export const submitPropertyListing = async (
     // ===== STEP 3: Generate Property ID Number =====
     const propertyIdNumber = await generatePropertyIdNumber()
 
-    // ===== STEP 4: Check auto-approve setting =====
-    let propertyStatus = 'pending';
-    try {
-      const autoApproveResult = await getAutoApproveProperties();
-      if (autoApproveResult.data?.auto_approve_properties) {
-        propertyStatus = 'approved';
-      }
-    } catch {
-      console.log('Could not check auto-approve setting, using pending status');
-    }
+    // ===== STEP 4: Resolve status from duplicate phone number rule =====
+    const {
+      normalizedContactNumber,
+      propertyStatus,
+      hasDuplicatePhone,
+    } = await resolveSubmittedPropertyStatus({
+      contactNumber: formData.contact_number,
+    })
 
     // ===== STEP 5: Create property record =====
     const propertyData = {
@@ -268,11 +395,12 @@ export const submitPropertyListing = async (
       floor_level: formData.floor_level,
       occupancy: formData.occupancy,
       room_size_sqft: formData.room_size_sqft || null,
-      rent_amount_bdt: formData.rent_amount_bdt,
+      rent_amount_bdt: formData.rent_amount_bdt || null,
       rent_period: formData.rent_period,
+      is_rent_negotiable: Boolean(formData.is_rent_negotiable),
       state_district: formData.state_district,
       area: formData.area,
-      contact_number: formData.contact_number,
+      contact_number: normalizedContactNumber,
       short_description: formData.short_description,
       sub_area: formData.sub_area || null,
       sector: formData.sector || null,
@@ -373,7 +501,11 @@ export const submitPropertyListing = async (
       return {
         success: true,
         propertyId: propertyId,
-        message: 'Property listing created successfully!',
+        status: propertyStatus,
+        message: getPropertySubmissionMessage({
+          propertyStatus,
+          hasDuplicatePhone,
+        }),
       }
     } catch (error) {
       // If any step after property creation fails, we should consider rollback
@@ -398,7 +530,7 @@ export const submitPropertyListing = async (
   } finally {
     invalidateUserPanelCache(buildUserPanelCacheKey(userId || 'guest', 'my-properties'))
     invalidateUserPanelCache(buildUserPanelCacheKey(userId || 'guest', 'dashboard'))
-    invalidateUserPanelCache(getAllPropertiesCacheKey())
+    invalidatePropertyCatalogCaches()
   }
 }
 
@@ -412,32 +544,59 @@ export const getPropertyById = async (propertyId, viewer = {}) => {
   const cacheKey = getPropertyByIdCacheKey(propertyId, viewer)
 
   try {
-    const { data: property, error: propertyError } = await supabase
-      .from('properties')
-      .select('*')
-      .eq('id', propertyId)
-      .single()
+    let propertyForViewer = null
 
-    if (propertyError) {
+    const { data, error: propertyError } = await supabase.rpc(PROPERTY_DETAIL_RPC, {
+      p_property_id: propertyId,
+    })
+
+    if (propertyError && !isMissingPropertyDetailRpcError(propertyError)) {
       throw propertyError
     }
 
-    let canRevealProtectedFields = Boolean(viewer?.canViewProtected)
-
-    if (!canRevealProtectedFields && viewer?.viewerId) {
-      canRevealProtectedFields =
-        property.user_id === viewer.viewerId ||
-        (await hasUnlockedContactView(viewer.viewerId, propertyId))
+    if (!propertyError) {
+      propertyForViewer = Array.isArray(data) ? data[0] : data
     }
 
-    const propertyForViewer = maskProtectedPropertyFields(
-      property,
-      canRevealProtectedFields
-    )
+    const usedLegacyFallback = Boolean(propertyError && isMissingPropertyDetailRpcError(propertyError))
+
+    if (!propertyForViewer) {
+      const { data: legacyProperty, error: legacyPropertyError } = await supabase
+        .from('properties')
+        .select('*')
+        .eq('id', propertyId)
+        .single()
+
+      if (legacyPropertyError) {
+        throw legacyPropertyError
+      }
+
+      let canRevealProtectedFields = Boolean(viewer?.canViewProtected)
+
+      if (!canRevealProtectedFields && viewer?.viewerId) {
+        canRevealProtectedFields =
+          legacyProperty.user_id === viewer.viewerId ||
+          (await hasUnlockedContactView(viewer.viewerId, propertyId))
+      }
+
+      if (
+        (!isPropertyVisible(legacyProperty) || legacyProperty.status !== 'approved') &&
+        legacyProperty.user_id !== viewer?.viewerId &&
+        !viewer?.canViewProtected
+      ) {
+        throw new Error('Property not found')
+      }
+
+      propertyForViewer = maskProtectedPropertyFields(legacyProperty, canRevealProtectedFields)
+    }
+
+    if (!propertyForViewer) {
+      throw new Error('Property not found')
+    }
 
     if (
       !isPropertyVisible(propertyForViewer) &&
-      property.user_id !== viewer?.viewerId &&
+      propertyForViewer.user_id !== viewer?.viewerId &&
       !viewer?.canViewProtected
     ) {
       throw new Error('Property not found')
@@ -455,67 +614,21 @@ export const getPropertyById = async (propertyId, viewer = {}) => {
         .eq('property_id', propertyId),
     ])
 
-    // Transform to nested structure expected by UI
-    const normalizedProperty = {
-      id: propertyForViewer.id,
-      property_id_number: propertyForViewer.property_id_number,
-      category: propertyForViewer.category,
-      property_type: propertyForViewer.property_type,
-      // Root level fields for backward compatibility
-      dining_rooms: propertyForViewer.dining_rooms || 0,
-      living_rooms: propertyForViewer.living_rooms || 0,
-      total_bathrooms: propertyForViewer.total_bathrooms,
-      total_balcony: propertyForViewer.balcony,
-      total_kitchen: propertyForViewer.total_kitchen || null,
-      floor_level: propertyForViewer.floor_level,
-      room_size: propertyForViewer.room_size_sqft,
-      occupancy: propertyForViewer.occupancy || null,
-      protected_contact_unlocked: canRevealProtectedFields,
-      // Nested structure
-      specifications: {
-        dining_rooms: propertyForViewer.dining_rooms || 0,
-        living_rooms: propertyForViewer.living_rooms || 0,
-        total_bathrooms: propertyForViewer.total_bathrooms,
-        total_balcony: propertyForViewer.balcony,
-        total_kitchen: propertyForViewer.total_kitchen || null,
-        floor_level: propertyForViewer.floor_level,
-        room_size: propertyForViewer.room_size_sqft,
-      },
-      pricing: {
-        rent_amount_bdt: propertyForViewer.rent_amount_bdt,
-        rent_period: propertyForViewer.rent_period,
-      },
-      location: {
-        state_district: propertyForViewer.state_district,
-        area: propertyForViewer.area,
-        sub_area: propertyForViewer.sub_area || null,
-        contact_number: propertyForViewer.contact_number,
-        short_description: propertyForViewer.short_description,
-        sector: propertyForViewer.sector,
-        road: propertyForViewer.road,
-        house_plot: propertyForViewer.house_plot,
-      },
-      amenities: (amenities || []).map((a) => a.amenity_type),
-      availability: {
-        available_from: propertyForViewer.available_from,
-        deadline: propertyForViewer.deadline,
-      },
-      images: getNormalizedImages(images),
-      primary_image: getNormalizedImages(images)[0] || null,
-      lat: propertyForViewer.lat,
-      lng: propertyForViewer.lng,
-      status: propertyForViewer.status,
-      is_active: propertyForViewer.is_active !== false,
-      is_pinned: Boolean(propertyForViewer.is_pinned),
-      created_at: propertyForViewer.created_at,
-      createdAt: propertyForViewer.created_at,
+    const normalizedProperty = normalizePropertyDetail(propertyForViewer, images, amenities)
+
+    if (usedLegacyFallback) {
+      logPropertyDetailFallback()
     }
 
     writeSnapshot(cacheKey, normalizedProperty)
 
     return normalizedProperty
   } catch (error) {
-    console.error('Error fetching property:', error)
+    if (isMissingPropertyDetailRpcError(error)) {
+      console.warn(`Property detail unavailable because ${PROPERTY_DETAIL_RPC} could not be loaded.`)
+    } else {
+      console.error('Error fetching property:', error)
+    }
 
     const cachedProperty = readSnapshot(cacheKey)
     if (cachedProperty) {
@@ -549,7 +662,7 @@ export const updateProperty = async (propertyId, updates) => {
     invalidateUserPanelCache(buildUserPanelCacheKey(data?.user_id || 'guest', 'my-properties'))
     invalidateUserPanelCache(buildUserPanelCacheKey(data?.user_id || 'guest', 'dashboard'))
     invalidateUserPanelCacheByPrefix(getPropertyByIdCacheKey(propertyId))
-    invalidateUserPanelCache(getAllPropertiesCacheKey())
+    invalidatePropertyCatalogCaches()
 
     return true
   } catch (error) {
@@ -570,7 +683,8 @@ export const updatePropertyWithImages = async (
   propertyId,
   formData,
   newImageFiles = [],
-  existingImageUrls = []
+  existingImageUrls = [],
+  options = {}
 ) => {
   let currentUserId = null
 
@@ -581,6 +695,8 @@ export const updatePropertyWithImages = async (
     const storedUser = localStorage.getItem('user')
     const isAuthenticatedUser = storedUser ? JSON.parse(storedUser) : null
     currentUserId = isAuthenticatedUser?.id || null
+    const allowAdminEdit = Boolean(options.allowAdminEdit && isAuthenticatedUser?.is_admin === true)
+    const preserveStatus = Boolean(options.preserveStatus && allowAdminEdit)
 
     if (!isAuthenticatedUser) {
       throw new Error('Please login to edit a property')
@@ -594,7 +710,7 @@ export const updatePropertyWithImages = async (
     console.log('Fetching property for ownership check...')
     const { data: currentProperty, error: fetchError } = await supabase
       .from('properties')
-      .select('user_id')
+      .select('user_id, status, reviewed_at')
       .eq('id', propertyId)
       .single()
 
@@ -610,9 +726,21 @@ export const updatePropertyWithImages = async (
     }
 
     // Verify ownership
-    if (currentProperty.user_id !== isAuthenticatedUser.id) {
+    if (currentProperty.user_id !== isAuthenticatedUser.id && !allowAdminEdit) {
       throw new Error('You do not have permission to edit this property')
     }
+
+    const {
+      normalizedContactNumber,
+      propertyStatus,
+      hasDuplicatePhone,
+    } = preserveStatus
+      ? {
+          normalizedContactNumber: normalizeContactNumberForStorage(formData.contact_number),
+          propertyStatus: currentProperty.status || 'pending',
+          hasDuplicatePhone: false,
+        }
+      : await resolvePropertyStatusForContactNumber(formData.contact_number, propertyId)
 
     // Prepare property data for update
     const propertyData = {
@@ -626,11 +754,12 @@ export const updatePropertyWithImages = async (
       floor_level: formData.floor_level,
       occupancy: formData.occupancy,
       room_size_sqft: formData.room_size_sqft || null,
-      rent_amount_bdt: formData.rent_amount_bdt,
+      rent_amount_bdt: formData.rent_amount_bdt || null,
       rent_period: formData.rent_period,
+      is_rent_negotiable: Boolean(formData.is_rent_negotiable),
       state_district: formData.state_district,
       area: formData.area,
-      contact_number: formData.contact_number,
+      contact_number: normalizedContactNumber,
       short_description: formData.short_description,
       sub_area: formData.sub_area || null,
       sector: formData.sector || null,
@@ -640,6 +769,12 @@ export const updatePropertyWithImages = async (
       lng: formData.lng,
       available_from: formData.available_from,
       deadline: formData.deadline,
+      status: propertyStatus,
+      reviewed_at: preserveStatus
+        ? currentProperty.reviewed_at || null
+        : propertyStatus === 'approved'
+          ? new Date().toISOString()
+          : null,
     }
 
     // Update property record
@@ -713,7 +848,11 @@ export const updatePropertyWithImages = async (
     return {
       success: true,
       propertyId: propertyId,
-      message: 'Property updated successfully!',
+      message: preserveStatus
+        ? 'Property updated successfully!'
+        : hasDuplicatePhone
+        ? 'Property updated and moved to pending review because this phone number is already used in another listing.'
+        : 'Property updated and approved successfully!',
     }
   } catch (error) {
     console.error('Property update error:', error)
@@ -725,7 +864,8 @@ export const updatePropertyWithImages = async (
     invalidateUserPanelCache(buildUserPanelCacheKey(currentUserId || 'guest', 'my-properties'))
     invalidateUserPanelCache(buildUserPanelCacheKey(currentUserId || 'guest', 'dashboard'))
     invalidateUserPanelCacheByPrefix(getPropertyByIdCacheKey(propertyId))
-    invalidateUserPanelCache(getAllPropertiesCacheKey())
+    invalidateAdminPropertySnapshots()
+    invalidatePropertyCatalogCaches()
   }
 }
 
@@ -796,6 +936,7 @@ export const getPropertyForEdit = async (propertyId) => {
       room_size_sqft: property.room_size_sqft || '',
       rent_amount_bdt: property.rent_amount_bdt,
       rent_period: property.rent_period,
+      is_rent_negotiable: Boolean(property.is_rent_negotiable),
       state_district: property.state_district,
       area: property.area,
       contact_number: property.contact_number,
@@ -846,7 +987,7 @@ export const deleteProperty = async (propertyId) => {
 
     invalidateUserPanelCache(buildUserPanelCacheKey(existingProperty?.user_id || 'guest', 'my-properties'))
     invalidateUserPanelCache(buildUserPanelCacheKey(existingProperty?.user_id || 'guest', 'dashboard'))
-    invalidateUserPanelCache(getAllPropertiesCacheKey())
+    invalidatePropertyCatalogCaches()
 
     return true
   } catch (error) {
@@ -937,6 +1078,7 @@ export const getUserProperties = async (userId) => {
           pricing: {
             rent_amount_bdt: property.rent_amount_bdt,
             rent_period: property.rent_period,
+            is_rent_negotiable: Boolean(property.is_rent_negotiable),
           },
           location: {
             state_district: property.state_district,
@@ -972,137 +1114,11 @@ export const getUserProperties = async (userId) => {
   }
 }
 
-/**
- * Get all properties with images and amenities
- * Transforms flat Supabase data to nested structure for UI compatibility
- * @returns {Promise<Array>} - Array of properties in nested format
- */
-export const getAllProperties = async (options = {}) => {
-  const cacheKey = getAllPropertiesCacheKey(options)
-
-  try {
-    const limit =
-      Number.isInteger(options.limit) && options.limit > 0 ? options.limit : null
-    const offset =
-      Number.isInteger(options.offset) && options.offset >= 0 ? options.offset : 0
-
-    // Fetch only approved properties for public display
-    // Order by created_at descending to show newest properties first
-    let propertiesQuery = supabase
-      .from('properties')
-      .select('*')
-      .eq('status', 'approved')
-      .neq('is_active', false)
-      .order('created_at', { ascending: false })
-
-    if (limit) {
-      propertiesQuery = propertiesQuery.range(offset, offset + limit - 1)
-    }
-
-    const { data: properties, error: propertiesError } = await propertiesQuery
-
-    if (propertiesError) {
-      throw propertiesError
-    }
-
-    if (!properties || properties.length === 0) {
-      return []
-    }
-
-    // Get all property IDs
-    const propertyIds = properties.map((p) => p.id)
-
-    // Fetch images for all properties
-    const [allImages, allAmenities] = await Promise.all([
-      fetchRelatedRowsInBatches({
-        table: 'property_images',
-        ids: propertyIds,
-        orderColumn: 'display_order',
-      }),
-      fetchRelatedRowsInBatches({
-        table: 'property_amenities',
-        select: 'property_id, amenity_type',
-        ids: propertyIds,
-      }),
-    ])
-
-    // Group images and amenities by property_id
-    const imagesByProperty = groupPropertyImages(allImages)
-    const amenitiesByProperty = {}
-
-    ;(allAmenities || []).forEach((amenity) => {
-      if (!amenitiesByProperty[amenity.property_id]) {
-        amenitiesByProperty[amenity.property_id] = []
-      }
-      amenitiesByProperty[amenity.property_id].push(amenity.amenity_type)
-    })
-
-    // Transform to nested structure expected by UI
-    const transformedProperties = properties.map((property) => ({
-      id: property.id,
-      property_id_number: property.property_id_number,
-      category: property.category,
-      property_type: property.property_type || 'Apartment',
-      // Root level for compatibility
-      dining_rooms: property.dining_rooms || 0,
-      living_rooms: property.living_rooms || 0,
-      total_bathrooms: property.total_bathrooms,
-      total_balcony: property.balcony,
-      total_kitchen: property.total_kitchen || null,
-      floor_level: property.floor_level,
-      room_size: property.room_size_sqft,
-      occupancy: property.occupancy || null,
-      specifications: {
-        dining_rooms: property.dining_rooms || 0,
-        living_rooms: property.living_rooms || 0,
-        total_bathrooms: property.total_bathrooms,
-        total_balcony: property.balcony,
-        total_kitchen: property.total_kitchen || null,
-        floor_level: property.floor_level,
-        room_size: property.room_size_sqft,
-      },
-      pricing: {
-        rent_amount_bdt: property.rent_amount_bdt,
-        rent_period: property.rent_period,
-      },
-      location: {
-        state_district: property.state_district,
-        area: property.area,
-        sub_area: property.sub_area || null,
-        contact_number: property.contact_number,
-        short_description: property.short_description,
-        sector: property.sector,
-        road: property.road,
-        house_plot: property.house_plot,
-      },
-      amenities: amenitiesByProperty[property.id] || [],
-      availability: {
-        available_from: property.available_from,
-        deadline: property.deadline,
-      },
-      images: imagesByProperty[property.id] || [],
-      primary_image: imagesByProperty[property.id]?.[0] || null,
-      lat: property.lat,
-      lng: property.lng,
-      status: property.status,
-      is_active: property.is_active !== false,
-      is_pinned: Boolean(property.is_pinned),
-      created_at: property.created_at,
-      reviewed_at: property.reviewed_at,
-    }))
-
-    writeSnapshot(cacheKey, transformedProperties)
-
-    return transformedProperties
-  } catch (error) {
-    console.error('Error fetching all properties:', error)
-
-    const cachedProperties = readSnapshot(cacheKey)
-    if (cachedProperties) {
-      console.warn('Using cached approved properties after fetch error')
-      return cachedProperties
-    }
-
-    throw error
-  }
+export {
+  getAllProperties,
+  getAllPropertiesCacheKey,
+  getHomepageProperties,
+  getHomepagePropertiesCacheKey,
+  getSearchableProperties,
+  getSearchablePropertiesCacheKey,
 }

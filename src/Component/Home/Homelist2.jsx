@@ -10,6 +10,8 @@ import {
     toggleSavedProperty,
     SAVED_PROPERTIES_BROWSER_EVENT,
 } from '../../services/userPanelService';
+import { matchesPropertyCategory } from '../../lib/propertyCategories';
+import RentDisplay from '../../components/RentDisplay';
 
 const getCardImageSource = (item) =>
     item?.primary_image ||
@@ -43,7 +45,7 @@ const Homelist2 = ({ locationFilter }) => {
     const filteredList = useMemo(() => {
         return list.filter(item => {
             // Category filter
-            const categoryMatch = selectedCategory === 'All' || item.category === selectedCategory
+            const categoryMatch = matchesPropertyCategory(item, selectedCategory)
 
             // Location filter
             let locationMatch = true
@@ -103,6 +105,9 @@ const Homelist2 = ({ locationFilter }) => {
                                         src={getCardImageSource(item)}
                                         alt={`${item.category} property in ${item.location?.area || 'Bangladesh'}`}
                                         eager={index < 10}
+                                        propertyType={item.property_type}
+                                        category={item.category}
+                                        pricing={item.pricing}
                                     />
                                     {/* Heart icon */}
                                     <button
@@ -152,7 +157,7 @@ const Homelist2 = ({ locationFilter }) => {
 
                                     {/* Price */}
                                     <p className='text-gray-800 font-bold text-base'>
-                                        ৳{item.pricing?.rent_amount_bdt || 0}
+                                        <RentDisplay pricing={item.pricing} prefix='৳' />
                                     </p>
                                 </div>
                             </div>

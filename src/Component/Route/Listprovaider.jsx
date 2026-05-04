@@ -1,8 +1,13 @@
 import React, { createContext, useEffect, useMemo, useState } from 'react';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
-import { getAllProperties, getAllPropertiesCacheKey } from '../../services/propertyService';
+import {
+    getAllProperties,
+    getAllPropertiesCacheKey,
+    getHomepageProperties,
+    getHomepagePropertiesCacheKey,
+} from '../../services/propertyCatalogService';
 export const listcontext = createContext('')
-const Listprovaider = ({children, queryOptions}) => {
+const Listprovaider = ({children, queryOptions, mode = 'all'}) => {
      const [selectedCategory, setSelectedCategory] = useState('All')
      const [selectedPriceRange, setSelectedPriceRange] = useState('All')
      const [refreshKey, setRefreshKey] = useState(0)
@@ -10,10 +15,11 @@ const Listprovaider = ({children, queryOptions}) => {
          limit: Number.isInteger(queryOptions?.limit) && queryOptions.limit > 0 ? queryOptions.limit : null,
          offset: Number.isInteger(queryOptions?.offset) && queryOptions.offset >= 0 ? queryOptions.offset : 0,
      }), [queryOptions?.limit, queryOptions?.offset])
-     const propertiesCacheKey = useMemo(
-         () => getAllPropertiesCacheKey(normalizedQueryOptions),
-         [normalizedQueryOptions]
-     )
+     const propertiesCacheKey = useMemo(() => (
+         mode === 'home'
+             ? getHomepagePropertiesCacheKey()
+             : getAllPropertiesCacheKey(normalizedQueryOptions)
+     ), [mode, normalizedQueryOptions])
      const {
          snapshot: cachedProperties,
          hasSnapshot: hasCachedProperties,
@@ -49,7 +55,9 @@ const Listprovaider = ({children, queryOptions}) => {
                 }
 
                 try {
-                    const properties = await getAllProperties(normalizedQueryOptions)
+                    const properties = mode === 'home'
+                        ? await getHomepageProperties()
+                        : await getAllProperties(normalizedQueryOptions)
                     setList(properties)
                 } catch (error) {
                     console.error('Error fetching properties:', error)
@@ -61,7 +69,7 @@ const Listprovaider = ({children, queryOptions}) => {
                 }
             }
             fetchProperties()
-        },[hasCachedProperties, isHydrated, normalizedQueryOptions, refreshKey])
+        },[hasCachedProperties, isHydrated, mode, normalizedQueryOptions, refreshKey])
 
         const listinfo = useMemo(() => ({
             list,

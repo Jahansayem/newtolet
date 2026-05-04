@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
-import { updatePropertyWithImages, getPropertyForEdit } from '../../services/propertyService'
+import { updatePropertyWithImages } from '../../services/propertyService'
 import { validateScreen1, validateScreen2, validateScreen3 } from '../../utils/formValidation'
 import { divisions, districts, areas, subAreas } from '../../utils/bangladeshLocations'
 import { supabase } from '../../services/supabaseClient'
+import RentDisplay from '../../components/RentDisplay'
 
 const categories = [
   { id: 'family', label: 'Family', icon: '👨‍👩‍👧‍👦' },
@@ -32,6 +33,11 @@ const floorLevels = [
   '13th Floor',
   '14th Floor',
   '15th Floor',
+  '16th Floor',
+  '17th Floor',
+  '18th Floor',
+  '19th Floor',
+  '20th Floor',
 ]
 
 const occupancies = [
@@ -118,6 +124,26 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
   )
 }
 
+const CheckboxInput = ({ label, checked, onChange, error, optional = false }) => (
+  <div>
+    <span className='block text-xs md:text-sm font-semibold text-gray-700 mb-1'>
+      {label} {!optional && '*'}
+    </span>
+    <label className='flex min-h-[42px] items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white cursor-pointer hover:bg-gray-50 transition-colors'>
+      <input
+        type='checkbox'
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className='h-4 w-4 rounded border-gray-300 text-[#1E73B8] focus:ring-[#1E73B8]'
+      />
+      <span className='text-sm md:text-base text-gray-700'>
+        {checked ? 'Yes' : 'No'}
+      </span>
+    </label>
+    {error && <p className='text-red-500 text-xs mt-1'>{error}</p>}
+  </div>
+)
+
 const SizeInput = ({ label, value, onChange }) => {
   const handleDecrement = () => {
     const currentValue = parseInt(value) || 0
@@ -173,6 +199,8 @@ const SizeInput = ({ label, value, onChange }) => {
 const EditProperty = () => {
   const [searchParams] = useSearchParams()
   const propertyId = searchParams.get('propertyId') || ''
+  const isAdminEditRequest = searchParams.get('admin') === '1'
+  const returnTo = searchParams.get('returnTo') || '/my-properties'
   const navigate = useNavigate()
 
   const [formData, setFormData] = useState({
@@ -188,6 +216,7 @@ const EditProperty = () => {
     room_size_sqft: '',
     rent_amount_bdt: '',
     rent_period: '',
+    is_rent_negotiable: false,
     state_district: '',
     area: '',
     sub_area: '',
@@ -220,6 +249,29 @@ const EditProperty = () => {
   const [selectedDistrict, setSelectedDistrict] = useState('')
   const [selectedUpazilla, setSelectedUpazilla] = useState('')
   const [selectedSubArea, setSelectedSubArea] = useState('')
+
+  const findDistrictForArea = (areaName, divisionName = '') => {
+    if (!areaName) {
+      return ''
+    }
+
+    if (areas[areaName]?.length) {
+      return areaName
+    }
+
+    if (divisionName) {
+      const divisionDistricts = districts[divisionName] || []
+      const matchingDistrict = divisionDistricts.find((district) =>
+        areas[district]?.includes(areaName)
+      )
+
+      if (matchingDistrict) {
+        return matchingDistrict
+      }
+    }
+
+    return Object.keys(areas).find((district) => areas[district]?.includes(areaName)) || ''
+  }
 
   // Load existing property data
   useEffect(() => {
@@ -262,8 +314,10 @@ const EditProperty = () => {
           throw new Error('Property not found')
         }
 
+        const canAdminEdit = isAdminEditRequest && isAuthenticatedUser.is_admin === true
+
         // Verify ownership
-        if (property.user_id !== isAuthenticatedUser.id) {
+        if (property.user_id !== isAuthenticatedUser.id && !canAdminEdit) {
           throw new Error('You do not have permission to edit this property')
         }
 
@@ -294,6 +348,7 @@ const EditProperty = () => {
           room_size_sqft: property.room_size_sqft || '',
           rent_amount_bdt: property.rent_amount_bdt,
           rent_period: property.rent_period,
+          is_rent_negotiable: Boolean(property.is_rent_negotiable),
           state_district: property.state_district,
           area: property.area,
           sub_area: property.sub_area || '',
@@ -327,6 +382,7 @@ const EditProperty = () => {
           room_size_sqft: processedProperty.room_size_sqft || '',
           rent_amount_bdt: processedProperty.rent_amount_bdt || '',
           rent_period: processedProperty.rent_period || '',
+          is_rent_negotiable: Boolean(processedProperty.is_rent_negotiable),
           state_district: processedProperty.state_district || '',
           area: processedProperty.area || '',
           sub_area: processedProperty.sub_area || '',
@@ -346,24 +402,28 @@ const EditProperty = () => {
         // Set existing images
         setExistingImageUrls(processedProperty.images || [])
 
-        // Set location hierarchy
-        if (processedProperty.state_district) {
-          // Try to find matching division
-          for (const division of divisions) {
-            if (processedProperty.state_district.includes(division) || districts[division]?.includes(processedProperty.state_district)) {
-              setSelectedDivision(division)
-              // Try to find district
-              const districtList = districts[division] || []
-              const matchingDistrict = districtList.find(d => processedProperty.state_district.includes(d) || d === processedProperty.state_district)
-              if (matchingDistrict) {
-                setSelectedDistrict(matchingDistrict)
-              }
-              break
-            }
-          }
+        // Preserve legacy rows where state_district may hold either a division or a district.
+        const matchedDivision = divisions.find(
+          (division) =>
+            processedProperty.state_district === division ||
+            districts[division]?.includes(processedProperty.state_district)
+        ) || ''
+
+        const matchedDistrict =
+          (matchedDivision && districts[matchedDivision]?.includes(processedProperty.state_district)
+            ? processedProperty.state_district
+            : '') ||
+          findDistrictForArea(processedProperty.area, matchedDivision)
+
+        if (matchedDivision) {
+          setSelectedDivision(matchedDivision)
         }
 
-        if (processedProperty.area) {
+        if (matchedDistrict) {
+          setSelectedDistrict(matchedDistrict)
+        }
+
+        if (processedProperty.area && matchedDistrict && areas[matchedDistrict]?.includes(processedProperty.area)) {
           setSelectedUpazilla(processedProperty.area)
         }
 
@@ -381,7 +441,7 @@ const EditProperty = () => {
     }
 
     loadProperty()
-  }, [propertyId])
+  }, [isAdminEditRequest, propertyId])
 
   const updateFormData = (updates) => {
     setFormData(prev => ({ ...prev, ...updates }))
@@ -396,13 +456,15 @@ const EditProperty = () => {
     setSelectedDivision(division)
     setSelectedDistrict('')
     setSelectedUpazilla('')
-    updateFormData({ state_district: division })
+    setSelectedSubArea('')
+    updateFormData({ state_district: division, area: '', sub_area: '' })
   }
 
   const handleDistrictChange = (district) => {
     setSelectedDistrict(district)
     setSelectedUpazilla('')
-    updateFormData({ state_district: selectedDivision })
+    setSelectedSubArea('')
+    updateFormData({ state_district: district, area: '', sub_area: '' })
   }
 
   const handleUpazillaChange = (upazilla) => {
@@ -503,13 +565,17 @@ const EditProperty = () => {
         propertyId,
         formData,
         newImageFiles,
-        allImages
+        allImages,
+        {
+          allowAdminEdit: isAdminEditRequest,
+          preserveStatus: isAdminEditRequest,
+        }
       )
 
       if (result.success) {
         setSubmitSuccess(true)
         setTimeout(() => {
-          navigate('/my-properties', {
+          navigate(returnTo, {
             state: {
               message: 'Property updated successfully!',
             },
@@ -546,10 +612,10 @@ const EditProperty = () => {
           <h2 className='text-xl font-bold text-gray-900 mb-2'>Error</h2>
           <p className='text-gray-600 mb-6'>{loadError}</p>
           <button
-            onClick={() => navigate('/my-properties')}
+            onClick={() => navigate(returnTo)}
             className='px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700'
           >
-            Back to My Properties
+            {isAdminEditRequest ? 'Back to Admin Properties' : 'Back to My Properties'}
           </button>
         </div>
       </div>
@@ -577,7 +643,9 @@ const EditProperty = () => {
           <p className='text-green-700 mb-4'>
             Your property listing has been updated successfully!
           </p>
-          <p className='text-sm text-gray-600'>Redirecting to your properties...</p>
+          <p className='text-sm text-gray-600'>
+            {isAdminEditRequest ? 'Redirecting to admin properties...' : 'Redirecting to your properties...'}
+          </p>
         </div>
       </div>
     )
@@ -675,11 +743,12 @@ const EditProperty = () => {
                   onChange={(val) => updateFormData({ dining_rooms: val })}
                   error={errors.dining_rooms}
                 />
-                <CounterInput
-                  label='Living Rooms'
-                  value={formData.living_rooms || 0}
-                  onChange={(val) => updateFormData({ living_rooms: val })}
+                <CheckboxInput
+                  label='Drawing Room'
+                  checked={Number(formData.living_rooms || 0) > 0}
+                  onChange={(checked) => updateFormData({ living_rooms: checked ? 1 : 0 })}
                   error={errors.living_rooms}
+                  optional
                 />
                 <CounterInput
                   label='Bathrooms'
@@ -767,7 +836,7 @@ const EditProperty = () => {
               {/* Rent Amount */}
               <div>
                 <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                  Rent Amount (BDT) *
+                  Rent Amount (BDT) {formData.is_rent_negotiable ? '' : '*'}
                 </label>
                 <div className='relative'>
                   <span className='absolute left-3 md:left-4 top-2.5 md:top-3 text-lg md:text-xl font-semibold text-gray-600'>
@@ -788,6 +857,19 @@ const EditProperty = () => {
                 </div>
                 {errors.rent_amount_bdt && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_amount_bdt}</p>}
               </div>
+
+              <label className='flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer'>
+                <input
+                  type='checkbox'
+                  checked={Boolean(formData.is_rent_negotiable)}
+                  onChange={(e) => updateFormData({ is_rent_negotiable: e.target.checked })}
+                  className='mt-1 h-4 w-4 text-[#1E73B8] bg-white'
+                />
+                <span>
+                  <span className='block text-sm md:text-base font-semibold text-gray-800'>Rent is negotiable</span>
+                  <span className='block text-xs md:text-sm text-gray-600'>Tenants will see this listing as negotiable. You can leave the amount empty.</span>
+                </span>
+              </label>
 
               {/* Rent Period */}
               <div>
@@ -820,10 +902,33 @@ const EditProperty = () => {
                 {errors.rent_period && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_period}</p>}
               </div>
 
+              {formData.is_rent_negotiable && !formData.rent_amount_bdt && formData.rent_period && (
+                <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
+                  <p className='text-sm md:text-base text-green-800'>
+                    <strong>Price:</strong>{' '}
+                    <RentDisplay
+                      pricing={{
+                        rent_amount_bdt: formData.rent_amount_bdt,
+                        is_rent_negotiable: formData.is_rent_negotiable,
+                      }}
+                      prefix='৳ '
+                    />
+                  </p>
+                </div>
+              )}
+
               {formData.rent_amount_bdt && formData.rent_period && (
                 <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
                   <p className='text-sm md:text-base text-green-800'>
-                    <strong>Price:</strong> ৳ {formData.rent_amount_bdt.toLocaleString('en-BD')} per {formData.rent_period.toLowerCase()}
+                    <strong>Price:</strong>{' '}
+                    <RentDisplay
+                      pricing={{
+                        rent_amount_bdt: formData.rent_amount_bdt,
+                        is_rent_negotiable: formData.is_rent_negotiable,
+                      }}
+                      prefix='৳ '
+                      suffix={`per ${formData.rent_period.toLowerCase()}`}
+                    />
                   </p>
                 </div>
               )}
@@ -1140,7 +1245,20 @@ const EditProperty = () => {
                 <h4 className='font-bold text-gray-800 text-base md:text-lg mb-3'>📋 Update Summary</h4>
                 <div className='space-y-1.5 md:space-y-2 text-xs md:text-sm text-gray-700'>
                   <p><strong>Category:</strong> {formData.category || '-'}</p>
-                  <p><strong>Price:</strong> {formData.rent_amount_bdt ? `৳${formData.rent_amount_bdt.toLocaleString('en-BD')} per ${formData.rent_period}` : '-'}</p>
+                  <p>
+                    <strong>Price:</strong>{' '}
+                    {formData.rent_amount_bdt || formData.is_rent_negotiable ? (
+                      <RentDisplay
+                        pricing={{
+                          rent_amount_bdt: formData.rent_amount_bdt,
+                          is_rent_negotiable: formData.is_rent_negotiable,
+                        }}
+                        prefix='৳ '
+                        suffix={formData.rent_amount_bdt ? `per ${formData.rent_period}` : ''}
+                      />
+                    ) : '-'}
+                  </p>
+                  <p><strong>Negotiable:</strong> {formData.is_rent_negotiable ? 'Yes' : 'No'}</p>
                   <p><strong>Location:</strong> {formData.area ? `${formData.area}, ${formData.state_district}` : '-'}</p>
                   <p><strong>Images:</strong> {allImagesForDisplay.length} total</p>
                   <p><strong>Amenities:</strong> {formData.amenities.length > 0 ? formData.amenities.join(', ') : 'None selected'}</p>

@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FiCheck, FiEye, FiFilter, FiSearch, FiStar, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
+import { FiCheck, FiEdit2, FiEye, FiFilter, FiSearch, FiStar, FiTrash2, FiUsers, FiX } from 'react-icons/fi'
 import {
+  getAdminDuplicatePhoneGroupsPage,
   getAdminPropertiesPage,
+  getAdminPropertiesByPhoneGroup,
   getAdminPropertyCounts,
   updatePropertyStatus,
+  updatePropertiesStatus,
+  approveAllPendingProperties,
   deleteProperty,
   togglePropertyFeatured,
   getDashboardStats,
@@ -11,19 +15,62 @@ import {
   toggleAutoApproveProperties,
 } from '../../services/adminService'
 import { readSnapshot, removeSnapshot, writeSnapshot } from '../../services/cacheService'
+import { buildEditPropertyHref, buildPageHref } from '../../lib/routePaths'
+import { PropertyThumbnailImage } from '../../components/PropertyCardMedia'
+import RentDisplay from '../../components/RentDisplay'
 
 const PAGE_SIZE = 20
-const PROPERTY_FILTERS = ['all', 'pending', 'approved', 'rejected']
+const PROPERTY_FILTERS = ['all', 'pending', 'approved', 'rejected', 'duplicate_pending']
 
-const getAdminPropertiesCacheKey = (status, pageSize = PAGE_SIZE) =>
-  `admin-properties:${status}:${pageSize}`
+const getAdminPropertyPricing = (property = {}) => ({
+  rent_amount_bdt: property.rent_amount_bdt ?? property.pricing?.rent_amount_bdt,
+  is_rent_negotiable: property.is_rent_negotiable ?? property.pricing?.is_rent_negotiable,
+})
+
+const AdminRentDisplay = ({ property = {} }) => {
+  return (
+    <RentDisplay
+      pricing={getAdminPropertyPricing(property)}
+      fallback="Price unavailable"
+      suffix={property.rent_amount_bdt ? `/ ${property.rent_period || 'month'}` : ''}
+    />
+  )
+}
+
+const getAdminPropertyImageSource = (property = {}) =>
+  property.images?.find((image) => typeof image === 'string' && image.trim()) ||
+  property.primary_image ||
+  (typeof property.image_url === 'string' && property.image_url.trim() ? property.image_url.trim() : null)
+
+const getAdminPropertiesCacheKey = (status, pageSize = PAGE_SIZE, phoneKey = '') =>
+  `admin-properties:${status}:${pageSize}:${phoneKey || 'root'}`
 
 const buildEmptyPropertyCounts = () => ({
   total: 0,
   approved: 0,
   pending: 0,
   rejected: 0,
+  duplicatePending: 0,
 })
+
+const getFilterLabel = (filter) => {
+  if (filter === 'duplicate_pending') {
+    return 'duplicate pending'
+  }
+
+  return filter === 'all' ? 'all statuses' : filter
+}
+
+const getSubmitterLabel = (property = {}) => {
+  const submitter = property.submitted_by || {}
+  return submitter.name || submitter.email || submitter.phone || submitter.id || property.user_id || 'Unknown user'
+}
+
+const getAdminEditPropertyHref = (propertyId) =>
+  buildEditPropertyHref(propertyId, {
+    admin: '1',
+    returnTo: buildPageHref('admin-dashboard', { tab: 'properties' }),
+  })
 
 const matchesPropertySearch = (property, search) => {
   if (!search) {
@@ -43,6 +90,11 @@ const matchesPropertySearch = (property, search) => {
     property.area,
     property.state_district,
     property.category,
+    property.contact_number,
+    property.submitted_by?.name,
+    property.submitted_by?.email,
+    property.submitted_by?.phone,
+    property.submitted_by?.id,
   ]
     .filter(Boolean)
     .join(' ')
@@ -57,18 +109,46 @@ const matchesPropertySearch = (property, search) => {
   )
 }
 
-const mergeUniqueProperties = (...propertyGroups) => {
-  const merged = []
-  const seenIds = new Set()
+const matchesDuplicatePhoneGroupSearch = (group, search) => {
+  if (!search) {
+    return true
+  }
 
-  propertyGroups.forEach((propertyGroup) => {
-    ;(propertyGroup || []).forEach((property) => {
-      if (!property?.id || seenIds.has(property.id)) {
+  const cleanQuery = search.replace('#', '').trim().toLowerCase()
+
+  if (!cleanQuery) {
+    return true
+  }
+
+  const previewProperty = group?.previewProperty || {}
+  const searchableText = [
+    group?.contact_number,
+    previewProperty.short_description,
+    previewProperty.area,
+    previewProperty.state_district,
+    previewProperty.category,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return searchableText.includes(cleanQuery)
+}
+
+const mergeUniqueItems = (getItemKey, ...itemGroups) => {
+  const merged = []
+  const seenKeys = new Set()
+
+  itemGroups.forEach((itemGroup) => {
+    ;(itemGroup || []).forEach((item) => {
+      const itemKey = getItemKey(item)
+
+      if (!itemKey || seenKeys.has(itemKey)) {
         return
       }
 
-      seenIds.add(property.id)
-      merged.push(property)
+      seenKeys.add(itemKey)
+      merged.push(item)
     })
   })
 
@@ -81,12 +161,14 @@ const PropertyManagement = () => {
   const [loadingMore, setLoadingMore] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [selectedPhoneGroup, setSelectedPhoneGroup] = useState(null)
   const [selectedProperty, setSelectedProperty] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
   const [warningMessage, setWarningMessage] = useState('')
   const [autoApproveEnabled, setAutoApproveEnabled] = useState(false)
   const [totalUsers, setTotalUsers] = useState(0)
-  const [updating, setUpdating] = useState(null)
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState(() => new Set())
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const [filteredTotalCount, setFilteredTotalCount] = useState(0)
@@ -100,9 +182,12 @@ const PropertyManagement = () => {
   const requestIdRef = useRef(0)
   const loadMoreTriggerRef = useRef(null)
 
+  const activePhoneKey =
+    statusFilter === 'duplicate_pending' ? selectedPhoneGroup?.duplicatePhoneKey || '' : ''
+  const isDuplicateGroupView = statusFilter === 'duplicate_pending' && !selectedPhoneGroup
   const cacheKey = useMemo(
-    () => getAdminPropertiesCacheKey(statusFilter, PAGE_SIZE),
-    [statusFilter]
+    () => getAdminPropertiesCacheKey(statusFilter, PAGE_SIZE, activePhoneKey),
+    [activePhoneKey, statusFilter]
   )
 
   useEffect(() => {
@@ -125,10 +210,37 @@ const PropertyManagement = () => {
     loadingMoreRef.current = loadingMore
   }, [loadingMore])
 
-  const visibleProperties = useMemo(
-    () => properties.filter((property) => matchesPropertySearch(property, searchTerm)),
-    [properties, searchTerm]
+  const visibleItems = useMemo(
+    () =>
+      properties.filter((item) =>
+        isDuplicateGroupView
+          ? matchesDuplicatePhoneGroupSearch(item, searchTerm)
+          : matchesPropertySearch(item, searchTerm)
+      ),
+    [isDuplicateGroupView, properties, searchTerm]
   )
+  const loadedPendingProperties = useMemo(
+    () => properties.filter((property) => property?.status === 'pending'),
+    [properties]
+  )
+  const visiblePendingProperties = useMemo(
+    () =>
+      isDuplicateGroupView
+        ? []
+        : visibleItems.filter((property) => property?.status === 'pending'),
+    [isDuplicateGroupView, visibleItems]
+  )
+  const selectedPendingPropertyIds = useMemo(() => {
+    const loadedPendingIds = new Set(loadedPendingProperties.map((property) => property.id))
+
+    return Array.from(selectedPropertyIds).filter((propertyId) =>
+      loadedPendingIds.has(propertyId)
+    )
+  }, [loadedPendingProperties, selectedPropertyIds])
+  const selectedPendingCount = selectedPendingPropertyIds.length
+  const allVisiblePendingSelected =
+    visiblePendingProperties.length > 0 &&
+    visiblePendingProperties.every((property) => selectedPropertyIds.has(property.id))
 
   const persistCachedSnapshot = useCallback(
     (snapshot) => {
@@ -146,7 +258,10 @@ const PropertyManagement = () => {
     PROPERTY_FILTERS.forEach((filter) => {
       removeSnapshot(getAdminPropertiesCacheKey(filter, PAGE_SIZE))
     })
-  }, [])
+    if (activePhoneKey) {
+      removeSnapshot(getAdminPropertiesCacheKey('duplicate_pending', PAGE_SIZE, activePhoneKey))
+    }
+  }, [activePhoneKey])
 
   const fetchUserStats = useCallback(async () => {
     const result = await getDashboardStats()
@@ -228,30 +343,45 @@ const PropertyManagement = () => {
         loadingMoreRef.current = true
       }
 
-      const result = await getAdminPropertiesPage({
-        page: pageToLoad,
-        pageSize: PAGE_SIZE,
-        status: statusFilter,
-      })
+      const loaderResult = isDuplicateGroupView
+        ? await getAdminDuplicatePhoneGroupsPage({
+            page: pageToLoad,
+            pageSize: PAGE_SIZE,
+          })
+        : selectedPhoneGroup
+          ? await getAdminPropertiesByPhoneGroup({
+              phoneKey: activePhoneKey,
+              page: pageToLoad,
+              pageSize: PAGE_SIZE,
+            })
+          : await getAdminPropertiesPage({
+              page: pageToLoad,
+              pageSize: PAGE_SIZE,
+              status: statusFilter,
+            })
+      const resultToApply = loaderResult
 
       if (requestId !== requestIdRef.current) {
         return
       }
 
-      if (result.data) {
+      if (resultToApply.data) {
         const existingItems = reset
           ? background
             ? propertiesRef.current
             : []
           : propertiesRef.current
+        const getItemKey = isDuplicateGroupView
+          ? (item) => item?.duplicatePhoneKey
+          : (item) => item?.id
 
         let nextItems = reset
           ? background
-            ? mergeUniqueProperties(result.data, existingItems)
-            : result.data
-          : mergeUniqueProperties(existingItems, result.data)
+            ? mergeUniqueItems(getItemKey, resultToApply.data, existingItems)
+            : resultToApply.data
+          : mergeUniqueItems(getItemKey, existingItems, resultToApply.data)
 
-        const totalCount = Math.max(0, Number(result.totalCount) || 0)
+        const totalCount = Math.max(0, Number(resultToApply.totalCount) || 0)
         const trimmedItems =
           totalCount === 0
             ? []
@@ -289,7 +419,7 @@ const PropertyManagement = () => {
       loadingRef.current = false
       loadingMoreRef.current = false
     },
-    [persistCachedSnapshot, statusFilter]
+    [activePhoneKey, isDuplicateGroupView, persistCachedSnapshot, selectedPhoneGroup, statusFilter]
   )
 
   useEffect(() => {
@@ -299,7 +429,14 @@ const PropertyManagement = () => {
   }, [fetchPropertyCounts, fetchSettings, fetchUserStats])
 
   useEffect(() => {
+    if (statusFilter !== 'duplicate_pending' && selectedPhoneGroup) {
+      setSelectedPhoneGroup(null)
+    }
+  }, [selectedPhoneGroup, statusFilter])
+
+  useEffect(() => {
     setSelectedProperty(null)
+    setSelectedPropertyIds(new Set())
 
     const cachedSnapshot = readSnapshot(cacheKey)
 
@@ -365,17 +502,107 @@ const PropertyManagement = () => {
     [fetchPropertyCounts, invalidatePropertyCache, loadPropertiesPage]
   )
 
+  const handlePhoneGroupSelect = (phoneGroup) => {
+    setSelectedPhoneGroup(phoneGroup)
+    setSelectedProperty(null)
+    setSelectedPropertyIds(new Set())
+    setSearchTerm('')
+  }
+
+  const handlePhoneGroupClear = () => {
+    setSelectedPhoneGroup(null)
+    setSelectedProperty(null)
+    setSelectedPropertyIds(new Set())
+    setSearchTerm('')
+  }
+
+  const togglePropertySelection = (propertyId) => {
+    setSelectedPropertyIds((currentSelection) => {
+      const nextSelection = new Set(currentSelection)
+
+      if (nextSelection.has(propertyId)) {
+        nextSelection.delete(propertyId)
+      } else {
+        nextSelection.add(propertyId)
+      }
+
+      return nextSelection
+    })
+  }
+
+  const toggleVisiblePendingSelection = () => {
+    setSelectedPropertyIds((currentSelection) => {
+      const nextSelection = new Set(currentSelection)
+
+      if (allVisiblePendingSelected) {
+        visiblePendingProperties.forEach((property) => nextSelection.delete(property.id))
+      } else {
+        visiblePendingProperties.forEach((property) => nextSelection.add(property.id))
+      }
+
+      return nextSelection
+    })
+  }
+
   const handleStatusChange = async (propertyId, newStatus) => {
-    setUpdating(propertyId)
     const result = await updatePropertyStatus(propertyId, newStatus)
 
     if (result.data) {
+      setWarningMessage('')
       setSuccessMessage(`Property ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully`)
       await refreshCurrentFilter({ clearCache: true })
       setTimeout(() => setSuccessMessage(''), 3000)
     }
+  }
 
-    setUpdating(null)
+  const handleBulkStatusChange = async (newStatus) => {
+    if (!selectedPendingPropertyIds.length || bulkUpdating) {
+      return
+    }
+
+    setBulkUpdating(true)
+    const result = await updatePropertiesStatus(selectedPendingPropertyIds, newStatus)
+
+    if (result.data) {
+      const updatedCount = result.data.length
+      setSelectedPropertyIds(new Set())
+      setWarningMessage('')
+      setSuccessMessage(
+        `${updatedCount} ${updatedCount === 1 ? 'property' : 'properties'} ${
+          newStatus === 'approved' ? 'approved' : 'rejected'
+        } successfully`
+      )
+      await refreshCurrentFilter({ clearCache: true })
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } else {
+      setWarningMessage('Unable to update the selected pending properties. Please try again.')
+    }
+
+    setBulkUpdating(false)
+  }
+
+  const handleApproveAllPending = async () => {
+    if (bulkUpdating) {
+      return
+    }
+
+    setBulkUpdating(true)
+    const result = await approveAllPendingProperties()
+
+    if (result.data) {
+      const approvedCount = result.data.approvedCount || 0
+      setSelectedPropertyIds(new Set())
+      setWarningMessage('')
+      setSuccessMessage(
+        `${approvedCount} pending ${approvedCount === 1 ? 'property' : 'properties'} approved successfully`
+      )
+      await refreshCurrentFilter({ clearCache: true })
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } else {
+      setWarningMessage('Unable to approve all pending properties. Please try again.')
+    }
+
+    setBulkUpdating(false)
   }
 
   const handleDeleteProperty = async (propertyId) => {
@@ -443,6 +670,7 @@ const PropertyManagement = () => {
     approved: propertyCounts.approved,
     pending: propertyCounts.pending,
     rejected: propertyCounts.rejected,
+    duplicatePending: propertyCounts.duplicatePending,
   }
 
   return (
@@ -512,7 +740,7 @@ const PropertyManagement = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-2 rounded-lg">
@@ -560,6 +788,26 @@ const PropertyManagement = () => {
             </div>
           </div>
         </div>
+
+        <button
+          onClick={() => setStatusFilter('duplicate_pending')}
+          className={`rounded-xl shadow-lg p-4 text-white text-left transition ${
+            statusFilter === 'duplicate_pending'
+              ? 'bg-gradient-to-r from-rose-600 to-pink-600 ring-4 ring-rose-200'
+              : 'bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600'
+          }`}
+          type="button"
+        >
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-lg">
+              <FiFilter className="text-white text-xl" />
+            </div>
+            <div>
+              <p className="text-rose-100 text-xs font-medium uppercase tracking-wide">Duplicate Pending</p>
+              <p className="text-2xl font-bold leading-tight">{stats.duplicatePending}</p>
+            </div>
+          </div>
+        </button>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
@@ -586,6 +834,7 @@ const PropertyManagement = () => {
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
+              <option value="duplicate_pending">Duplicate Pending</option>
             </select>
           </div>
 
@@ -600,49 +849,147 @@ const PropertyManagement = () => {
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-500">
           <p>
-            Loaded {properties.length} of {filteredTotalCount} properties for{' '}
+            Loaded {properties.length} of {filteredTotalCount}{' '}
+            {isDuplicateGroupView ? 'phone groups' : 'properties'} for{' '}
             <span className="font-semibold text-gray-700">
-              {statusFilter === 'all' ? 'all statuses' : statusFilter}
+              {getFilterLabel(statusFilter)}
             </span>
           </p>
           <p>
             {searchTerm
-              ? `${visibleProperties.length} loaded matches for "${searchTerm.trim()}"`
-              : `${stats.total} total properties across all statuses`}
+              ? `${visibleItems.length} loaded matches for "${searchTerm.trim()}"`
+              : selectedPhoneGroup
+                ? `${filteredTotalCount} total properties for ${selectedPhoneGroup.contact_number || selectedPhoneGroup.duplicatePhoneKey}`
+                : statusFilter === 'duplicate_pending'
+                  ? `${stats.duplicatePending} total duplicate pending properties across ${filteredTotalCount} phone numbers`
+                  : `${stats.total} total properties across all statuses`}
           </p>
         </div>
       </div>
+
+      {!isDuplicateGroupView && (
+        <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-900">Pending review actions</p>
+            <p className="text-sm text-gray-600">
+              {selectedPendingCount} selected from {loadedPendingProperties.length} loaded pending properties
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              onClick={toggleVisiblePendingSelection}
+              disabled={visiblePendingProperties.length === 0 || bulkUpdating}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+            >
+              {allVisiblePendingSelected ? 'Clear Visible Pending' : 'Select Visible Pending'}
+            </button>
+            <button
+              onClick={() => handleBulkStatusChange('approved')}
+              disabled={selectedPendingCount === 0 || bulkUpdating}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+            >
+              <FiCheck size={16} />
+              Approve Selected
+            </button>
+            <button
+              onClick={() => handleBulkStatusChange('rejected')}
+              disabled={selectedPendingCount === 0 || bulkUpdating}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+            >
+              <FiX size={16} />
+              Reject Selected
+            </button>
+            <button
+              onClick={handleApproveAllPending}
+              disabled={stats.pending === 0 || bulkUpdating}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              type="button"
+            >
+              <FiCheck size={16} />
+              Approve All Pending
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="bg-white rounded-lg shadow p-12 flex justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600" />
         </div>
-      ) : visibleProperties.length === 0 ? (
+      ) : visibleItems.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
-          <p className="text-gray-600 text-lg">No properties found</p>
+          <p className="text-gray-600 text-lg">
+            {statusFilter === 'duplicate_pending'
+              ? isDuplicateGroupView
+                ? 'No duplicate phone groups found'
+                : 'No properties found for this phone number'
+              : 'No properties found'}
+          </p>
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {visibleProperties.map((property) => (
-              <div key={property.id} className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition">
+          {selectedPhoneGroup && (
+            <div className="bg-white rounded-lg shadow p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-primary-700">Phone drilldown</p>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {selectedPhoneGroup.contact_number || selectedPhoneGroup.duplicatePhoneKey}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Showing all properties under this phone number across every status
+                </p>
+              </div>
+              <button
+                onClick={handlePhoneGroupClear}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+                type="button"
+              >
+                Back to Duplicate Groups
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {isDuplicateGroupView &&
+              visibleItems.map((group) => (
+                <DuplicatePhoneGroupCard
+                  key={group.duplicatePhoneKey}
+                  group={group}
+                  onOpen={() => handlePhoneGroupSelect(group)}
+                />
+              ))}
+
+            {!isDuplicateGroupView &&
+              visibleItems.map((property) => (
+                <div key={property.id} className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition">
                 <div className="relative h-48 bg-gray-200">
-                  {property.images && property.images.length > 0 ? (
-                    <img
-                      src={property.images[0]}
-                      alt={property.short_description}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-300">
-                      <span className="text-gray-500">No Image</span>
-                    </div>
-                  )}
+                  <PropertyThumbnailImage
+                    src={getAdminPropertyImageSource(property)}
+                    alt={property.short_description || property.category || 'Property'}
+                    propertyType={property.property_type}
+                    category={property.category}
+                    pricing={getAdminPropertyPricing(property)}
+                  />
                   {property.is_featured && (
                     <div className="absolute top-3 left-3 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
                       <FiStar size={12} />
                       Featured
                     </div>
+                  )}
+                  {property.status === 'pending' && (
+                    <label className="absolute bottom-3 left-3 inline-flex items-center gap-2 rounded-lg bg-white/95 px-3 py-2 text-sm font-semibold text-gray-800 shadow">
+                      <input
+                        type="checkbox"
+                        checked={selectedPropertyIds.has(property.id)}
+                        onChange={() => togglePropertySelection(property.id)}
+                        disabled={bulkUpdating}
+                        className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600 disabled:cursor-not-allowed"
+                      />
+                      Select
+                    </label>
                   )}
                   <div className="absolute top-3 right-3">{getStatusBadge(property.status)}</div>
                 </div>
@@ -654,44 +1001,34 @@ const PropertyManagement = () => {
                         #{property.property_id_number}
                       </p>
                     )}
+                    {property.isDuplicatePhone && (
+                      <p className="mb-1 inline-flex items-center rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
+                        Duplicate Phone x{property.duplicateCount || 0}
+                      </p>
+                    )}
                     <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
                       {property.short_description || 'No title'}
                     </h3>
                     <p className="text-sm text-gray-600">
                       {property.category} | {property.area}, {property.state_district}
                     </p>
+                    {property.contact_number && (
+                      <p className="text-xs text-gray-500 mt-1">Phone: {property.contact_number}</p>
+                    )}
+                    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                      <p className="font-semibold text-gray-800">Submitted by {getSubmitterLabel(property)}</p>
+                      {property.submitted_by?.email && <p>{property.submitted_by.email}</p>}
+                      {property.submitted_by?.phone && <p>{property.submitted_by.phone}</p>}
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span className="text-xl font-bold text-primary-600">
-                      BDT {property.rent_amount_bdt?.toLocaleString()}
-                      <span className="text-sm font-normal text-gray-600">/{property.rent_period || 'month'}</span>
+                      <AdminRentDisplay property={property} />
                     </span>
                   </div>
 
                   <div className="flex gap-2 pt-3 border-t">
-                    {property.status === 'pending' && !autoApproveEnabled && (
-                      <>
-                        <button
-                          onClick={() => handleStatusChange(property.id, 'approved')}
-                          disabled={updating === property.id}
-                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm font-medium disabled:opacity-50"
-                          type="button"
-                        >
-                          <FiCheck size={16} />
-                          Approve
-                        </button>
-                        <button
-                          onClick={() => handleStatusChange(property.id, 'rejected')}
-                          disabled={updating === property.id}
-                          className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium disabled:opacity-50"
-                          type="button"
-                        >
-                          <FiX size={16} />
-                          Reject
-                        </button>
-                      </>
-                    )}
                     {property.status === 'approved' && (
                       <>
                         <button
@@ -716,35 +1053,33 @@ const PropertyManagement = () => {
                         </button>
                       </>
                     )}
-                    {property.status === 'rejected' && (
-                      <button
-                        onClick={() => handleStatusChange(property.id, 'approved')}
-                        disabled={updating === property.id}
-                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm font-medium disabled:opacity-50"
-                        type="button"
-                      >
-                        <FiCheck size={16} />
-                        Approve
-                      </button>
-                    )}
                     <button
                       onClick={() => setSelectedProperty(property)}
                       className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
                       type="button"
+                      title="View property"
                     >
                       <FiEye size={16} />
                     </button>
+                    <a
+                      href={getAdminEditPropertyHref(property.id)}
+                      className="px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition"
+                      title="Edit property"
+                    >
+                      <FiEdit2 size={16} />
+                    </a>
                     <button
                       onClick={() => handleDeleteProperty(property.id)}
                       className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
                       type="button"
+                      title="Delete property"
                     >
                       <FiTrash2 size={16} />
                     </button>
                   </div>
                 </div>
               </div>
-            ))}
+              ))}
           </div>
 
           <div ref={loadMoreTriggerRef} className="h-4" />
@@ -780,6 +1115,9 @@ const PropertyManagement = () => {
             handleToggleFeatured(selectedProperty.id, selectedProperty.is_featured)
             setSelectedProperty(null)
           }}
+          onEdit={() => {
+            window.location.href = getAdminEditPropertyHref(selectedProperty.id)
+          }}
           onDelete={() => {
             handleDeleteProperty(selectedProperty.id)
             setSelectedProperty(null)
@@ -790,7 +1128,63 @@ const PropertyManagement = () => {
   )
 }
 
-const PropertyDetailModal = ({ property, onClose, onApprove, onReject, onToggleFeatured, onDelete }) => {
+const DuplicatePhoneGroupCard = ({ group, onOpen }) => {
+  const previewProperty = group?.previewProperty || {}
+  const previewLocation = [previewProperty.area, previewProperty.state_district].filter(Boolean).join(', ')
+  const previewMeta = [previewProperty.category, previewLocation].filter(Boolean).join(' | ')
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition">
+      <div className="relative h-48 bg-gray-200">
+        <PropertyThumbnailImage
+          src={getAdminPropertyImageSource(previewProperty)}
+          alt={previewProperty.short_description || group.contact_number || 'Property'}
+          propertyType={previewProperty.property_type}
+          category={previewProperty.category}
+          pricing={getAdminPropertyPricing(previewProperty)}
+        />
+        <div className="absolute top-3 right-3">
+          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">
+            {group.pendingDuplicateCount} Pending Duplicate
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3">
+        <div>
+          <button
+            onClick={onOpen}
+            className="text-lg font-semibold text-primary-700 hover:text-primary-800 transition"
+            type="button"
+          >
+            {group.contact_number || group.duplicatePhoneKey}
+          </button>
+          <p className="text-sm text-gray-600 mt-1">
+            {group.totalPropertiesCount} total properties under this number
+          </p>
+          <h3 className="text-base font-semibold text-gray-900 mt-3 line-clamp-1">
+            {previewProperty.short_description || 'No title'}
+          </h3>
+          {previewMeta && <p className="text-sm text-gray-600">{previewMeta}</p>}
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-base font-bold text-primary-600">
+            <AdminRentDisplay property={previewProperty} />
+          </span>
+          <button
+            onClick={onOpen}
+            className="px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition text-sm font-medium"
+            type="button"
+          >
+            View All
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const PropertyDetailModal = ({ property, onClose, onApprove, onReject, onToggleFeatured, onEdit, onDelete }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -825,12 +1219,23 @@ const PropertyDetailModal = ({ property, onClose, onApprove, onReject, onToggleF
             <div>
               <label className="block text-sm text-gray-600 mb-1">Rent Amount</label>
               <p className="text-lg font-semibold text-gray-900">
-                BDT {property.rent_amount_bdt?.toLocaleString()} / {property.rent_period || 'month'}
+                <AdminRentDisplay property={property} />
               </p>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Status</label>
               <p className="text-lg font-semibold capitalize">{property.status || 'Pending'}</p>
+            </div>
+            <div className="col-span-2 rounded-lg bg-gray-50 p-4">
+              <label className="block text-sm text-gray-600 mb-1">Submitted By</label>
+              <p className="text-lg font-semibold text-gray-900">{getSubmitterLabel(property)}</p>
+              <div className="mt-1 text-sm text-gray-600">
+                {property.submitted_by?.email && <p>Email: {property.submitted_by.email}</p>}
+                {property.submitted_by?.phone && <p>Phone: {property.submitted_by.phone}</p>}
+                {(property.submitted_by?.id || property.user_id) && (
+                  <p>User ID: {property.submitted_by?.id || property.user_id}</p>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Bedrooms</label>
@@ -853,6 +1258,13 @@ const PropertyDetailModal = ({ property, onClose, onApprove, onReject, onToggleF
           </div>
 
           <div className="flex gap-3">
+            <button
+              onClick={onEdit}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+              type="button"
+            >
+              Edit
+            </button>
             {property.status === 'pending' && (
               <>
                 <button

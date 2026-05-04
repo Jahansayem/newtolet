@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'newtolet-cache:v1'
-const USER_PANEL_CACHE_NAMESPACE = 'user-panel:v2'
+const USER_PANEL_CACHE_NAMESPACE = 'user-panel:v3'
 
 const userPanelMemoryCache = new Map()
 const userPanelInflightRequests = new Map()

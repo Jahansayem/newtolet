@@ -95,7 +95,11 @@ export default function NavSearchOverlay({
   }
 
   const handleSearchFilterChange = (field, value) => {
-    setSearchFilters((current) => updateSearchFilters(current, field, value))
+    if (field === 'search') {
+      setSearchQuery(value)
+    } else {
+      setSearchFilters((current) => updateSearchFilters(current, field, value))
+    }
   }
 
   const handleResultClick = () => {

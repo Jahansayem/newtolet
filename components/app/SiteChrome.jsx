@@ -39,7 +39,7 @@ export default function SiteChrome({ children }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navber />
-      <FloatingQuickRail />
+    <FloatingQuickRail />
       <div className="max-w-full mx-auto">{children}</div>
       <Footer />
     </div>

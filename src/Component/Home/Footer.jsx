@@ -44,7 +44,7 @@ const Footer = () => {
                 <div className='grid gap-10 border-b border-white/10 pb-12 md:grid-cols-2 xl:grid-cols-[1.15fr_repeat(3,minmax(0,1fr))]'>
                     <div className='space-y-6'>
                         <img
-                            className='w-40 brightness-0 invert transition-transform duration-300 hover:scale-[1.02] md:w-44'
+                            className='w-40 brightness-0  invert transition-transform duration-300 hover:scale-[1.02] md:w-44'
                             src={LOGO_SRC}
                             alt="Company Logo"
                             onError={(event) => {
@@ -101,7 +101,7 @@ const Footer = () => {
                         <address className='space-y-4 text-sm not-italic text-slate-300'>
                             <p className='flex items-start gap-3'>
                                 <FaPhone className='mt-1 text-[#67aee2]' />
-                                <span>+880 1707346634</span>
+                                <span>09649551551</span>
                             </p>
                             <p className='flex items-start gap-3 break-all'>
                                 <IoMdMail className='mt-1 text-[#67aee2]' />

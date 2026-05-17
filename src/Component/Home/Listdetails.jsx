@@ -544,7 +544,7 @@ const Listdetails = () => {
 
                             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                                 <div className="rounded-2xl bg-green-50 p-3 text-center">
-                                    <p className="text-sm text-gray-600">Dining</p>
+                                    <p className="text-sm text-gray-600">Rooms</p>
                                     <p className="font-semibold text-green-700">
                                         {lists.dining_rooms ?? specifications.dining_rooms ?? 0}
                                     </p>

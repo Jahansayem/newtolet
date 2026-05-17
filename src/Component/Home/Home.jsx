@@ -28,7 +28,7 @@ const CategorySectionsFallback = () => (
                     <div className='h-5 w-36 rounded-full bg-gray-200' />
                 </div>
                 <div className='grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6'>
-                    {Array.from({ length: 6 }).map((_, index) => (
+                    {Array.from({ length: 8 }).map((_, index) => (
                         <div key={`${category}-${index}`} className='h-64 rounded-2xl bg-gray-200' />
                     ))}
                 </div>
@@ -65,7 +65,7 @@ const Home = () => {
         HOME_CATEGORIES.map((category) => {
             const items = list
                 .filter((item) => matchesPropertyCategory(item, category) && matchesKeywordSearch(item, searchQuery))
-                .slice(0, 6);
+                .slice(0, 8);
 
             return { category, items };
         }).filter((section) => section.items.length > 0)
@@ -250,7 +250,7 @@ const Home = () => {
                 <Cover />
                 <div className='px-2 pt-6 text-center'>
                     <p className='text-xs font-bold uppercase tracking-[0.32em] text-gray-900 sm:text-sm md:text-base'>
-                        NEW TOLET - HOUSE RENT SOLUTION
+                        NEW TOLET - Find Homes Smartly
                     </p>
                 </div>
             </div>
@@ -262,13 +262,13 @@ const Home = () => {
             >
                 <section className='space-y-5'>
                     <div className='mx-auto max-w-3xl text-center'>
-                        <p className='site-kicker'>Recently Published Properties</p>
-                        <h1 className='mt-3 text-balance text-3xl font-bold text-gray-800 md:text-4xl lg:text-[2.8rem]'>
+                        {/* <p className='site-kicker'>Recently Published Properties</p> */}
+                        {/* <h1 className='mt-3 text-balance text-3xl font-bold text-gray-800 md:text-4xl lg:text-[2.8rem]'>
                             Check out the latest property listings
-                        </h1>
-                        <p className='mt-3 text-sm leading-7 text-gray-500 md:text-base'>
+                        </h1> */}
+                        {/* <p className='mt-3 text-sm leading-7 text-gray-500 md:text-base'>
                             Browse the newest approved property listings curated across the latest categories.
-                        </p>
+                        </p> */}
                         {searchQuery && (
                             <div className='mt-5 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-white'>
                                 <span className='text-sm'>Search: {searchQuery}</span>
@@ -300,7 +300,7 @@ const Home = () => {
                                 >
                                     <div className='flex flex-col gap-4 border-b border-gray-200 pb-4 sm:flex-row sm:items-center sm:justify-between'>
                                         <div>
-                                            <h2 className='text-2xl font-bold text-gray-800 md:text-[1.8rem]'>{category}</h2>
+                                            <h2 className='text-xl font-bold text-gray-800 md:text-[1.8rem]'>{category}</h2>
                                             <p className='text-sm leading-6 text-gray-500'>Top {items.length} featured {category.toLowerCase()} listings.</p>
                                         </div>
                                         <Link
@@ -311,7 +311,7 @@ const Home = () => {
                                         </Link>
                                     </div>
 
-                                    <div className='grid grid-cols-1 gap-4 gap-y-6 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6'>
+                                    <div className='grid grid-cols-2 gap-4 gap-y-6 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4'>
                                         {items.map((item, index) => (
                                             <PropertyListingCard
                                                 key={item.id || `${category}-${index}`}

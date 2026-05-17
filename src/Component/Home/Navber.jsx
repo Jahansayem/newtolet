@@ -44,7 +44,7 @@ const NavSearchOverlay = dynamic(() => import('./NavSearchOverlay'), {
 })
 
 const desktopLinkClassName = (isActive) =>
-  `inline-flex items-center gap-2 border-b-2 px-1 py-4 text-[15px] font-medium transition ${
+  `inline-flex items-center gap-1.5 border-b-2 px-1 py-4 text-[14px] lg:text-[15px] font-medium transition ${
     isActive
       ? 'border-[#1E73B8] text-[#1E73B8]'
       : 'border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900'
@@ -54,7 +54,7 @@ const dropdownLinkClassName =
   'flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 hover:text-[#1E73B8]'
 
 const homepageCtaClassName =
-  'inline-flex h-10 items-center gap-2 border-y border-r border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition first:rounded-l-lg first:border-l last:rounded-r-lg hover:border-[#1E73B8] hover:bg-[#1E73B8] hover:text-white'
+  'inline-flex h-9 items-center gap-1.5 border-y border-r border-slate-200 bg-white px-2.5 text-xs lg:text-sm lg:px-3 lg:gap-2 lg:h-10 font-semibold text-slate-700 transition first:rounded-l-lg first:border-l last:rounded-r-lg hover:border-[#1E73B8] hover:bg-[#1E73B8] hover:text-white'
 
 const checkAdminInstant = () => {
   if (typeof window === 'undefined') return false
@@ -202,15 +202,15 @@ const Navber = () => {
         isHomepage && !homeNavVisible ? '-translate-y-full pointer-events-none' : 'translate-y-0'
       }`}
     >
-      <div className="mx-auto max-w-[1250px] px-3 md:px-6 xl:px-0">
-        <div className="flex items-center justify-between gap-4 py-2.5 md:py-0">
+      <div className="w-full px-3 md:px-6 xl:px-8">
+        <div className="flex items-center justify-between gap-2 py-2.5 md:py-0 lg:gap-4">
           <Link to="/" className="inline-flex shrink-0 items-center py-2 md:py-3">
             <Logo className="h-10 w-auto max-w-[150px] object-contain md:h-11 md:max-w-[176px]" />
           </Link>
 
-          <div className="hidden min-w-0 flex-1 items-center justify-between gap-6 md:flex">
+          <div className="hidden min-w-0 flex-1 items-center justify-between gap-3 md:flex lg:gap-6">
             <nav className="min-w-0 flex-1">
-              <ul className="flex items-center gap-5 lg:gap-6">
+              <ul className="flex items-center gap-3 lg:gap-4 xl:gap-5">
                 <li>
                   <DesktopNavLink
                     href="/"
@@ -295,9 +295,9 @@ const Navber = () => {
               </ul>
             </nav>
 
-            <div className="flex shrink-0 items-center gap-4">
+            <div className="flex shrink-0 items-center gap-2 lg:gap-3 xl:gap-4">
               {isHomepage ? (
-                <div className="flex items-center">
+                <div className="hidden lg:flex items-center">
                   <Link to="/addproperty" className={homepageCtaClassName}>
                     <BiPlus className="text-base" />
                     <span>Add Property</span>

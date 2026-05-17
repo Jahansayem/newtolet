@@ -130,13 +130,13 @@ const FloatingQuickRail = () => {
 
   const quickActions = useMemo(
     () => [
-      {
-        key: 'home',
-        href: buildPageHref(),
-        label: 'Home',
-        icon: FiHome,
-        isActive: !page,
-      },
+      // {
+      //   key: 'home',
+      //   href: buildPageHref(),
+      //   label: 'Home',
+      //   icon: FiHome,
+      //   isActive: !page,
+      // },
       ...(!page
         ? [
             {
@@ -275,7 +275,7 @@ const FloatingQuickRail = () => {
                   <button
                     type="button"
                     onClick={() => setMenuOpen(false)}
-                    className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600"
+                    className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600"
                   >
                     Close
                   </button>
@@ -332,7 +332,7 @@ const FloatingQuickRail = () => {
                 >
                   <action.icon />
                   {action.badge ? (
-                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[20px] font-bold text-white">
                       {action.badge}
                     </span>
                   ) : null}

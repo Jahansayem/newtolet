@@ -241,6 +241,11 @@ const PropertyListingCard = ({ item, index = 0 }) => {
                     </div>
 
                     <div className='relative border-t border-slate-100 px-3 py-3 pr-10'>
+                        {item.property_id_number && (
+                            <p className='text-xs font-semibold text-slate-500'>
+                                ID: #{item.property_id_number}
+                            </p>
+                        )}
                         <p className='line-clamp-1 text-base font-bold leading-6 text-[#1E73B8]'>
                             {buildCardTitle(item)}
                         </p>

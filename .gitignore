@@ -20,6 +20,10 @@ out
 coverage
 tmp
 temp
+.codex-build-*/
+.codex-build-webpack-*/
+.codex-static-builds/
+out-static/
 .serena/cache
 .claude/cache
 .chrome-check/

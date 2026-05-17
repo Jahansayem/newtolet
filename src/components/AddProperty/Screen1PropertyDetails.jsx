@@ -129,10 +129,10 @@ const Screen1PropertyDetails = () => {
 
       {/* Specifications Grid */}
       <div className='grid grid-cols-2 lg:grid-cols-6 gap-3 md:gap-4'>
-        {/* Dining Rooms */}
+        {/* Rooms */}
         <div>
           <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-1'>
-            Dining Rooms
+            Rooms
           </label>
           <div className='flex items-center border border-gray-300 rounded-lg overflow-hidden'>
             <button
@@ -144,7 +144,7 @@ const Screen1PropertyDetails = () => {
                 updateFormData({ dining_rooms: newValue })
               }}
               className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
-              aria-label='Decrease dining rooms'
+              aria-label='Decrease rooms'
               tabIndex={0}
             >
               −
@@ -158,7 +158,7 @@ const Screen1PropertyDetails = () => {
                 updateFormData({ dining_rooms: newValue })
               }}
               className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
-              aria-label='Increase dining rooms'
+              aria-label='Increase rooms'
               tabIndex={0}
             >
               +

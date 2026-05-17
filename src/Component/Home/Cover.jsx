@@ -112,7 +112,7 @@ const Cover = () => {
                     }}
                     autoplay={{ delay: 5000, disableOnInteraction: false }}
                     loop
-                    className="site-card-strong relative h-[260px] w-full overflow-hidden rounded-[28px] shadow-lg group sm:h-[320px] md:h-[420px] xl:h-[500px]"
+                    className="site-card-strong relative h-[260px] w-full overflow-hidden rounded shadow-lg group sm:h-[220px] md:h-[350px] xl:h-[400px]"
                 >
                     {slides.map((slide, index) => {
                         return (

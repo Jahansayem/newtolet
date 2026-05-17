@@ -479,7 +479,7 @@ const AddPropertyContent = () => {
               {/* Specifications Grid */}
               <div className='grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4'>
                 <CounterInput
-                  label='Dining Rooms'
+                  label='Rooms'
                   value={formData.dining_rooms || 0}
                   onChange={(val) => updateFormData({ dining_rooms: val })}
                   error={errors.dining_rooms}
@@ -881,21 +881,6 @@ const AddPropertyContent = () => {
                       style={{ colorScheme: 'light', color: 'black', backgroundColor: 'white' }}
                     />
                     {errors.available_from && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.available_from}</p>}
-                  </div>
-                  <div>
-                    <label className='block text-xs md:text-sm font-semibold text-black mb-2'>Deadline *</label>
-                    <input
-                      type='date'
-                      value={formData.deadline}
-                      onChange={(e) => updateFormData({ deadline: e.target.value })}
-                      className={`w-full px-3 md:px-4 py-2.5 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
-                        errors.deadline
-                          ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
-                      }`}
-                      style={{ colorScheme: 'light', color: 'black', backgroundColor: 'white' }}
-                    />
-                    {errors.deadline && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.deadline}</p>}
                   </div>
                 </div>
               </div>

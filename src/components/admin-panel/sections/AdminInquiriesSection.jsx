@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MdDelete } from 'react-icons/md'
 import {
   deleteInquiry,
@@ -12,15 +12,29 @@ const AdminInquiriesSection = ({ searchQuery = '' }) => {
   const [loading, setLoading] = useState(true)
   const [inquiries, setInquiries] = useState([])
   const [message, setMessage] = useState({ type: '', text: '' })
+  const isMountedRef = useRef(true)
+  const messageTimerRef = useRef(null)
 
-  const showMessage = (type, text) => {
+  const showMessage = useCallback((type, text) => {
     setMessage({ type, text })
-    window.setTimeout(() => setMessage({ type: '', text: '' }), 3000)
-  }
+    if (messageTimerRef.current) {
+      window.clearTimeout(messageTimerRef.current)
+    }
+    messageTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setMessage({ type: '', text: '' })
+      }
+    }, 3000)
+  }, [])
 
-  const fetchInquiries = async () => {
+  const fetchInquiries = useCallback(async () => {
     setLoading(true)
     const { data, error } = await getAllPropertyInquiries()
+
+    if (!isMountedRef.current) {
+      return
+    }
+
     if (error) {
       showMessage('error', 'Failed to load inquiries')
       setInquiries([])
@@ -28,11 +42,19 @@ const AdminInquiriesSection = ({ searchQuery = '' }) => {
       setInquiries(data || [])
     }
     setLoading(false)
-  }
+  }, [showMessage])
 
   useEffect(() => {
+    isMountedRef.current = true
     void fetchInquiries()
-  }, [])
+
+    return () => {
+      isMountedRef.current = false
+      if (messageTimerRef.current) {
+        window.clearTimeout(messageTimerRef.current)
+      }
+    }
+  }, [fetchInquiries])
 
   const filteredInquiries = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()

@@ -1,28 +1,16 @@
 import React, { useEffect } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
-import { validateScreen2 } from '../../utils/formValidation'
 import RentDisplay from '../RentDisplay'
 
 const Screen2Pricing = () => {
-  const { formData, updateFormData, errors, setFormErrors, clearErrors, nextStep } =
+  const { formData, updateFormData, errors, clearErrors } =
     useAddProperty()
 
   const rentPeriods = ['Daily', 'Weekly', 'Monthly', 'Yearly']
 
-  const handleNext = () => {
-    clearErrors()
-    const screenErrors = validateScreen2(formData)
-
-    if (Object.keys(screenErrors).length === 0) {
-      nextStep()
-    } else {
-      setFormErrors(screenErrors)
-    }
-  }
-
   useEffect(() => {
     clearErrors()
-  }, [])
+  }, [clearErrors])
 
   return (
     <div className='space-y-4 md:space-y-6 pb-20 md:pb-24'>

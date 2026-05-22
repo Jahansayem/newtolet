@@ -3,22 +3,11 @@ import { readSnapshot, removeSnapshot, writeSnapshot } from './cacheService'
 import { HOME_CATEGORIES, normalizePropertyCategory } from '../lib/propertyCategories'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
-const PUBLIC_PROPERTIES_VIEW = 'public_property_catalog'
 const RELATED_RECORD_BATCH_SIZE = 100
 const HOMEPAGE_CATEGORY_ITEM_LIMIT = 6
 const HOMEPAGE_PROPERTIES_LIMIT = 72
 const SEARCHABLE_PROPERTIES_LIMIT = 200
 const PROPERTY_CATALOG_CACHE_VERSION = 'v2'
-
-const isMissingPublicCatalogError = (error) =>
-  error?.code === 'PGRST205' ||
-  error?.code === '42P01' ||
-  error?.message?.includes(`Could not find the table '${PUBLIC_PROPERTIES_VIEW}'`) ||
-  error?.message?.includes('does not exist')
-
-const logPublicCatalogFallback = (contextLabel = 'properties') => {
-  console.warn(`Using ${contextLabel} fallback because ${PUBLIC_PROPERTIES_VIEW} is unavailable.`)
-}
 
 export const getAllPropertiesCacheKey = (options = {}) => {
   const limit =
@@ -132,6 +121,7 @@ const mapPublicProperty = (property, imagesByProperty = {}, amenitiesByProperty 
   category: property.category,
   normalizedCategory: normalizePropertyCategory(property.category),
   property_type: property.property_type || 'Apartment',
+  total_rooms: property.total_rooms || 0,
   dining_rooms: property.dining_rooms || 0,
   living_rooms: property.living_rooms || 0,
   total_bathrooms: property.total_bathrooms,
@@ -141,6 +131,7 @@ const mapPublicProperty = (property, imagesByProperty = {}, amenitiesByProperty 
   room_size: property.room_size_sqft,
   occupancy: property.occupancy || null,
   specifications: {
+    total_rooms: property.total_rooms || 0,
     dining_rooms: property.dining_rooms || 0,
     living_rooms: property.living_rooms || 0,
     total_bathrooms: property.total_bathrooms,
@@ -200,28 +191,6 @@ const mapPublicProperties = (properties, images = [], amenities = []) => {
 }
 
 const fetchPublicProperties = async ({ select = '*', limit = null, offset = 0 } = {}) => {
-  let query = supabase
-    .from(PUBLIC_PROPERTIES_VIEW)
-    .select(select)
-    .order('created_at', { ascending: false })
-
-  if (limit) {
-    query = query.range(offset, offset + limit - 1)
-  }
-
-  const { data, error } = await query
-
-  if (!error) {
-    return {
-      properties: data || [],
-      usedLegacyFallback: false,
-    }
-  }
-
-  if (!isMissingPublicCatalogError(error)) {
-    throw error
-  }
-
   let legacyQuery = supabase
     .from('properties')
     .select(select)
@@ -241,7 +210,6 @@ const fetchPublicProperties = async ({ select = '*', limit = null, offset = 0 } 
 
   return {
     properties: legacyData || [],
-    usedLegacyFallback: true,
   }
 }
 
@@ -260,12 +228,9 @@ export const getAllProperties = async (options = {}) => {
     const offset =
       Number.isInteger(options.offset) && options.offset >= 0 ? options.offset : 0
 
-    const { properties, usedLegacyFallback } = await fetchPublicProperties({ limit, offset })
+    const { properties } = await fetchPublicProperties({ limit, offset })
 
     if (!properties || properties.length === 0) {
-      if (usedLegacyFallback) {
-        logPublicCatalogFallback('approved properties')
-      }
       writeSnapshot(cacheKey, [])
       return []
     }
@@ -286,10 +251,6 @@ export const getAllProperties = async (options = {}) => {
 
     const transformedProperties = mapPublicProperties(properties, allImages, allAmenities)
 
-    if (usedLegacyFallback) {
-      logPublicCatalogFallback('approved properties')
-    }
-
     writeSnapshot(cacheKey, transformedProperties)
 
     return transformedProperties
@@ -298,7 +259,6 @@ export const getAllProperties = async (options = {}) => {
 
     const cachedProperties = readSnapshot(cacheKey)
     if (cachedProperties) {
-      console.warn('Using cached approved properties after fetch error')
       return cachedProperties
     }
 
@@ -316,7 +276,6 @@ export const getHomepageProperties = async () => {
     }, {})
     const selectedPropertyIds = new Set()
     let offset = 0
-    let usedLegacyFallback = false
     let exhaustedCatalog = false
 
     while (!exhaustedCatalog) {
@@ -325,7 +284,6 @@ export const getHomepageProperties = async () => {
         offset,
       })
       const properties = response?.properties || []
-      usedLegacyFallback = usedLegacyFallback || response?.usedLegacyFallback === true
 
       if (properties.length === 0) {
         exhaustedCatalog = true
@@ -372,14 +330,12 @@ export const getHomepageProperties = async () => {
     )
 
     if (!selectedProperties.length) {
-      if (usedLegacyFallback) {
-        logPublicCatalogFallback('homepage properties')
-      }
       writeSnapshot(cacheKey, [])
       return []
     }
 
     const propertyIds = selectedProperties.map((property) => property.id)
+
     const [allImages, allAmenities] = await Promise.all([
       fetchRelatedRowsInBatches({
         table: 'property_images',
@@ -399,23 +355,14 @@ export const getHomepageProperties = async () => {
       allAmenities
     )
 
-    if (usedLegacyFallback) {
-      logPublicCatalogFallback('homepage properties')
-    }
-
     writeSnapshot(cacheKey, transformedProperties)
 
     return transformedProperties
   } catch (error) {
-    if (isMissingPublicCatalogError(error)) {
-      console.warn(`Homepage properties unavailable because ${PUBLIC_PROPERTIES_VIEW} could not be loaded.`)
-    } else {
-      console.error('Error fetching homepage properties:', error)
-    }
+    console.error('Error fetching homepage properties:', error)
 
     const cachedProperties = readSnapshot(cacheKey)
     if (cachedProperties) {
-      console.warn('Using cached homepage properties after fetch error')
       return cachedProperties
     }
 
@@ -427,7 +374,7 @@ export const getSearchableProperties = async (limit = SEARCHABLE_PROPERTIES_LIMI
   const cacheKey = getSearchablePropertiesCacheKey(limit)
 
   try {
-    const { properties, usedLegacyFallback } = await fetchPublicProperties({
+    const { properties } = await fetchPublicProperties({
       select:
         'id, property_id_number, category, property_type, rent_amount_bdt, is_rent_negotiable, state_district, area, sub_area, short_description, created_at, status, is_active',
       limit,
@@ -477,23 +424,14 @@ export const getSearchableProperties = async (limit = SEARCHABLE_PROPERTIES_LIMI
       is_active: property.is_active !== false,
     }))
 
-    if (usedLegacyFallback) {
-      logPublicCatalogFallback('searchable properties')
-    }
-
     writeSnapshot(cacheKey, transformedProperties)
 
     return transformedProperties
   } catch (error) {
-    if (isMissingPublicCatalogError(error)) {
-      console.warn(`Searchable properties unavailable because ${PUBLIC_PROPERTIES_VIEW} could not be loaded.`)
-    } else {
-      console.error('Error fetching searchable properties:', error)
-    }
+    console.error('Error fetching searchable properties:', error)
 
     const cachedProperties = readSnapshot(cacheKey)
     if (cachedProperties) {
-      console.warn('Using cached searchable properties after fetch error')
       return cachedProperties
     }
 

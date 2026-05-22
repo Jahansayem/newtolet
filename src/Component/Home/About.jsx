@@ -1,5 +1,4 @@
-import banner from '../../assets/banner.jpg'
-import { FaBuilding, FaUsers, FaAward, FaHandshake, FaCheckCircle, FaArrowRight } from 'react-icons/fa'
+import { FaBuilding, FaUsers, FaAward, FaHandshake } from 'react-icons/fa'
 
 const About = () => {
     const stats = [
@@ -7,13 +6,6 @@ const About = () => {
         { icon: <FaUsers />, value: "10K+", label: "Happy Customers" },
         { icon: <FaAward />, value: "15+", label: "Years Experience" },
         { icon: <FaHandshake />, value: "98%", label: "Client Satisfaction" }
-    ]
-
-    const features = [
-        "Verified property listings with authentic photos",
-        "Transparent pricing with no hidden fees",
-        "24/7 customer support for all inquiries",
-        "Secure payment processing and transactions"
     ]
 
     return (

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BiImage,
   BiPackage,
@@ -183,6 +183,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
     ...createLast7Range(),
   }))
   const [reportErrorMessage, setReportErrorMessage] = useState('')
+  const isMountedRef = useRef(true)
 
   const activeReportRange = useMemo(() => buildReportFilterRange(reportFilter), [reportFilter])
   const reportRangeLabel = useMemo(
@@ -222,7 +223,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
     (submitter) => (submitterListingReport.todayCountsBySubmitterId?.[submitter.id] || 0) > 0
   )
 
-  const loadDashboardStats = async (rangeOverride = buildReportFilterRange(reportFilter)) => {
+  const loadDashboardStats = useCallback(async (rangeOverride = buildReportFilterRange(reportFilter)) => {
     setLoading(true)
 
     const [
@@ -238,6 +239,10 @@ const AdminDashboardSection = ({ onQuickAction }) => {
       getDailySubmitterWiseListingReport(rangeOverride),
       getCoverPhotos(),
     ])
+
+    if (!isMountedRef.current) {
+      return
+    }
 
     if (!error && data) {
       setStats(data)
@@ -266,13 +271,21 @@ const AdminDashboardSection = ({ onQuickAction }) => {
         : ''
     )
     setLoading(false)
-  }
+  }, [reportFilter])
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (reportFilter.preset !== REPORT_FILTER_PRESETS.custom) {
       void loadDashboardStats(buildReportFilterRange(reportFilter))
     }
-  }, [reportFilter.preset])
+  }, [loadDashboardStats, reportFilter])
 
   const handleReportPresetChange = (preset) => {
     if (preset === REPORT_FILTER_PRESETS.month) {

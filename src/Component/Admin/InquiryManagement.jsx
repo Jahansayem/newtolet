@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiMail, FiPhone, FiUser, FiMapPin, FiClock, FiTrash2, FiCheck, FiMessageSquare, FiUsers, FiSearch } from 'react-icons/fi';
 import { getAllInquiries, updateInquiryStatus, deleteInquiry } from '../../services/inquiryService';
 import { getDashboardStats } from '../../services/adminService';
 
 const InquiryManagement = () => {
     const [inquiries, setInquiries] = useState([]);
-    const [filteredInquiries, setFilteredInquiries] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
@@ -13,58 +12,72 @@ const InquiryManagement = () => {
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [updating, setUpdating] = useState(null);
     const [totalUsers, setTotalUsers] = useState(0);
+    const isMountedRef = useRef(true);
 
     useEffect(() => {
-        fetchInquiries();
-        fetchUserStats();
+        isMountedRef.current = true;
+
+        return () => {
+            isMountedRef.current = false;
+        };
     }, []);
 
-    const fetchUserStats = async () => {
+    const fetchUserStats = useCallback(async () => {
         const result = await getDashboardStats();
-        if (result.data) {
+        if (isMountedRef.current && result.data) {
             setTotalUsers(result.data.totalUsers || 0);
         }
-    };
+    }, []);
 
-    const fetchInquiries = async () => {
+    const fetchInquiries = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const { data, error } = await getAllInquiries();
             if (error) throw error;
-            setInquiries(data || []);
-            filterInquiries(data || [], searchTerm, filter);
+            if (isMountedRef.current) {
+                setInquiries(data || []);
+            }
         } catch (err) {
             console.error('Error fetching inquiries:', err);
-            setError('Failed to load inquiries');
+            if (isMountedRef.current) {
+                setError('Failed to load inquiries');
+            }
         } finally {
-            setLoading(false);
+            if (isMountedRef.current) {
+                setLoading(false);
+            }
         }
-    };
+    }, []);
 
-    const filterInquiries = (inquiryList, search, status) => {
-        let filtered = inquiryList;
+    useEffect(() => {
+        void fetchInquiries();
+        void fetchUserStats();
+    }, [fetchInquiries, fetchUserStats]);
 
-        if (status !== 'all') {
-            filtered = filtered.filter((i) => i.status === status);
+    const filteredInquiries = useMemo(() => {
+        let filtered = inquiries;
+
+        if (filter !== 'all') {
+            filtered = filtered.filter((i) => i.status === filter);
         }
 
-        if (search) {
+        if (searchTerm) {
+            const normalizedSearch = searchTerm.toLowerCase();
             filtered = filtered.filter(
                 (i) =>
-                    i.name?.toLowerCase().includes(search.toLowerCase()) ||
-                    i.email?.toLowerCase().includes(search.toLowerCase()) ||
-                    i.phone?.includes(search) ||
-                    i.message?.toLowerCase().includes(search.toLowerCase())
+                    i.name?.toLowerCase().includes(normalizedSearch) ||
+                    i.email?.toLowerCase().includes(normalizedSearch) ||
+                    i.phone?.includes(searchTerm) ||
+                    i.message?.toLowerCase().includes(normalizedSearch)
             );
         }
 
-        setFilteredInquiries(filtered);
-    };
+        return filtered;
+    }, [filter, inquiries, searchTerm]);
 
     const handleSearch = (value) => {
         setSearchTerm(value);
-        filterInquiries(inquiries, value, filter);
     };
 
     const handleStatusChange = async (inquiryId, newStatus) => {
@@ -77,11 +90,6 @@ const InquiryManagement = () => {
                     inq.id === inquiryId ? { ...inq, status: newStatus } : inq
                 )
             );
-            // Re-filter after status change
-            const updated = inquiries.map(inq =>
-                inq.id === inquiryId ? { ...inq, status: newStatus } : inq
-            );
-            filterInquiries(updated, searchTerm, filter);
         } catch (err) {
             console.error('Error updating status:', err);
             alert('Failed to update status');
@@ -201,7 +209,6 @@ const InquiryManagement = () => {
                             value={filter}
                             onChange={(e) => {
                                 setFilter(e.target.value);
-                                filterInquiries(inquiries, searchTerm, e.target.value);
                             }}
                             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
                         >

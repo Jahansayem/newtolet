@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import ReactDOM from 'react-dom'
 import { RxCross2 } from 'react-icons/rx'
@@ -56,7 +56,8 @@ const dropdownLinkClassName =
 const homepageCtaClassName =
   'inline-flex h-9 items-center gap-1.5 border-y border-r border-slate-200 bg-white px-2.5 text-xs lg:text-sm lg:px-3 lg:gap-2 lg:h-10 font-semibold text-slate-700 transition first:rounded-l-lg first:border-l last:rounded-r-lg hover:border-[#1E73B8] hover:bg-[#1E73B8] hover:text-white'
 
-const checkAdminInstant = () => {
+// Use a function that only reads from localStorage once during mount
+const getInitialAdminState = () => {
   if (typeof window === 'undefined') return false
 
   try {
@@ -88,7 +89,6 @@ const Logo = ({ className = 'h-10 w-auto max-w-[150px] object-contain md:max-w-[
 const Navber = () => {
   const [mounted, setMounted] = useState(false)
   const [menubtn, setmenubtn] = useState(false)
-  const [isAdmin, setIsAdmin] = useState(checkAdminInstant())
   const [showProfileDropdown, setShowProfileDropdown] = useState(false)
   const [showPropertyDropdown, setShowPropertyDropdown] = useState(false)
   const [mobilePropertyDropdown, setMobilePropertyDropdown] = useState(false)
@@ -105,6 +105,23 @@ const Navber = () => {
   const activeDashboardTab = routeSearchParams.get('tab') || 'dashboard'
   const isHomepage = location.pathname === '/'
   const [homeNavVisible, setHomeNavVisible] = useState(true)
+  const [hasStoredAdminRole, setHasStoredAdminRole] = useState(false)
+
+  // Use refs to track current page state for memoized functions
+  const activePageRef = useRef(activePage)
+  const activeDashboardTabRef = useRef(activeDashboardTab)
+  const isMountedRef = useRef(true)
+
+  useEffect(() => {
+    activePageRef.current = activePage
+  }, [activePage])
+
+  useEffect(() => {
+    activeDashboardTabRef.current = activeDashboardTab
+  }, [activeDashboardTab])
+
+  const isAdmin = user?.is_admin === true || hasStoredAdminRole
+
   const propertyDropdownItems = useMemo(
     () => [
       { label: 'All property', href: buildLegacyPropertyListHref() },
@@ -116,8 +133,15 @@ const Navber = () => {
     []
   )
 
-  useEffect(() => setMounted(true), [])
-  useEffect(() => setIsAdmin(user?.is_admin === true || checkAdminInstant()), [user])
+  useEffect(() => {
+    isMountedRef.current = true
+    setMounted(true)
+    setHasStoredAdminRole(getInitialAdminState())
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     document.body.style.overflow = menubtn || mobileSearchOpen || searchOpen ? 'hidden' : 'auto'
@@ -168,14 +192,22 @@ const Navber = () => {
     }
   }, [])
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout()
-    setIsAdmin(false)
     setShowProfileDropdown(false)
-    navigate('/login')
-  }
+    // Delay navigation to ensure router is ready
+    if (isMountedRef.current) {
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          navigate('/login')
+        }
+      }, 0)
+    }
+  }, [logout, navigate])
 
-  const isDesktopLinkActive = (key) => {
+  // Memoize isDesktopLinkActive to prevent unnecessary re-renders
+  // Uses state values directly instead of refs to avoid accessing refs during render
+  const isDesktopLinkActive = useCallback((key) => {
     switch (key) {
       case 'home':
         return location.pathname === '/'
@@ -194,7 +226,7 @@ const Navber = () => {
       default:
         return false
     }
-  }
+  }, [location.pathname, activePage, activeDashboardTab])
 
   return (
     <div
@@ -205,10 +237,10 @@ const Navber = () => {
       <div className="w-full px-3 md:px-6 xl:px-8">
         <div className="flex items-center justify-between gap-2 py-2.5 md:py-0 lg:gap-4">
           <Link to="/" className="inline-flex shrink-0 items-center py-2 md:py-3">
-            <Logo className="h-10 w-auto max-w-[150px] object-contain md:h-11 md:max-w-[176px]" />
+            <Logo className="h-10 w-auto max-w-[170px] object-contain md:h-11 md:max-w-[176px]" />
           </Link>
 
-          <div className="hidden min-w-0 flex-1 items-center justify-between gap-3 md:flex lg:gap-6">
+          <div className="hidden md:flex min-w-0 flex-1 items-center justify-between lg:gap-6">
             <nav className="min-w-0 flex-1">
               <ul className="flex items-center gap-3 lg:gap-4 xl:gap-5">
                 <li>
@@ -217,6 +249,14 @@ const Navber = () => {
                     icon={FiHome}
                     label="Home"
                     isActive={isDesktopLinkActive('home')}
+                  />
+                </li>
+                <li>
+                  <DesktopNavLink
+                    href="/career"
+                    icon={FiBriefcase}
+                    label="Career"
+                    isActive={isDesktopLinkActive('career')}
                   />
                 </li>
                 <li
@@ -282,14 +322,6 @@ const Navber = () => {
                     icon={FiFileText}
                     label="Article"
                     isActive={isDesktopLinkActive('article')}
-                  />
-                </li>
-                <li>
-                  <DesktopNavLink
-                    href="/career"
-                    icon={FiBriefcase}
-                    label="Career"
-                    isActive={isDesktopLinkActive('career')}
                   />
                 </li>
               </ul>
@@ -437,6 +469,11 @@ const Navber = () => {
                     <li className="cursor-pointer rounded-lg px-4 py-3 text-lg font-medium text-gray-700 transition-all duration-300 hover:bg-[#1E73B8]/10 hover:text-[#1E73B8]">
                       <Link to="/" className="block w-full" onClick={() => setmenubtn(false)}>
                         Home
+                      </Link>
+                    </li>
+                    <li className="cursor-pointer rounded-lg px-4 py-3 text-lg font-medium text-gray-700 transition-all duration-300 hover:bg-[#1E73B8]/10 hover:text-[#1E73B8]">
+                      <Link to="/career" className="block w-full" onClick={() => setmenubtn(false)}>
+                        Career
                       </Link>
                     </li>
                     {isHomepage ? (

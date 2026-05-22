@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiSearch, FiFilter, FiTrash2, FiLock, FiUnlock, FiUsers, FiAlertTriangle, FiBriefcase, FiSlash } from 'react-icons/fi';
 import { MdOutlineBlock } from 'react-icons/md';
 import { getAllUsers, updateUserStatus, updateUserRole, updateUserEmployeeStatus, deleteUser, blacklistUser, unblacklistUser, checkUserBlacklist, getBlacklistReasons } from '../../services/adminService';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
-  const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -16,81 +15,103 @@ const UserManagement = () => {
   const [blacklistReason, setBlacklistReason] = useState('');
   const [blacklistNotes, setBlacklistNotes] = useState('');
   const [userBlacklistInfo, setUserBlacklistInfo] = useState({});
+  const isMountedRef = useRef(true);
+  const successTimerRef = useRef(null);
 
   useEffect(() => {
-    fetchUsers();
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+      if (successTimerRef.current) {
+        clearTimeout(successTimerRef.current);
+      }
+    };
   }, []);
 
-  const fetchUsers = async () => {
+  const showSuccessMessage = useCallback((message) => {
+    setSuccessMessage(message);
+    if (successTimerRef.current) {
+      clearTimeout(successTimerRef.current);
+    }
+    successTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) {
+        setSuccessMessage('');
+      }
+    }, 3000);
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     const result = await getAllUsers();
-    if (result.data) {
+    if (isMountedRef.current && result.data) {
       setUsers(result.data);
-      filterUsers(result.data, searchTerm, statusFilter);
     }
-    setLoading(false);
-  };
+    if (isMountedRef.current) {
+      setLoading(false);
+    }
+  }, []);
 
-  const filterUsers = (userList, search, status) => {
-    let filtered = userList;
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
 
-    if (status !== 'all') {
+  const filteredUsers = useMemo(() => {
+    let filtered = users;
+
+    if (statusFilter !== 'all') {
       filtered = filtered.filter((u) =>
-        status === 'active' ? u.is_active : !u.is_active
+        statusFilter === 'active' ? u.is_active : !u.is_active
       );
     }
 
-    if (search) {
+    if (searchTerm) {
+      const normalizedSearch = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (u) =>
-          u.name?.toLowerCase().includes(search.toLowerCase()) ||
-          u.email?.toLowerCase().includes(search.toLowerCase()) ||
-          u.phone?.includes(search)
+          u.name?.toLowerCase().includes(normalizedSearch) ||
+          u.email?.toLowerCase().includes(normalizedSearch) ||
+          u.phone?.includes(searchTerm)
       );
     }
 
-    setFilteredUsers(filtered);
-  };
+    return filtered;
+  }, [searchTerm, statusFilter, users]);
 
   const handleSearch = (value) => {
     setSearchTerm(value);
-    filterUsers(users, value, statusFilter);
   };
 
   const handleStatusChange = async (userId, newStatus) => {
     const result = await updateUserStatus(userId, newStatus);
     if (result.data) {
-      setSuccessMessage(newStatus ? 'User unblocked successfully' : 'User blocked successfully');
-      fetchUsers();
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showSuccessMessage(newStatus ? 'User unblocked successfully' : 'User blocked successfully');
+      void fetchUsers();
     }
   };
 
   const handleMakeAdmin = async (userId, makeAdmin) => {
     const result = await updateUserRole(userId, makeAdmin);
     if (result.data) {
-      setSuccessMessage(makeAdmin ? 'User promoted to admin' : 'Admin privileges removed');
-      fetchUsers();
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showSuccessMessage(makeAdmin ? 'User promoted to admin' : 'Admin privileges removed');
+      void fetchUsers();
     }
   };
 
   const handleEmployeeStatusChange = async (userId, isEmployee) => {
     const result = await updateUserEmployeeStatus(userId, isEmployee);
     if (result.data) {
-      setSuccessMessage(isEmployee ? 'User marked as employee' : 'Employee tag removed');
-      fetchUsers();
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showSuccessMessage(isEmployee ? 'User marked as employee' : 'Employee tag removed');
+      void fetchUsers();
     }
   };
 
   const handleDeleteUser = async (userId) => {
     const result = await deleteUser(userId);
     if (result.error === null) {
-      setSuccessMessage('User deleted successfully');
-      fetchUsers();
+      showSuccessMessage('User deleted successfully');
+      void fetchUsers();
       setDeleteConfirmation(null);
-      setTimeout(() => setSuccessMessage(''), 3000);
     }
   };
 
@@ -105,21 +126,19 @@ const UserManagement = () => {
     );
 
     if (result.error === null) {
-      setSuccessMessage('User blacklisted successfully');
-      fetchUsers();
+      showSuccessMessage('User blacklisted successfully');
+      void fetchUsers();
       setBlacklistModal(null);
       setBlacklistReason('');
       setBlacklistNotes('');
-      setTimeout(() => setSuccessMessage(''), 3000);
     }
   };
 
   const handleUnblacklistUser = async (userId) => {
     const result = await unblacklistUser(userId);
     if (result.error === null) {
-      setSuccessMessage('User removed from blacklist');
-      fetchUsers();
-      setTimeout(() => setSuccessMessage(''), 3000);
+      showSuccessMessage('User removed from blacklist');
+      void fetchUsers();
     }
   };
 
@@ -258,9 +277,8 @@ const UserManagement = () => {
             <FiFilter className="text-gray-400" />
             <select
               value={statusFilter}
-              onChange={(e) => {
+            onChange={(e) => {
                 setStatusFilter(e.target.value);
-                filterUsers(users, searchTerm, e.target.value);
               }}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
             >

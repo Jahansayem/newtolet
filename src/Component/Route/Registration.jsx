@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
 import { FaGift } from 'react-icons/fa';
@@ -20,11 +20,24 @@ const Registration = () => {
     const [errors, setErrors] = useState({});
     const [referrerName, setReferrerName] = useState('');
     const [referralPreviewError, setReferralPreviewError] = useState('');
+    const isMountedRef = useRef(true);
+    const redirectTimerRef = useRef(null);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            if (redirectTimerRef.current) {
+                clearTimeout(redirectTimerRef.current);
+            }
+        };
+    }, []);
 
     // Check for referral link in URL on mount
     useEffect(() => {
         const refInput = searchParams.get('ref');
-        if (refInput) {
+        if (refInput && isMountedRef.current) {
             setFormData(prev => ({ ...prev, referralCode: refInput }));
             validateReferralInput(refInput);
         }
@@ -33,25 +46,29 @@ const Registration = () => {
     const validateReferralInput = async (input) => {
         const referralInput = String(input || '').trim();
         if (!referralInput) {
-            setReferrerName('');
-            setReferralPreviewError('');
+            if (isMountedRef.current) {
+                setReferrerName('');
+                setReferralPreviewError('');
+            }
             return;
         }
 
         try {
             const { data, error } = await getPublicReferralCandidate(referralInput);
 
-            if (!error && data) {
+            if (!error && data && isMountedRef.current) {
                 setReferrerName(data.name);
                 setReferralPreviewError('');
-            } else {
+            } else if (isMountedRef.current) {
                 setReferrerName('');
                 setReferralPreviewError(referralInput.length >= 4 ? 'Referral username not found.' : '');
             }
         } catch (error) {
             console.error('Error validating referral input:', error);
-            setReferrerName('');
-            setReferralPreviewError('');
+            if (isMountedRef.current) {
+                setReferrerName('');
+                setReferralPreviewError('');
+            }
         }
     };
 
@@ -139,24 +156,31 @@ const Registration = () => {
 
             // Check if email confirmation is required
             if (data.user.identities && data.user.identities.length === 0) {
-                setMessage({
-                    type: 'error',
-                    text: 'This email is already registered. Please login or use a different email.'
-                });
+                if (isMountedRef.current) {
+                    setMessage({
+                        type: 'error',
+                        text: 'This email is already registered. Please login or use a different email.'
+                    });
+                }
                 return;
             }
 
-            setMessage({
-                type: 'success',
-                text: 'Registration successful! Please verify your email. If you used a referral username, bonus rules will apply automatically after paid credit purchases.'
-            });
+            if (isMountedRef.current) {
+                setMessage({
+                    type: 'success',
+                    text: 'Registration successful! Please verify your email. If you used a referral username, bonus rules will apply automatically after paid credit purchases.'
+                });
 
-            setFormData({ name: '', email: '', phone: '', password: '', referralCode: '' });
-            setReferrerName('');
-            setReferralPreviewError('');
+                setFormData({ name: '', email: '', phone: '', password: '', referralCode: '' });
+                setReferrerName('');
+                setReferralPreviewError('');
+            }
 
-            setTimeout(() => {
-                navigate('/login');
+            // Redirect to login after 2 seconds
+            redirectTimerRef.current = setTimeout(() => {
+                if (isMountedRef.current) {
+                    navigate('/login');
+                }
             }, 2000);
 
         } catch (error) {
@@ -176,9 +200,13 @@ const Registration = () => {
                 }
             }
 
-            setMessage({ type: 'error', text: errorMessage });
+            if (isMountedRef.current) {
+                setMessage({ type: 'error', text: errorMessage });
+            }
         } finally {
-            setIsLoading(false);
+            if (isMountedRef.current) {
+                setIsLoading(false);
+            }
         }
     };
 

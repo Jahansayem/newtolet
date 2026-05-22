@@ -27,6 +27,7 @@ export const COVER_BANNER_GUIDANCE = {
 }
 
 let imageCompressionPromise
+const activeCoverPhotoRequests = new Map()
 
 const loadImageCompression = async () => {
   if (!imageCompressionPromise) {
@@ -58,29 +59,39 @@ export const getCoverPhotos = async () => {
 export const getActiveCoverPhotos = async (limit = 6) => {
   const cacheKey = getActiveCoverPhotosCacheKey(limit)
 
-  try {
-    const { data, error } = await supabase
-      .from('cover_photos')
-      .select('id, image_url, order_index') // Only select needed columns
-      .eq('is_active', true)
-      .order('order_index', { ascending: true })
-      .limit(limit) // Limit number of slides for performance
-
-    if (error) throw error
-    const activePhotos = data || []
-    writeSnapshot(cacheKey, activePhotos)
-    return { data: activePhotos, error: null }
-  } catch (error) {
-    console.error('Error fetching active cover photos:', error)
-
-    const cachedPhotos = readSnapshot(cacheKey)
-    if (cachedPhotos) {
-      console.warn('Using cached active cover photos after fetch error')
-      return { data: cachedPhotos, error: null }
-    }
-
-    return { data: [], error }
+  if (activeCoverPhotoRequests.has(cacheKey)) {
+    return activeCoverPhotoRequests.get(cacheKey)
   }
+
+  const request = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cover_photos')
+        .select('id, image_url, order_index')
+        .eq('is_active', true)
+        .order('order_index', { ascending: true })
+        .limit(limit)
+
+      if (error) throw error
+      const activePhotos = data || []
+      writeSnapshot(cacheKey, activePhotos)
+      return { data: activePhotos, error: null }
+    } catch (error) {
+      console.error('Error fetching active cover photos:', error)
+
+      const cachedPhotos = readSnapshot(cacheKey)
+      if (cachedPhotos) {
+        return { data: cachedPhotos, error: null }
+      }
+
+      return { data: [], error }
+    } finally {
+      activeCoverPhotoRequests.delete(cacheKey)
+    }
+  })()
+
+  activeCoverPhotoRequests.set(cacheKey, request)
+  return request
 }
 
 // Add a new cover photo to Supabase
@@ -320,7 +331,7 @@ export const uploadCoverImageToSupabase = async (file) => {
     const filePath = `covers/${fileName}`
 
     // Upload to Supabase Storage with long cache policy (1 year for immutable file names)
-    const { data, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from(SUPABASE_BUCKET)
       .upload(filePath, optimizedFile, {
         cacheControl: '31536000', // 1 year cache for immutable file names

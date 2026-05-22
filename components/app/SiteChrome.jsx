@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useMemo, useRef, Suspense } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import Navber from '../../src/Component/Home/Navber.jsx'
 import Footer from '../../src/Component/Home/Footer.jsx'
 import FloatingQuickRail from './FloatingQuickRail.jsx'
+import HomePageSkeleton from './HomePageSkeleton.jsx'
 import { getRoutePage } from '../../src/lib/routePaths.js'
 
 const STANDALONE_PAGES = new Set([
@@ -21,16 +22,27 @@ const STANDALONE_PAGES = new Set([
   'my-properties',
 ])
 
-export default function SiteChrome({ children }) {
+// Inner component that uses useSearchParams - wrapped in Suspense
+function SiteChromeInner({ children }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const routeKey = `${pathname}?${searchParams?.toString() || ''}`
-  const page = getRoutePage(pathname, searchParams)
+  const previousPathnameRef = useRef(pathname)
+
+  // Memoize the page check to avoid recalculating on every render
+  const page = useMemo(() => {
+    return getRoutePage(pathname, searchParams)
+  }, [pathname, searchParams])
+
   const hideChrome = STANDALONE_PAGES.has(page)
 
   useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [routeKey])
+    // Only scroll to top when pathname actually changes
+    // This prevents unwanted scrolls during search param changes
+    if (pathname !== previousPathnameRef.current) {
+      window.scrollTo(0, 0)
+      previousPathnameRef.current = pathname
+    }
+  }, [pathname])
 
   if (hideChrome) {
     return <div className="min-h-screen bg-gray-50">{children}</div>
@@ -39,9 +51,17 @@ export default function SiteChrome({ children }) {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navber />
-    <FloatingQuickRail />
+      <FloatingQuickRail />
       <div className="max-w-full mx-auto">{children}</div>
       <Footer />
     </div>
+  )
+}
+
+export default function SiteChrome({ children }) {
+  return (
+    <Suspense fallback={<HomePageSkeleton />}>
+      <SiteChromeInner>{children}</SiteChromeInner>
+    </Suspense>
   )
 }

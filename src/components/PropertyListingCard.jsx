@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MdMoreVert } from 'react-icons/md';
 import PropertyCardMedia from './PropertyCardMedia';
@@ -66,7 +66,14 @@ const formatMonth = (dateValue) => {
     return date.toLocaleString('default', { month: 'long' });
 };
 
-const PropertyListingCard = ({ item, index = 0 }) => {
+const PropertyListingCard = ({
+    item,
+    index = 0,
+    savedPropertyIds = null,
+    comparedPropertyIds = null,
+    onSavedPropertiesChange = null,
+    onComparedPropertiesChange = null,
+}) => {
     const [isSaved, setIsSaved] = useState(false);
     const [isCompared, setIsCompared] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -76,19 +83,52 @@ const PropertyListingCard = ({ item, index = 0 }) => {
     const [reportFeedback, setReportFeedback] = useState({ type: '', text: '' });
     const [isSubmittingReport, setIsSubmittingReport] = useState(false);
     const menuRef = useRef(null);
-    const rentPricing = {
+    const isMountedRef = useRef(true);
+    const itemId = item?.id;
+    const rentPricing = useMemo(() => ({
         rent_amount_bdt: item?.pricing?.rent_amount_bdt ?? item?.rent_amount_bdt,
         is_rent_negotiable: item?.pricing?.is_rent_negotiable ?? item?.is_rent_negotiable,
-    };
-    const isNegotiableRent = isRentNegotiable(rentPricing);
-    const displayRentPricing = isNegotiableRent
-        ? { ...rentPricing, rent_amount_bdt: null }
-        : rentPricing;
+    }), [item?.pricing?.rent_amount_bdt, item?.pricing?.is_rent_negotiable, item?.rent_amount_bdt, item?.is_rent_negotiable]);
+    const isNegotiableRent = useMemo(() => isRentNegotiable(rentPricing), [rentPricing]);
+    const displayRentPricing = useMemo(() => (
+        isNegotiableRent
+            ? { ...rentPricing, rent_amount_bdt: null }
+            : rentPricing
+    ), [isNegotiableRent, rentPricing]);
+    const cardTitle = useMemo(() => buildCardTitle(item), [item]);
+    const cardImageSource = useMemo(() => getCardImageSource(item), [item]);
 
     useEffect(() => {
+        isMountedRef.current = true;
+
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (Array.isArray(savedPropertyIds)) {
+            setIsSaved(savedPropertyIds.includes(itemId));
+        }
+    }, [itemId, savedPropertyIds]);
+
+    useEffect(() => {
+        if (Array.isArray(comparedPropertyIds)) {
+            setIsCompared(comparedPropertyIds.includes(itemId));
+        }
+    }, [comparedPropertyIds, itemId]);
+
+    useEffect(() => {
+        if (Array.isArray(savedPropertyIds)) {
+            return undefined;
+        }
+
         const syncSavedState = async () => {
             const savedPropertyIds = await getSavedPropertyIds(getStoredUser()?.id || null);
-            setIsSaved(savedPropertyIds.includes(item.id));
+
+            if (isMountedRef.current) {
+                setIsSaved(savedPropertyIds.includes(itemId));
+            }
         };
 
         void syncSavedState();
@@ -103,11 +143,17 @@ const PropertyListingCard = ({ item, index = 0 }) => {
             window.removeEventListener('userLogin', syncSavedState);
             window.removeEventListener('userLogout', syncSavedState);
         };
-    }, [item.id]);
+    }, [itemId, savedPropertyIds]);
 
     useEffect(() => {
+        if (Array.isArray(comparedPropertyIds)) {
+            return undefined;
+        }
+
         const syncComparedState = () => {
-            setIsCompared(getComparedPropertyIds().includes(item.id));
+            if (isMountedRef.current) {
+                setIsCompared(getComparedPropertyIds().includes(itemId));
+            }
         };
 
         syncComparedState();
@@ -118,7 +164,7 @@ const PropertyListingCard = ({ item, index = 0 }) => {
             window.removeEventListener(COMPARE_PROPERTIES_BROWSER_EVENT, syncComparedState);
             window.removeEventListener('storage', syncComparedState);
         };
-    }, [item.id]);
+    }, [comparedPropertyIds, itemId]);
 
     useEffect(() => {
         if (!isMenuOpen) {
@@ -130,12 +176,16 @@ const PropertyListingCard = ({ item, index = 0 }) => {
                 return;
             }
 
-            setIsMenuOpen(false);
+            if (isMountedRef.current) {
+                setIsMenuOpen(false);
+            }
         };
 
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
-                setIsMenuOpen(false);
+                if (isMountedRef.current) {
+                    setIsMenuOpen(false);
+                }
             }
         };
 
@@ -148,25 +198,39 @@ const PropertyListingCard = ({ item, index = 0 }) => {
         };
     }, [isMenuOpen]);
 
-    const toggleSave = async (event) => {
+    const toggleSave = useCallback(async (event) => {
         event.preventDefault();
         event.stopPropagation();
 
-        const result = await toggleSavedProperty(getStoredUser()?.id || null, item.id);
-        setIsSaved(Boolean(result?.saved));
-        setIsMenuOpen(false);
-    };
+        const result = await toggleSavedProperty(getStoredUser()?.id || null, itemId);
 
-    const toggleCompare = (event) => {
+        if (isMountedRef.current) {
+            setIsSaved(Boolean(result?.saved));
+            setIsMenuOpen(false);
+        }
+
+        if (Array.isArray(result?.propertyIds)) {
+            onSavedPropertiesChange?.(result.propertyIds);
+        }
+    }, [itemId, onSavedPropertiesChange]);
+
+    const toggleCompare = useCallback((event) => {
         event.preventDefault();
         event.stopPropagation();
 
-        const result = toggleComparedProperty(item.id);
-        setIsCompared(Boolean(result?.compared));
-        setIsMenuOpen(false);
-    };
+        const result = toggleComparedProperty(itemId);
 
-    const openReportModal = (event) => {
+        if (isMountedRef.current) {
+            setIsCompared(Boolean(result?.compared));
+            setIsMenuOpen(false);
+        }
+
+        if (Array.isArray(result?.propertyIds)) {
+            onComparedPropertiesChange?.(result.propertyIds);
+        }
+    }, [itemId, onComparedPropertiesChange]);
+
+    const openReportModal = useCallback((event) => {
         event.preventDefault();
         event.stopPropagation();
         setReportReason(REPORT_REASONS[0]);
@@ -174,17 +238,17 @@ const PropertyListingCard = ({ item, index = 0 }) => {
         setReportFeedback({ type: '', text: '' });
         setIsReportOpen(true);
         setIsMenuOpen(false);
-    };
+    }, []);
 
-    const closeReportModal = () => {
+    const closeReportModal = useCallback(() => {
         if (isSubmittingReport) {
             return;
         }
 
         setIsReportOpen(false);
-    };
+    }, [isSubmittingReport]);
 
-    const handleReportSubmit = async (event) => {
+    const handleReportSubmit = useCallback(async (event) => {
         event.preventDefault();
         setReportFeedback({ type: '', text: '' });
 
@@ -197,41 +261,47 @@ const PropertyListingCard = ({ item, index = 0 }) => {
 
         try {
             const result = await submitPropertyReport({
-                propertyId: item.id,
+                propertyId: itemId,
                 userId: getStoredUser()?.id || null,
                 reason: reportReason,
                 message: reportMessage,
             });
 
-            setReportFeedback({
-                type: 'success',
-                text: result.isLocalFallback
-                    ? 'Report saved locally.'
-                    : 'Report submitted successfully.',
-            });
-            setReportMessage('');
+            if (isMountedRef.current) {
+                setReportFeedback({
+                    type: 'success',
+                    text: result.isLocalFallback
+                        ? 'Report saved locally.'
+                        : 'Report submitted successfully.',
+                });
+                setReportMessage('');
+            }
         } catch (error) {
-            setReportFeedback({
-                type: 'error',
-                text: error.message || 'Unable to submit report.',
-            });
+            if (isMountedRef.current) {
+                setReportFeedback({
+                    type: 'error',
+                    text: error.message || 'Unable to submit report.',
+                });
+            }
         } finally {
-            setIsSubmittingReport(false);
+            if (isMountedRef.current) {
+                setIsSubmittingReport(false);
+            }
         }
-    };
+    }, [itemId, reportMessage, reportReason]);
 
     return (
         <>
-            <div className='group relative h-full rounded-[14px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md'>
+            <div className='group relative flex h-auto flex-col rounded-[14px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md md:h-[380px]'>
                 <Link
                     to={buildListDetailsHref(item.id)}
                     className='absolute inset-0 z-10 rounded-[14px]'
-                    aria-label={`View details for ${buildCardTitle(item)}`}
+                    aria-label={`View details for ${cardTitle}`}
                 />
-                <div className='pointer-events-none'>
-                    <div className='overflow-hidden rounded-t-[14px]'>
+                <div className='pointer-events-none flex flex-col md:h-full'>
+                    <div className='overflow-hidden rounded-t-[14px] flex-shrink-0'>
                         <PropertyCardMedia
-                            src={getCardImageSource(item)}
+                            src={cardImageSource}
                             alt={`${item.category} property in ${item.location?.area || 'Bangladesh'}`}
                             eager={index < 10}
                             propertyType={item.property_type}
@@ -240,27 +310,27 @@ const PropertyListingCard = ({ item, index = 0 }) => {
                         />
                     </div>
 
-                    <div className='relative border-t border-slate-100 px-3 py-3 pr-10'>
+                    <div className='relative flex min-h-0 flex-col border-t border-slate-100 px-3 py-3 pr-10 md:flex-1'>
                         {item.property_id_number && (
-                            <p className='text-xs font-semibold text-slate-500'>
+                            <p className='text-xs font-semibold text-slate-500 flex-shrink-0'>
                                 ID: #{item.property_id_number}
                             </p>
                         )}
-                        <p className='line-clamp-1 text-base font-bold leading-6 text-[#1E73B8]'>
-                            {buildCardTitle(item)}
+                        <p className='line-clamp-1 text-base font-bold leading-6 text-[#1E73B8] flex-shrink-0'>
+                            {cardTitle}
                         </p>
-                        <p className='line-clamp-1 text-sm leading-5 text-slate-700'>
+                        <p className='line-clamp-1 text-sm leading-5 text-slate-700 flex-shrink-0'>
                             {item.location?.area || 'Area not set'}{item.location?.state_district ? `, ${item.location.state_district}` : ''}
                         </p>
 
-                        <div className='mt-3 space-y-1 text-sm leading-5 text-slate-900'>
-                            <p>
+                        <div className='mt-2 space-y-1 text-sm leading-5 text-slate-900 md:mt-auto'>
+                            <p className='line-clamp-1'>
                                 Bed: {item.total_rooms ?? item.specifications?.total_rooms ?? 0}, Bath: {item.total_bathrooms ?? item.specifications?.total_bathrooms ?? 0}
                             </p>
-                            <p>
+                            <p className='line-clamp-1'>
                                 To-Let from: {formatMonth(item.availability?.available_from ?? item.available_from)}
                             </p>
-                            <p>
+                            <p className='line-clamp-1'>
                                 Rent : <RentDisplay pricing={displayRentPricing} prefix='' suffix='BDT' />
                             </p>
                         </div>
@@ -329,7 +399,7 @@ const PropertyListingCard = ({ item, index = 0 }) => {
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h3 className='text-lg font-bold text-slate-900'>Report Property</h3>
-                                <p className='mt-1 text-sm text-slate-500'>{buildCardTitle(item)}</p>
+                                <p className='mt-1 text-sm text-slate-500'>{cardTitle}</p>
                             </div>
                             <button
                                 type='button'

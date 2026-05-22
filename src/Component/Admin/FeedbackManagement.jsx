@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiUser, FiClock, FiTrash2, FiCheck, FiX, FiMessageCircle, FiUsers, FiSearch } from 'react-icons/fi';
 import { getAllFeedback, updateFeedbackStatus, deleteFeedback } from '../../services/feedbackService';
 import { getDashboardStats } from '../../services/adminService';
 
 const FeedbackManagement = () => {
     const [feedbackList, setFeedbackList] = useState([]);
-    const [filteredFeedback, setFilteredFeedback] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
@@ -13,57 +12,71 @@ const FeedbackManagement = () => {
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [updating, setUpdating] = useState(null);
     const [totalUsers, setTotalUsers] = useState(0);
+    const isMountedRef = useRef(true);
 
     useEffect(() => {
-        fetchFeedback();
-        fetchUserStats();
+        isMountedRef.current = true;
+
+        return () => {
+            isMountedRef.current = false;
+        };
     }, []);
 
-    const fetchUserStats = async () => {
+    const fetchUserStats = useCallback(async () => {
         const result = await getDashboardStats();
-        if (result.data) {
+        if (isMountedRef.current && result.data) {
             setTotalUsers(result.data.totalUsers || 0);
         }
-    };
+    }, []);
 
-    const fetchFeedback = async () => {
+    const fetchFeedback = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const { data, error } = await getAllFeedback();
             if (error) throw error;
-            setFeedbackList(data || []);
-            filterFeedback(data || [], searchTerm, filter);
+            if (isMountedRef.current) {
+                setFeedbackList(data || []);
+            }
         } catch (err) {
             console.error('Error fetching feedback:', err);
-            setError('Failed to load feedback');
+            if (isMountedRef.current) {
+                setError('Failed to load feedback');
+            }
         } finally {
-            setLoading(false);
+            if (isMountedRef.current) {
+                setLoading(false);
+            }
         }
-    };
+    }, []);
 
-    const filterFeedback = (fbList, search, status) => {
-        let filtered = fbList;
+    useEffect(() => {
+        void fetchFeedback();
+        void fetchUserStats();
+    }, [fetchFeedback, fetchUserStats]);
 
-        if (status !== 'all') {
-            filtered = filtered.filter((f) => f.status === status);
+    const filteredFeedback = useMemo(() => {
+        let filtered = feedbackList;
+
+        if (filter !== 'all') {
+            filtered = filtered.filter((f) => f.status === filter);
         }
 
-        if (search) {
+        if (searchTerm) {
+            const normalizedSearch = searchTerm.toLowerCase();
             filtered = filtered.filter(
                 (f) =>
-                    f.name?.toLowerCase().includes(search.toLowerCase()) ||
-                    f.email?.toLowerCase().includes(search.toLowerCase()) ||
-                    f.feedback?.toLowerCase().includes(search.toLowerCase())
+                    f.name?.toLowerCase().includes(normalizedSearch) ||
+                    f.email?.toLowerCase().includes(normalizedSearch) ||
+                    f.feedback?.toLowerCase().includes(normalizedSearch)
             );
         }
 
-        setFilteredFeedback(filtered);
-    };
+        return filtered;
+    }, [feedbackList, filter, searchTerm]);
 
     const handleSearch = (value) => {
         setSearchTerm(value);
-        filterFeedback(feedbackList, value, filter);
     };
 
     const handleApprove = async (feedbackId) => {
@@ -75,7 +88,6 @@ const FeedbackManagement = () => {
                 fb.id === feedbackId ? { ...fb, status: 'approved' } : fb
             );
             setFeedbackList(updated);
-            filterFeedback(updated, searchTerm, filter);
         } catch (err) {
             console.error('Error approving feedback:', err);
             alert('Failed to approve feedback');
@@ -93,7 +105,6 @@ const FeedbackManagement = () => {
                 fb.id === feedbackId ? { ...fb, status: 'rejected' } : fb
             );
             setFeedbackList(updated);
-            filterFeedback(updated, searchTerm, filter);
         } catch (err) {
             console.error('Error rejecting feedback:', err);
             alert('Failed to reject feedback');
@@ -108,7 +119,6 @@ const FeedbackManagement = () => {
             if (error) throw error;
             const updated = feedbackList.filter(fb => fb.id !== feedbackId);
             setFeedbackList(updated);
-            filterFeedback(updated, searchTerm, filter);
             setDeleteConfirm(null);
         } catch (err) {
             console.error('Error deleting feedback:', err);
@@ -214,7 +224,6 @@ const FeedbackManagement = () => {
                             value={filter}
                             onChange={(e) => {
                                 setFilter(e.target.value);
-                                filterFeedback(feedbackList, searchTerm, e.target.value);
                             }}
                             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
                         >

@@ -13,6 +13,16 @@ const Feedback = () => {
     const [loading, setLoading] = useState(true)
     const scrollContainerRef = useRef(null)
     const [currentIndex, setCurrentIndex] = useState(0)
+    const isMounted = useRef(true)
+    const requestIdRef = useRef(0)
+
+    useEffect(() => {
+        isMounted.current = true
+
+        return () => {
+            isMounted.current = false
+        }
+    }, [])
 
     useEffect(() => {
         if (!isHydrated) {
@@ -30,6 +40,9 @@ const Feedback = () => {
             return
         }
 
+        const requestId = requestIdRef.current + 1
+        requestIdRef.current = requestId
+
         const fetchFeedback = async () => {
             if (!hasCachedFeedback) {
                 setLoading(true)
@@ -37,13 +50,19 @@ const Feedback = () => {
 
             try {
                 const { data, error } = await getApprovedFeedback()
+                if (!isMounted.current || requestId !== requestIdRef.current) {
+                    return
+                }
+
                 if (!error && data) {
                     setFeed(data)
                 }
             } catch (err) {
                 console.error('Error fetching feedback:', err)
             } finally {
-                setLoading(false)
+                if (isMounted.current && requestId === requestIdRef.current) {
+                    setLoading(false)
+                }
             }
         }
 
@@ -63,10 +82,14 @@ const Feedback = () => {
 
                 if (newScrollLeft >= maxScroll) {
                     container.scrollTo({ left: 0, behavior: 'smooth' })
-                    setCurrentIndex(0)
+                    if (isMounted.current) {
+                        setCurrentIndex(0)
+                    }
                 } else {
                     container.scrollTo({ left: newScrollLeft, behavior: 'smooth' })
-                    setCurrentIndex(prev => (prev + 1) % feed.length)
+                    if (isMounted.current) {
+                        setCurrentIndex(prev => (prev + 1) % feed.length)
+                    }
                 }
             }
         }, 4000) // Auto slide every 4 seconds
@@ -104,7 +127,7 @@ const Feedback = () => {
                         feed.map((item, index) =>
                             <div
                                 key={item.id || index}
-                                className='min-w-[280px] sm:min-w-[300px] md:min-w-[350px] snap-start bg-white p-4 rounded-xl shadow-md border border-gray-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-2 group'
+                                className='min-w-[280px] sm:min-w-[300px] md:min-w-[350px] h-[200px] snap-start bg-white p-4 rounded-xl shadow-md border border-gray-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-2 group flex flex-col'
                                 style={{ animationDelay: `${index * 100}ms` }}
                             >
                                 {/* Name at top */}
@@ -119,8 +142,8 @@ const Feedback = () => {
                                 </div>
 
                                 {/* Feedback at bottom */}
-                                <FaQuoteLeft className='text-[#1E73B8]/20 text-2xl mb-3 group-hover:text-[#1E73B8]/40 transition-colors duration-300' />
-                                <p className='text-gray-600 text-sm leading-relaxed'>{item.feedback}</p>
+                                <FaQuoteLeft className='text-[#1E73B8]/20 text-2xl mb-3 group-hover:text-[#1E73B8]/40 transition-colors duration-300 flex-shrink-0' />
+                                <p className='text-gray-600 text-sm leading-relaxed line-clamp-3 flex-1 overflow-hidden'>{item.feedback}</p>
                             </div>
                         )
                     ) : (

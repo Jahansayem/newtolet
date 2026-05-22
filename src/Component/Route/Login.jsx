@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { loginUser } from '../../services/authService';
@@ -46,10 +46,15 @@ const Login = () => {
     const [allowRenderWhileAuthPending, setAllowRenderWhileAuthPending] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const [hasAttemptedLogin, setHasAttemptedLogin] = useState(false);
     const redirectTarget = useMemo(() => resolveRedirectTarget(location.state), [location.state]);
+    const isMountedRef = useRef(true);
+    const hasNavigatedRef = useRef(false);
 
     // Check for password reset success in URL params
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
         const params = new URLSearchParams(location.search);
         if (params.get('reset') === 'success') {
             setSuccessMessage('Password reset successful! Please login with your new password.');
@@ -58,6 +63,34 @@ const Login = () => {
         }
     }, [location.search]);
 
+    // Only navigate after a successful login attempt, not during initial auth check
+    useEffect(() => {
+        // Prevent multiple navigations and ensure component is mounted
+        if (!isMountedRef.current || hasNavigatedRef.current) {
+            return;
+        }
+
+        if (hasAttemptedLogin && !isAuthLoading && isAuthenticated) {
+            hasNavigatedRef.current = true;
+            // Small delay to ensure router is fully ready
+            const navTimer = setTimeout(() => {
+                if (isMountedRef.current) {
+                    navigate(redirectTarget, { replace: true });
+                }
+            }, 0);
+            return () => clearTimeout(navTimer);
+        }
+    }, [hasAttemptedLogin, isAuthLoading, isAuthenticated, navigate, redirectTarget]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    // Redirect already authenticated users away from login page
     useEffect(() => {
         if (!isAuthLoading && isAuthenticated) {
             navigate(redirectTarget, { replace: true });
@@ -87,19 +120,22 @@ const Login = () => {
         setIsLoading(true);
         setErrorMessage('');
         setSuccessMessage('');
+        setHasAttemptedLogin(true);
 
         try {
             const result = await loginUser(data.email, data.password);
 
             if (result.success) {
                 handleLogin(result.user, result.session);
-                navigate(redirectTarget, { replace: true });
+                // Navigate will be handled by the useEffect when isAuthenticated becomes true
             } else {
                 setErrorMessage(result.error);
+                setHasAttemptedLogin(false);
             }
         } catch (error) {
             setErrorMessage('Login failed. Please try again.');
             console.error('Login error:', error);
+            setHasAttemptedLogin(false);
         } finally {
             setIsLoading(false);
         }

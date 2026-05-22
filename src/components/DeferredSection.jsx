@@ -9,7 +9,16 @@ const DeferredSection = ({
   rootMargin = '300px 0px',
 }) => {
   const containerRef = useRef(null)
+  const isMountedRef = useRef(true)
   const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (isVisible || !containerRef.current) {
@@ -19,7 +28,9 @@ const DeferredSection = ({
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setIsVisible(true)
+          if (isMountedRef.current) {
+            setIsVisible(true)
+          }
           observer.disconnect()
         }
       },

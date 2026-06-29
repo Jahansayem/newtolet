@@ -54,11 +54,24 @@ const Feedback = () => {
                     return
                 }
 
-                if (!error && data) {
-                    setFeed(data)
+                // Always set data (even if empty array) to prevent UI issues
+                if (data) {
+                    setFeed(Array.isArray(data) ? data : [])
+                } else if (error) {
+                    console.warn('Failed to fetch feedback, showing cached data if available')
+                    // Use cached data as fallback
+                    if (hasCachedFeedback && Array.isArray(cachedFeedback)) {
+                        setFeed(cachedFeedback)
+                    } else {
+                        setFeed([])
+                    }
+                } else {
+                    setFeed([])
                 }
             } catch (err) {
-                console.error('Error fetching feedback:', err)
+                console.error('Unexpected error fetching feedback:', err)
+                // Ensure feed is always an array to prevent crashes
+                setFeed([])
             } finally {
                 if (isMounted.current && requestId === requestIdRef.current) {
                     setLoading(false)

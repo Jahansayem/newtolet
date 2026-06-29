@@ -24,8 +24,9 @@ export const submitFeedback = async (feedbackData) => {
         if (error) throw error;
         return { data, error: null };
     } catch (error) {
-        console.error('Error submitting feedback:', error);
-        return { data: null, error };
+        const errorMessage = error?.message || String(error);
+        console.error('Error submitting feedback:', errorMessage, error);
+        return { data: null, error: { message: errorMessage, ...error } };
     }
 };
 
@@ -43,8 +44,9 @@ export const getAllFeedback = async () => {
         if (error) throw error;
         return { data, error: null };
     } catch (error) {
-        console.error('Error fetching feedback:', error);
-        return { data: null, error };
+        const errorMessage = error?.message || String(error);
+        console.error('Error fetching feedback:', errorMessage, error);
+        return { data: null, error: { message: errorMessage, ...error } };
     }
 };
 
@@ -67,7 +69,10 @@ export const getApprovedFeedback = async () => {
         writeSnapshot(cacheKey, approvedFeedback);
         return { data: approvedFeedback, error: null };
     } catch (error) {
-        console.error('Error fetching approved feedback:', error);
+        // Better error logging with full details
+        const errorMessage = error?.message || String(error);
+        const errorDetails = error ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2) : '{}';
+        console.error('Error fetching approved feedback:', errorMessage, errorDetails);
 
         const cachedFeedback = readSnapshot(cacheKey);
         if (cachedFeedback) {
@@ -75,7 +80,8 @@ export const getApprovedFeedback = async () => {
             return { data: cachedFeedback, error: null };
         }
 
-        return { data: null, error };
+        // Return empty array instead of null to prevent UI crashes
+        return { data: [], error: { message: errorMessage, ...error } };
     }
 };
 
@@ -96,8 +102,9 @@ export const updateFeedbackStatus = async (feedbackId, status) => {
         if (error) throw error;
         return { data: data?.[0] || null, error: null };
     } catch (error) {
-        console.error('Error updating feedback status:', error);
-        return { data: null, error };
+        const errorMessage = error?.message || String(error);
+        console.error('Error updating feedback status:', errorMessage, error);
+        return { data: null, error: { message: errorMessage, ...error } };
     }
 };
 
@@ -116,7 +123,8 @@ export const deleteFeedback = async (feedbackId) => {
         if (error) throw error;
         return { data, error: null };
     } catch (error) {
-        console.error('Error deleting feedback:', error);
-        return { data: null, error };
+        const errorMessage = error?.message || String(error);
+        console.error('Error deleting feedback:', errorMessage, error);
+        return { data: null, error: { message: errorMessage, ...error } };
     }
 };

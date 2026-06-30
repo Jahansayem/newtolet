@@ -1,26 +1,14 @@
 import React, { useEffect, useState } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
-import { validateScreen3 } from '../../utils/formValidation'
 import LocationPicker from './LocationPicker'
 import { FiMapPin, FiExternalLink } from 'react-icons/fi'
 
 const Screen3Location = () => {
-  const { formData, updateFormData, errors, setFormErrors, clearErrors, nextStep } =
+  const { formData, updateFormData, errors, clearErrors } =
     useAddProperty()
 
   const [showLocationPicker, setShowLocationPicker] = useState(false)
   const [showOptional, setShowOptional] = useState(false)
-
-  const handleNext = () => {
-    clearErrors()
-    const screenErrors = validateScreen3(formData)
-
-    if (Object.keys(screenErrors).length === 0) {
-      nextStep()
-    } else {
-      setFormErrors(screenErrors)
-    }
-  }
 
   const handleLocationSelect = (lat, lng) => {
     updateFormData({ lat, lng })
@@ -29,7 +17,7 @@ const Screen3Location = () => {
 
   useEffect(() => {
     clearErrors()
-  }, [])
+  }, [clearErrors])
 
   return (
     <div className='space-y-4 md:space-y-6 pb-20 md:pb-24'>

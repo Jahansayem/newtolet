@@ -1,0 +1,31 @@
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background is transparent - can be used on any background -->
+
+  <!-- Logo Icon - Dark Navy Circle -->
+  <rect x="0" y="4" width="40" height="40" rx="8" fill="#1a1a2e" />
+
+  <!-- Gradient for the L shape -->
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#3b82f6" />
+      <stop offset="100%" stopColor="#1d4ed8" />
+    </linearGradient>
+  </defs>
+
+  <!-- L-shaped element -->
+  <path d="M13 14 L21 14 L21 28 L29 28 L29 32 L13 32 Z" fill="url(#blueGrad)" />
+
+  <!-- Diagonal accent -->
+  <path d="M21 14 L29 22 L27 24 L19 16 Z" fill="#60a5fa" opacity="0.8" />
+
+  <!-- 2x2 grid squares -->
+  <rect x="31" y="14" width="4" height="4" rx="1" fill="#3b82f6" />
+  <rect x="37" y="14" width="4" height="4" rx="1" fill="#1d4ed8" />
+  <rect x="31" y="20" width="4" height="4" rx="1" fill="#2563eb" />
+  <rect x="37" y="20" width="4" height="4" rx="1" fill="#1e40af" />
+
+  <!-- NewTolet.Com Text -->
+  <text x="50" y="32" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#1a1a2e">
+    NewTolet<tspan font-weight="normal" opacity="0.8">.Com</tspan>
+  </text>
+</svg>

@@ -1,13 +1,12 @@
  'use client'
 
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Link, useSearchParams } from 'react-router-dom';
 import { listcontext } from '../Route/Listprovaider';
 import CategoryFilterBar from './CategoryFilterBar';
-import Cover from './Cover';
+import CoverSkeleton from './CoverSkeleton';
 import DeferredSection from '../../components/DeferredSection';
-import JobFeedSection from '../../components/JobFeedSection';
 import { logCustomerSearch } from '../../services/searchHistoryService';
 import { getPublicJobFeedOrders } from '../../services/jobFeedService';
 import { HOME_CATEGORIES } from './categoryConfig';
@@ -15,8 +14,24 @@ import { matchesKeywordSearch } from './propertySearchCore';
 import PropertyListingCard from '../../components/PropertyListingCard';
 import { matchesPropertyCategory } from '../../lib/propertyCategories';
 import { HOME_CHROME_SCROLL_EVENT } from '../../lib/homeScrollChrome';
+import About from './About';
+import ArticlePreview from './ArticlePreview';
+import { getStoredUser } from '../../services/authService';
+import {
+    getSavedPropertyIds,
+    SAVED_PROPERTIES_BROWSER_EVENT,
+} from '../../services/userPanelService';
+import {
+    COMPARE_PROPERTIES_BROWSER_EVENT,
+    getComparedPropertyIds,
+} from '../../services/propertyCompareService';
 
-const About = dynamic(() => import('./About'));
+const Cover = dynamic(() => import('./Cover'), {
+    loading: () => <CoverSkeleton />,
+});
+const JobFeedSection = dynamic(() => import('../../components/JobFeedSection'), {
+    loading: () => <ContentSectionFallback height='260px' />,
+});
 const Feedback = dynamic(() => import('./Feadback'));
 
 const CategorySectionsFallback = () => (
@@ -29,7 +44,7 @@ const CategorySectionsFallback = () => (
                 </div>
                 <div className='grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6'>
                     {Array.from({ length: 8 }).map((_, index) => (
-                        <div key={`${category}-${index}`} className='h-64 rounded-2xl bg-gray-200' />
+                        <div key={`${category}-${index}`} className='h-[380px] rounded-[14px] bg-gray-200' />
                     ))}
                 </div>
             </div>
@@ -46,7 +61,6 @@ const ContentSectionFallback = ({ height = '320px' }) => (
 );
 
 const Home = () => {
-    const [resultCount, setResultCount] = useState(0);
     const [jobFeedOrders, setJobFeedOrders] = useState([]);
     const [jobFeedLoading, setJobFeedLoading] = useState(true);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -60,6 +74,30 @@ const Home = () => {
     const [activeCategorySection, setActiveCategorySection] = useState(HOME_CATEGORIES[0]);
     const [isCategoryPinned, setIsCategoryPinned] = useState(false);
     const [isHomeNavVisible, setIsHomeNavVisible] = useState(true);
+    const [savedPropertyIds, setSavedPropertyIds] = useState([]);
+    const [comparedPropertyIds, setComparedPropertyIds] = useState([]);
+
+    // Use refs to track current state values for scroll handler (avoid stale closures)
+    const isCategoryPinnedRef = useRef(false);
+    const isHomeNavVisibleRef = useRef(true);
+    const isMountedRef = useRef(true);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    // Update refs whenever state changes
+    useEffect(() => {
+        isCategoryPinnedRef.current = isCategoryPinned;
+    }, [isCategoryPinned]);
+
+    useEffect(() => {
+        isHomeNavVisibleRef.current = isHomeNavVisible;
+    }, [isHomeNavVisible]);
 
     const categorySections = useMemo(() => (
         HOME_CATEGORIES.map((category) => {
@@ -73,47 +111,92 @@ const Home = () => {
 
     const hasActiveSearch = Boolean(searchQuery);
 
-    const searchSignature = useMemo(() => JSON.stringify({
-        searchQuery: searchQuery || null,
-        resultCount,
-    }), [resultCount, searchQuery]);
+    // Calculate result count directly from categorySections - no separate state needed
+    const resultCount = useMemo(() =>
+        categorySections.reduce((total, section) => total + section.items.length, 0),
+        [categorySections]
+    );
+
+    // Simple search signature for logging - only depends on searchQuery, not resultCount
+    const searchSignature = useMemo(() =>
+        searchQuery || null,
+        [searchQuery]
+    );
 
     useEffect(() => {
-        let isMounted = true;
-
         const loadJobFeedOrders = async () => {
             setJobFeedLoading(true);
-            const { data } = await getPublicJobFeedOrders();
 
-            if (isMounted) {
-                setJobFeedOrders(data || []);
-                setJobFeedLoading(false);
+            try {
+                const { data } = await getPublicJobFeedOrders();
+
+                if (isMountedRef.current) {
+                    setJobFeedOrders(data || []);
+                }
+            } finally {
+                if (isMountedRef.current) {
+                    setJobFeedLoading(false);
+                }
             }
         };
 
         loadJobFeedOrders();
 
-        return () => {
-            isMounted = false;
-        };
     }, []);
 
     useEffect(() => {
-        setResultCount(categorySections.reduce((total, section) => total + section.items.length, 0));
-    }, [categorySections]);
+        const syncSavedProperties = async () => {
+            const propertyIds = await getSavedPropertyIds(getStoredUser()?.id || null);
 
+            if (isMountedRef.current) {
+                setSavedPropertyIds(propertyIds);
+            }
+        };
+
+        const syncComparedProperties = () => {
+            if (isMountedRef.current) {
+                setComparedPropertyIds(getComparedPropertyIds());
+            }
+        };
+
+        syncComparedProperties();
+        void syncSavedProperties();
+
+        window.addEventListener(SAVED_PROPERTIES_BROWSER_EVENT, syncSavedProperties);
+        window.addEventListener(COMPARE_PROPERTIES_BROWSER_EVENT, syncComparedProperties);
+        window.addEventListener('storage', syncSavedProperties);
+        window.addEventListener('storage', syncComparedProperties);
+        window.addEventListener('userLogin', syncSavedProperties);
+        window.addEventListener('userLogout', syncSavedProperties);
+
+        return () => {
+            window.removeEventListener(SAVED_PROPERTIES_BROWSER_EVENT, syncSavedProperties);
+            window.removeEventListener(COMPARE_PROPERTIES_BROWSER_EVENT, syncComparedProperties);
+            window.removeEventListener('storage', syncSavedProperties);
+            window.removeEventListener('storage', syncComparedProperties);
+            window.removeEventListener('userLogin', syncSavedProperties);
+            window.removeEventListener('userLogout', syncSavedProperties);
+        };
+    }, []);
+
+    // Only update activeCategorySection when categorySections changes, not when activeCategorySection changes
     useEffect(() => {
         if (!categorySections.length) {
             return;
         }
 
-        if (!categorySections.some((section) => section.category === activeCategorySection)) {
-            setActiveCategorySection(categorySections[0].category);
-        }
-    }, [activeCategorySection, categorySections]);
+        // Only update if the current activeCategorySection is no longer valid
+        setActiveCategorySection((currentCategory) => (
+            categorySections.some((section) => section.category === currentCategory)
+                ? currentCategory
+                : categorySections[0].category
+        ));
+    }, [categorySections]);
 
+    // Simplified search logging - only depends on searchQuery and loading state
+    // resultCount is read directly inside the effect, not a dependency
     useEffect(() => {
-        if (isLoading || resultCount === null || !hasActiveSearch) {
+        if (isLoading || !hasActiveSearch) {
             return;
         }
 
@@ -145,18 +228,33 @@ const Home = () => {
 
         const getNavbarOffset = () => (window.innerWidth >= 768 ? 118 : 72);
 
+        // Use refs to track current state and avoid unnecessary setState calls
+        let rafId = null;
+
         const syncHomeChrome = () => {
-            const sentinelTop = stickySentinelRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
-            const scrollY = window.scrollY || 0;
-            const navbarOffset = getNavbarOffset();
-            const pinned = sentinelTop <= navbarOffset;
-            const delta = scrollY - lastScrollYRef.current;
+            // Cancel any pending RAF to avoid stacking updates
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+            }
 
-            setIsCategoryPinned((currentPinned) => (currentPinned === pinned ? currentPinned : pinned));
+            rafId = requestAnimationFrame(() => {
+                const sentinelTop = stickySentinelRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
+                const scrollY = window.scrollY || 0;
+                const navbarOffset = getNavbarOffset();
+                const pinned = sentinelTop <= navbarOffset;
+                const delta = scrollY - lastScrollYRef.current;
 
-            setIsHomeNavVisible((currentVisible) => {
-                let nextVisible = currentVisible;
+                // Read current state from refs to avoid stale closures
+                const wasPinned = isCategoryPinnedRef.current;
+                const wasVisible = isHomeNavVisibleRef.current;
 
+                // Only update if pinned state actually changed
+                if (wasPinned !== pinned) {
+                    setIsCategoryPinned(pinned);
+                }
+
+                // Calculate next visibility state
+                let nextVisible = wasVisible;
                 if (!pinned || scrollY <= 16) {
                     nextVisible = true;
                 } else if (delta > 4) {
@@ -165,10 +263,14 @@ const Home = () => {
                     nextVisible = true;
                 }
 
-                return nextVisible;
-            });
+                // Only update if visibility actually changed
+                if (wasVisible !== nextVisible) {
+                    setIsHomeNavVisible(nextVisible);
+                }
 
-            lastScrollYRef.current = scrollY;
+                lastScrollYRef.current = scrollY;
+                rafId = null;
+            });
         };
 
         lastScrollYRef.current = window.scrollY || 0;
@@ -180,6 +282,9 @@ const Home = () => {
         return () => {
             window.removeEventListener('scroll', syncHomeChrome);
             window.removeEventListener('resize', syncHomeChrome);
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+            }
             window.dispatchEvent(
                 new CustomEvent(HOME_CHROME_SCROLL_EVENT, {
                     detail: {
@@ -196,6 +301,7 @@ const Home = () => {
             return;
         }
 
+        // Always dispatch current state to Navber
         window.dispatchEvent(
             new CustomEvent(HOME_CHROME_SCROLL_EVENT, {
                 detail: {
@@ -204,9 +310,10 @@ const Home = () => {
                 },
             })
         );
+
     }, [isCategoryPinned, isHomeNavVisible]);
 
-    const handleCategoryJump = (category) => {
+    const handleCategoryJump = useCallback((category) => {
         setActiveCategorySection(category);
 
         const targetSection = sectionRefs.current[category];
@@ -221,13 +328,25 @@ const Home = () => {
         const topOffset = navbarOffset + stickyBarHeight + 24;
         const targetTop = targetSection.getBoundingClientRect().top + window.scrollY - topOffset;
         window.scrollTo({ top: targetTop, behavior: 'smooth' });
-    };
+    }, [isCategoryPinned, isHomeNavVisible]);
 
-    const clearSearch = () => {
+    const clearSearch = useCallback(() => {
         const nextSearchParams = new URLSearchParams(searchParams.toString());
         nextSearchParams.delete('search');
         setSearchParams(nextSearchParams);
-    };
+    }, [searchParams, setSearchParams]);
+
+    const handleSavedPropertiesChange = useCallback((propertyIds) => {
+        if (Array.isArray(propertyIds)) {
+            setSavedPropertyIds(propertyIds);
+        }
+    }, []);
+
+    const handleComparedPropertiesChange = useCallback((propertyIds) => {
+        if (Array.isArray(propertyIds)) {
+            setComparedPropertyIds(propertyIds);
+        }
+    }, []);
 
     return (
         <div className='site-shell-wide min-h-screen bg-gray-50 py-6 md:py-8'>
@@ -317,6 +436,10 @@ const Home = () => {
                                                 key={item.id || `${category}-${index}`}
                                                 item={item}
                                                 index={index}
+                                                savedPropertyIds={savedPropertyIds}
+                                                comparedPropertyIds={comparedPropertyIds}
+                                                onSavedPropertiesChange={handleSavedPropertiesChange}
+                                                onComparedPropertiesChange={handleComparedPropertiesChange}
                                             />
                                         ))}
                                     </div>
@@ -325,6 +448,14 @@ const Home = () => {
                         </div>
                     )}
                 </section>
+            </DeferredSection>
+
+            <DeferredSection
+                className='px-0 md:px-4 xl:px-8'
+                fallback={<ContentSectionFallback height='300px' />}
+                rootMargin='0px 0px 120px 0px'
+            >
+                <ArticlePreview />
             </DeferredSection>
 
             <JobFeedSection orders={jobFeedOrders} isLoading={jobFeedLoading} />

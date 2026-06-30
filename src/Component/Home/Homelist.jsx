@@ -17,7 +17,7 @@ const Homelist = ({
     categoryOverride = null,
     searchFilters = null,
 }) => {
-    const { list, selectedCategory, selectedPriceRange } = useContext(listcontext);
+    const { isLoading, list, selectedCategory, selectedPriceRange } = useContext(listcontext);
     const effectiveCategory = categoryOverride || selectedCategory;
 
     const resolvedFilters = useMemo(() => {
@@ -79,10 +79,37 @@ const Homelist = ({
     }, [filteredList, maxItems]);
 
     useEffect(() => {
-        if (typeof onResultsChange === 'function') {
+        if (!isLoading && typeof onResultsChange === 'function') {
             onResultsChange(filteredList.length);
         }
-    }, [filteredList.length, onResultsChange]);
+    }, [filteredList.length, isLoading, onResultsChange]);
+
+    if (isLoading) {
+        return (
+            <div className={`${containerClassName} mx-auto bg-gray-50 pb-8`}>
+                <div className='text-center py-4'>
+                    <div className='mx-auto h-5 w-48 animate-pulse rounded-full bg-gray-200' />
+                </div>
+                <div className={`grid ${gridClassName} gap-4 gap-y-6 md:gap-5 md:gap-y-8`}>
+                    {Array.from({ length: maxItems || 10 }).map((_, index) => (
+                        <div
+                            key={index}
+                            className='h-[390px] animate-pulse rounded-[14px] bg-white shadow-sm'
+                        >
+                            <div className='h-[210px] rounded-t-[14px] bg-gray-200' />
+                            <div className='space-y-3 p-3'>
+                                <div className='h-4 w-20 rounded-full bg-gray-200' />
+                                <div className='h-4 w-28 rounded-full bg-gray-200' />
+                                <div className='h-5 w-32 rounded-full bg-gray-200' />
+                                <div className='h-4 w-full rounded-full bg-gray-200' />
+                                <div className='h-5 w-24 rounded-full bg-gray-200' />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={`${containerClassName} mx-auto bg-gray-50 pb-8`}>

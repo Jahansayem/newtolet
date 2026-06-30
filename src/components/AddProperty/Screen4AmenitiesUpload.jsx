@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
 import { validateScreen4 } from '../../utils/formValidation'
 import ImageUploader from './ImageUploader'
@@ -6,7 +6,7 @@ import IDVerification from './IDVerification'
 import RentDisplay from '../RentDisplay'
 
 const Screen4AmenitiesUpload = () => {
-  const { formData, updateFormData, errors, setFormErrors, clearErrors, nextStep } =
+  const { formData, updateFormData, errors, setFormErrors, clearErrors } =
     useAddProperty()
 
   const amenitiesList = [
@@ -32,7 +32,7 @@ const Screen4AmenitiesUpload = () => {
     updateFormData({ images: newImages })
   }
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     clearErrors()
     const screenErrors = validateScreen4(formData)
 
@@ -45,13 +45,19 @@ const Screen4AmenitiesUpload = () => {
       setFormErrors(screenErrors)
       return false
     }
-  }
+  }, [clearErrors, formData, setFormErrors])
 
   useEffect(() => {
     clearErrors()
     // Expose handleNext to parent for form submission
     window.validateScreen4AndSubmit = handleNext
-  }, [formData])
+
+    return () => {
+      if (window.validateScreen4AndSubmit === handleNext) {
+        delete window.validateScreen4AndSubmit
+      }
+    }
+  }, [clearErrors, handleNext])
 
   return (
     <div className='space-y-4 md:space-y-8 pb-20 md:pb-24'>

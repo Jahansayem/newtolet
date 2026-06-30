@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { RxCross2 } from 'react-icons/rx'
 import { listcontext } from '../Route/Listprovaider'
@@ -29,15 +29,35 @@ const Propertylist2 = () => {
   const { isLoading, selectedCategory, setSelectedCategory } = useContext(listcontext)
   const lastLoggedSignatureRef = useRef('')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const divisionSlug = Array.isArray(routeParams?.divisionSlug)
+    ? routeParams.divisionSlug[0] || ''
+    : routeParams?.divisionSlug || ''
   const routeContext = useMemo(
-    () => getSearchRouteContext(location.pathname, routeParams),
-    [location.pathname, routeParams]
+    () => getSearchRouteContext(location.pathname, { divisionSlug }),
+    [divisionSlug, location.pathname]
+  )
+  const searchParamsString = useMemo(
+    () => searchParams.toString(),
+    [searchParams]
   )
 
-  const searchFilters = useMemo(
-    () => parseSearchFilters(searchParams, routeContext),
-    [routeContext, searchParams]
+  const urlSearchFilters = useMemo(
+    () => parseSearchFilters(new URLSearchParams(searchParamsString), routeContext),
+    [routeContext, searchParamsString]
   )
+  const urlSearchSignature = useMemo(
+    () => JSON.stringify(urlSearchFilters),
+    [urlSearchFilters]
+  )
+  const [searchFilters, setSearchFilters] = useState(urlSearchFilters)
+
+  useEffect(() => {
+    setSearchFilters((currentFilters) => {
+      const currentSignature = JSON.stringify(currentFilters)
+
+      return currentSignature === urlSearchSignature ? currentFilters : urlSearchFilters
+    })
+  }, [urlSearchFilters, urlSearchSignature])
 
   const activeChips = useMemo(
     () => getActiveSearchChips(searchFilters),
@@ -54,6 +74,10 @@ const Propertylist2 = () => {
       }),
     [resultCount, searchFilters]
   )
+  const isCommittedSearch = useMemo(
+    () => JSON.stringify(searchFilters) === urlSearchSignature,
+    [searchFilters, urlSearchSignature]
+  )
 
   useEffect(() => {
     if (selectedCategory !== searchFilters.category) {
@@ -62,7 +86,7 @@ const Propertylist2 = () => {
   }, [searchFilters.category, selectedCategory, setSelectedCategory])
 
   useEffect(() => {
-    if (isLoading || resultCount === null || !hasActiveFilters) {
+    if (isLoading || resultCount === null || !hasActiveFilters || !isCommittedSearch) {
       return
     }
 
@@ -80,29 +104,44 @@ const Propertylist2 = () => {
       filters: searchFilters,
       resultCount,
     })
-  }, [hasActiveFilters, isLoading, resultCount, searchFilters, searchSignature])
+  }, [hasActiveFilters, isCommittedSearch, isLoading, resultCount, searchFilters, searchSignature])
 
-  const applyNextFilters = (nextFilters) => {
-    navigate(buildSearchHref(nextFilters, routeContext), { replace: true })
-  }
+  const applyNextFilters = useCallback((nextFilters, options = {}) => {
+    setSearchFilters(nextFilters)
 
-  const handleFieldChange = (field, value) => {
-    applyNextFilters(updateSearchFilters(searchFilters, field, value))
-  }
+    if (!options.syncUrl) {
+      return
+    }
 
-  const handleCategorySelect = (category) => {
+    const nextHref = buildSearchHref(nextFilters, routeContext)
+
+    if (nextHref !== location.href) {
+      navigate(nextHref, { replace: true })
+    }
+  }, [location.href, navigate, routeContext])
+
+  const handleFieldChange = useCallback((field, value) => {
+    setSearchFilters((currentFilters) => updateSearchFilters(currentFilters, field, value))
+  }, [])
+
+  const handleCategorySelect = useCallback((category) => {
     const nextCategory = searchFilters.category === category ? 'All' : category
-    applyNextFilters(updateSearchFilters(searchFilters, 'category', nextCategory))
-  }
+    applyNextFilters(updateSearchFilters(searchFilters, 'category', nextCategory), { syncUrl: true })
+  }, [applyNextFilters, searchFilters])
 
-  const handleClearAll = () => {
+  const handleSearchSubmit = useCallback((event) => {
+    event.preventDefault()
+    applyNextFilters(searchFilters, { syncUrl: true })
+  }, [applyNextFilters, searchFilters])
+
+  const handleClearAll = useCallback(() => {
     setSelectedCategory(DEFAULT_SEARCH_FILTERS.category)
-    navigate(buildSearchHref(DEFAULT_SEARCH_FILTERS, routeContext), { replace: true })
-  }
+    applyNextFilters(DEFAULT_SEARCH_FILTERS, { syncUrl: true })
+  }, [applyNextFilters, setSelectedCategory])
 
-  const handleClearChip = (chipKey) => {
-    applyNextFilters(clearSearchFilter(searchFilters, chipKey))
-  }
+  const handleClearChip = useCallback((chipKey) => {
+    applyNextFilters(clearSearchFilter(searchFilters, chipKey), { syncUrl: true })
+  }, [applyNextFilters, searchFilters])
 
   return (
     <div className='site-shell-wide min-h-screen bg-gray-50 py-6 md:py-8'>
@@ -142,10 +181,10 @@ const Propertylist2 = () => {
           <PropertySearchForm
             filters={searchFilters}
             onFieldChange={handleFieldChange}
-            onSubmit={(event) => event.preventDefault()}
+            onSubmit={handleSearchSubmit}
             onReset={handleClearAll}
             showSort
-            submitLabel='Filters Applied'
+            submitLabel='Search Properties'
             resetLabel='Reset Search'
           />
         </div>

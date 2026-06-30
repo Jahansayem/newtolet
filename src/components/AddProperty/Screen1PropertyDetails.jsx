@@ -1,9 +1,8 @@
 import React, { useEffect } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
-import { validateScreen1 } from '../../utils/formValidation'
 
 const Screen1PropertyDetails = () => {
-  const { formData, updateFormData, errors, setFormErrors, clearErrors, nextStep } =
+  const { formData, updateFormData, errors, clearErrors } =
     useAddProperty()
 
   const categories = [
@@ -59,20 +58,9 @@ const Screen1PropertyDetails = () => {
     'Only Female',
   ]
 
-  const handleNext = () => {
-    clearErrors()
-    const screenErrors = validateScreen1(formData)
-
-    if (Object.keys(screenErrors).length === 0) {
-      nextStep()
-    } else {
-      setFormErrors(screenErrors)
-    }
-  }
-
   useEffect(() => {
     clearErrors()
-  }, [])
+  }, [clearErrors])
 
   return (
     <div className='space-y-4 md:space-y-6 pb-20 md:pb-24'>

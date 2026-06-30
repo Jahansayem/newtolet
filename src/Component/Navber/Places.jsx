@@ -1,24 +1,33 @@
-import React, { useState, useCallback, memo } from 'react';
+import React, { useState, useCallback, memo, useMemo } from 'react';
 import locationData from '../../thetolet_locations_bundle.json';
 
 const Places = ({ onLocationSelect }) => {
     // Transform hierarchical data to flat structures for compatibility
-    const divisions = locationData.divisions.map(d => d.name);
-    const districts = {};
-    const areas = {};
-    const subAreas = {};
+    const { divisions, districts, areas, subAreas } = useMemo(() => {
+        const nextDivisions = locationData.divisions.map(d => d.name);
+        const nextDistricts = {};
+        const nextAreas = {};
+        const nextSubAreas = {};
 
-    locationData.divisions.forEach(division => {
-        districts[division.name] = division.districts.map(d => d.name);
-        division.districts.forEach(district => {
-            areas[district.name] = district.upazillas.map(u => u.name);
-            district.upazillas.forEach(upazilla => {
-                if (upazilla.sub_areas && upazilla.sub_areas.length > 0) {
-                    subAreas[upazilla.name] = upazilla.sub_areas;
-                }
+        locationData.divisions.forEach(division => {
+            nextDistricts[division.name] = division.districts.map(d => d.name);
+            division.districts.forEach(district => {
+                nextAreas[district.name] = district.upazillas.map(u => u.name);
+                district.upazillas.forEach(upazilla => {
+                    if (upazilla.sub_areas && upazilla.sub_areas.length > 0) {
+                        nextSubAreas[upazilla.name] = upazilla.sub_areas;
+                    }
+                });
             });
         });
-    });
+
+        return {
+            divisions: nextDivisions,
+            districts: nextDistricts,
+            areas: nextAreas,
+            subAreas: nextSubAreas,
+        };
+    }, []);
     const [level, setLevel] = useState(1); // 1 = division, 2 = district, 3 = upazilla, 4 = sub-area, 5 = specific area
     const [selectedDivision, setSelectedDivision] = useState(null);
     const [selectedDistrict, setSelectedDistrict] = useState(null);
@@ -85,7 +94,7 @@ const Places = ({ onLocationSelect }) => {
                 area: null
             });
         }
-    }, [onLocationSelect, selectedDivision, selectedDistrict]);
+    }, [onLocationSelect, selectedDivision, selectedDistrict, subAreas]);
 
     // Handle sub-area click
     const handleSubAreaClick = useCallback((subArea) => {
@@ -106,7 +115,7 @@ const Places = ({ onLocationSelect }) => {
                 area: null
             });
         }
-    }, [onLocationSelect, selectedDivision, selectedDistrict, selectedUpazilla]);
+    }, [onLocationSelect, selectedDivision, selectedDistrict, selectedUpazilla, subAreas]);
 
     // Handle specific area click (Level 5)
     const handleAreaClick = useCallback((area) => {
@@ -135,30 +144,6 @@ const Places = ({ onLocationSelect }) => {
             onLocationSelect(null);
         }
     }, [onLocationSelect]);
-
-    // Go back to previous level
-    const handleBack = useCallback(() => {
-        if (level === 5) {
-            setLevel(4);
-            setSelectedArea(null);
-        } else if (level === 4) {
-            setLevel(3);
-            setSelectedSubArea(null);
-            setSelectedArea(null);
-        } else if (level === 3) {
-            setLevel(2);
-            setSelectedUpazilla(null);
-            setSelectedSubArea(null);
-            setSelectedArea(null);
-        } else if (level === 2) {
-            setLevel(1);
-            setSelectedDivision(null);
-            setSelectedDistrict(null);
-            setSelectedUpazilla(null);
-            setSelectedSubArea(null);
-            setSelectedArea(null);
-        }
-    }, [level]);
 
     // Get current level items
     const getCurrentItems = () => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useCallback, useEffect, useContext, useMemo, useRef, useState } from 'react';
 import { FiCreditCard, FiPhone, FiLock, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
@@ -21,42 +21,64 @@ const BuyCredits = () => {
   const [success, setSuccess] = useState(false);
   const [isBlacklisted, setIsBlacklisted] = useState(false);
   const [blacklistReason, setBlacklistReason] = useState('');
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [transactionId, setTransactionId] = useState('');
   const [packages, setPackages] = useState([]);
+  const isMountedRef = useRef(true);
+  const resetTimerRef = useRef(null);
 
-  const paymentGateways = getPaymentGateways();
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const paymentGateways = useMemo(() => getPaymentGateways(), []);
+
+  const fetchCredits = useCallback(async () => {
+    if (!user) {
+      return;
+    }
+
+    const credits = await getUserCredits(user.id);
+    if (isMountedRef.current) {
+      setCurrentCredits(credits);
+    }
+  }, [user]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const loadPackages = async () => {
       const packageData = await getCreditPackages();
-      setPackages(packageData || []);
+      if (isMounted && isMountedRef.current) {
+        setPackages(packageData || []);
+      }
     };
 
-    loadPackages();
+    void loadPackages();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    fetchCredits();
+    void fetchCredits();
     // Pre-fill phone if user has one
     if (user.phone) {
       setPhoneNumber(user.phone);
-      setPhoneVerified(true);
     }
-  }, [user]);
+  }, [fetchCredits, user]);
 
-  const fetchCredits = async () => {
-    if (user) {
-      const credits = await getUserCredits(user.id);
-      setCurrentCredits(credits);
-    }
-  };
-
-  const checkBlacklistStatus = async (userId) => {
+  const checkBlacklistStatus = useCallback(async (userId) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('user_blacklist')
         .select('reason, notes')
         .eq('user_id', userId)
@@ -64,17 +86,17 @@ const BuyCredits = () => {
         .limit(1)
         .single();
 
-      if (data) {
+      if (data && isMountedRef.current) {
         setIsBlacklisted(true);
         setBlacklistReason(data.reason || 'Account restricted');
         return true;
       }
       return false;
-    } catch (err) {
+    } catch {
       // Table might not exist or no blacklist entry
       return false;
     }
-  };
+  }, []);
 
   const validatePhone = (phone) => {
     // Bangladeshi phone validation
@@ -136,9 +158,8 @@ const BuyCredits = () => {
         return;
       }
 
-      setPhoneVerified(true);
       setStep(2);
-    } catch (err) {
+    } catch {
       setError('Failed to verify phone number. Please try again.');
     } finally {
       setLoading(false);
@@ -182,8 +203,6 @@ const BuyCredits = () => {
 
       if (transError) throw transError;
 
-      setTransactionId(transaction.transaction_id);
-
       // Simulate payment gateway (in production, redirect to actual gateway)
       await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -192,22 +211,29 @@ const BuyCredits = () => {
 
       if (completeError) throw completeError;
 
-      setSuccess(true);
-      await fetchCredits();
+      if (isMountedRef.current) {
+        setSuccess(true);
+        await fetchCredits();
+      }
 
       // Reset after 3 seconds
-      setTimeout(() => {
-        setSuccess(false);
-        setStep(1);
-        setSelectedPackage(null);
-        setSelectedPayment(null);
-        setTransactionId('');
+      resetTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setSuccess(false);
+          setStep(1);
+          setSelectedPackage(null);
+          setSelectedPayment(null);
+        }
       }, 3000);
 
     } catch (err) {
-      setError(err.message || 'Payment failed. Please try again.');
+      if (isMountedRef.current) {
+        setError(err.message || 'Payment failed. Please try again.');
+      }
     } finally {
-      setProcessingPayment(false);
+      if (isMountedRef.current) {
+        setProcessingPayment(false);
+      }
     }
   };
 

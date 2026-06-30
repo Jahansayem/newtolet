@@ -62,28 +62,48 @@ const FloatingQuickRail = () => {
   const [savedCount, setSavedCount] = useState(0)
   const desktopRailRef = useRef(null)
   const mobileRailRef = useRef(null)
-
-  const refreshSavedCount = () => {
-    setSavedCount(getSavedPropertiesCount())
-  }
+  const isMountedRef = useRef(true)
+  const lastRouteKeyRef = useRef('')
 
   useEffect(() => {
-    refreshSavedCount()
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  // Only refresh saved count when routeKey actually changes
+  useEffect(() => {
+    // Skip on first render or if route hasn't changed
+    if (lastRouteKeyRef.current === routeKey) {
+      return
+    }
+    lastRouteKeyRef.current = routeKey
+
+    if (isMountedRef.current) {
+      setSavedCount(getSavedPropertiesCount())
+    }
   }, [routeKey])
 
   useEffect(() => {
     const handleStorage = (event) => {
       if (!event.key || event.key === 'savedProperties') {
-        refreshSavedCount()
+        if (isMountedRef.current) {
+          setSavedCount(getSavedPropertiesCount())
+        }
       }
     }
 
     const handleSavedPropertiesChange = () => {
-      refreshSavedCount()
+      if (isMountedRef.current) {
+        setSavedCount(getSavedPropertiesCount())
+      }
     }
 
     const handleWindowFocus = () => {
-      refreshSavedCount()
+      if (isMountedRef.current) {
+        setSavedCount(getSavedPropertiesCount())
+      }
     }
 
     window.addEventListener('storage', handleStorage)
@@ -98,7 +118,9 @@ const FloatingQuickRail = () => {
   }, [])
 
   useEffect(() => {
-    setMenuOpen(false)
+    if (isMountedRef.current) {
+      setMenuOpen(false)
+    }
   }, [routeKey])
 
   useEffect(() => {
@@ -106,13 +128,13 @@ const FloatingQuickRail = () => {
       const clickInsideDesktop = desktopRailRef.current?.contains(event.target)
       const clickInsideMobile = mobileRailRef.current?.contains(event.target)
 
-      if (!clickInsideDesktop && !clickInsideMobile) {
+      if (!clickInsideDesktop && !clickInsideMobile && isMountedRef.current) {
         setMenuOpen(false)
       }
     }
 
     const handleEscape = (event) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && isMountedRef.current) {
         setMenuOpen(false)
       }
     }

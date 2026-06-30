@@ -67,22 +67,40 @@ const LOCATION_INDEX = (() => {
   const districtsByDivision = {}
   const upazillasByDistrict = {}
   const subAreasByUpazilla = {}
+  const divisionByKey = {}
+  const districtByKey = {}
+  const upazillaByKey = {}
+  const subAreaByKey = {}
   const districtToDivision = {}
   const upazillaToDistrict = {}
   const upazillaToDivision = {}
+  const subAreaToUpazilla = {}
+  const subAreaToDistrict = {}
+  const subAreaToDivision = {}
 
   locationData.divisions.forEach((division) => {
     divisions.push(division.name)
+    divisionByKey[division.name.toLowerCase()] = division.name
     districtsByDivision[division.name] = division.districts.map((district) => district.name)
 
     division.districts.forEach((district) => {
+      districtByKey[district.name.toLowerCase()] = district.name
       districtToDivision[district.name.toLowerCase()] = division.name
       upazillasByDistrict[district.name] = district.upazillas.map((upazilla) => upazilla.name)
 
       district.upazillas.forEach((upazilla) => {
+        upazillaByKey[upazilla.name.toLowerCase()] = upazilla.name
         upazillaToDistrict[upazilla.name.toLowerCase()] = district.name
         upazillaToDivision[upazilla.name.toLowerCase()] = division.name
         subAreasByUpazilla[upazilla.name] = upazilla.sub_areas || []
+        ;(upazilla.sub_areas || []).forEach((subArea) => {
+          const subAreaKey = subArea.toLowerCase()
+
+          subAreaByKey[subAreaKey] = subArea
+          subAreaToUpazilla[subAreaKey] = upazilla.name
+          subAreaToDistrict[subAreaKey] = district.name
+          subAreaToDivision[subAreaKey] = division.name
+        })
       })
     })
   })
@@ -92,9 +110,16 @@ const LOCATION_INDEX = (() => {
     districtsByDivision,
     upazillasByDistrict,
     subAreasByUpazilla,
+    divisionByKey,
+    districtByKey,
+    upazillaByKey,
+    subAreaByKey,
     districtToDivision,
     upazillaToDistrict,
     upazillaToDivision,
+    subAreaToUpazilla,
+    subAreaToDistrict,
+    subAreaToDivision,
   }
 })()
 
@@ -120,16 +145,32 @@ const normalizePositiveNumber = (value) => {
   return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : ''
 }
 
-const getValue = (paramsLike, key) => {
+const getValue = (paramsLike, key, aliases = []) => {
   if (!paramsLike) {
     return ''
   }
 
+  const keys = [key, ...aliases]
+
   if (typeof paramsLike.get === 'function') {
-    return paramsLike.get(key) || ''
+    for (const entry of keys) {
+      const value = paramsLike.get(entry)
+
+      if (value) {
+        return value
+      }
+    }
+
+    return ''
   }
 
-  return paramsLike[key] || ''
+  for (const entry of keys) {
+    if (paramsLike[entry]) {
+      return paramsLike[entry]
+    }
+  }
+
+  return ''
 }
 
 const normalizePathname = (pathname = '') => {
@@ -193,8 +234,40 @@ export const getSearchRouteContext = (pathname = '', routeParams = {}) => {
   }
 }
 
+const getCanonicalLocationValue = (lookup, value = '') => {
+  const key = normalizeText(value)
+  return key ? lookup[key] || value.trim() : ''
+}
+
 const buildLocationTrail = (filters) => {
   const nextFilters = { ...DEFAULT_SEARCH_FILTERS, ...filters }
+  nextFilters.division = getCanonicalLocationValue(LOCATION_INDEX.divisionByKey, nextFilters.division)
+  nextFilters.district = getCanonicalLocationValue(LOCATION_INDEX.districtByKey, nextFilters.district)
+  nextFilters.upazilla = getCanonicalLocationValue(LOCATION_INDEX.upazillaByKey, nextFilters.upazilla)
+  nextFilters.subArea = getCanonicalLocationValue(LOCATION_INDEX.subAreaByKey, nextFilters.subArea)
+
+  const districtKey = normalizeText(nextFilters.district)
+  const upazillaKey = normalizeText(nextFilters.upazilla)
+  const subAreaKey = normalizeText(nextFilters.subArea)
+
+  if (!nextFilters.division) {
+    nextFilters.division =
+      LOCATION_INDEX.districtToDivision[districtKey] ||
+      LOCATION_INDEX.upazillaToDivision[upazillaKey] ||
+      LOCATION_INDEX.subAreaToDivision[subAreaKey] ||
+      ''
+  }
+
+  if (!nextFilters.district) {
+    nextFilters.district =
+      LOCATION_INDEX.upazillaToDistrict[upazillaKey] ||
+      LOCATION_INDEX.subAreaToDistrict[subAreaKey] ||
+      ''
+  }
+
+  if (!nextFilters.upazilla) {
+    nextFilters.upazilla = LOCATION_INDEX.subAreaToUpazilla[subAreaKey] || ''
+  }
 
   if (!nextFilters.division) {
     nextFilters.district = ''
@@ -231,12 +304,12 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
     search: getValue(paramsLike, 'search').trim(),
     division: routeContext?.division || getValue(paramsLike, 'division').trim(),
     district: getValue(paramsLike, 'district').trim(),
-    upazilla: getValue(paramsLike, 'upazilla').trim(),
-    subArea: getValue(paramsLike, 'subArea').trim(),
+    upazilla: getValue(paramsLike, 'upazilla', ['area']).trim(),
+    subArea: getValue(paramsLike, 'subArea', ['sub_area', 'sub-area']).trim(),
     category: getValue(paramsLike, 'category').trim(),
-    propertyType: getValue(paramsLike, 'propertyType').trim(),
-    minPrice: normalizePositiveNumber(getValue(paramsLike, 'minPrice')),
-    maxPrice: normalizePositiveNumber(getValue(paramsLike, 'maxPrice')),
+    propertyType: getValue(paramsLike, 'propertyType', ['property_type', 'type']).trim(),
+    minPrice: normalizePositiveNumber(getValue(paramsLike, 'minPrice', ['minBudget', 'min_budget'])),
+    maxPrice: normalizePositiveNumber(getValue(paramsLike, 'maxPrice', ['maxBudget', 'max_budget'])),
     rooms: normalizePositiveNumber(getValue(paramsLike, 'rooms')),
     sort: getValue(paramsLike, 'sort').trim(),
   }
@@ -369,14 +442,15 @@ const getPropertyRooms = (item) =>
   Number(item?.total_rooms ?? item?.specifications?.total_rooms ?? 0)
 
 const resolvePropertyLocation = (item) => {
+  const explicitDivision = normalizeText(item?.location?.division)
   const stateDistrict = normalizeText(item?.location?.state_district)
   const area = normalizeText(item?.location?.area)
   const subArea = normalizeText(item?.location?.sub_area)
 
-  let division = ''
+  let division = explicitDivision
   let district = ''
 
-  if (stateDistrict) {
+  if (stateDistrict && !division) {
     if (LOCATION_INDEX.divisions.some((entry) => normalizeText(entry) === stateDistrict)) {
       division = stateDistrict
     } else if (LOCATION_INDEX.districtToDivision[stateDistrict]) {
@@ -471,7 +545,7 @@ export const matchesPropertySearch = (item, searchInput = '') => {
 
   return (
     matchesPropertyCategory(item, filters.category) &&
-    (!filters.propertyType || filters.propertyType === 'All' || item?.property_type === filters.propertyType) &&
+    (!filters.propertyType || filters.propertyType === 'All' || normalizeText(item?.property_type) === normalizeText(filters.propertyType)) &&
     matchesBudgetFilters(item, filters) &&
     matchesRoomFilter(item, filters) &&
     matchesLocationFilters(item, filters) &&

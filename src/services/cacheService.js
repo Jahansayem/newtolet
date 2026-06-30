@@ -8,20 +8,7 @@ const getStorageKey = (key) => `${CACHE_PREFIX}:${key}`
 
 const canUseStorage = () => typeof window !== 'undefined' && typeof localStorage !== 'undefined'
 
-const isDevEnvironment = () => process.env.NODE_ENV !== 'production'
-
-const logUserPanelCacheEvent = (event, cacheKey, details = null) => {
-  if (!isDevEnvironment()) {
-    return
-  }
-
-  if (details) {
-    console.info(`[user-panel-cache] ${event}`, cacheKey, details)
-    return
-  }
-
-  console.info(`[user-panel-cache] ${event}`, cacheKey)
-}
+const logUserPanelCacheEvent = () => {}
 
 const readStorageValue = (key) => {
   if (!canUseStorage() || !key) {

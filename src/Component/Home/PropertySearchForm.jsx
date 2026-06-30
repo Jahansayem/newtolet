@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { BiSearch } from 'react-icons/bi'
 import { HOME_CATEGORIES } from './categoryConfig'
 import {
@@ -23,11 +23,11 @@ const PropertySearchForm = ({
   compact = false,
   className = '',
 }) => {
-  const locationOptions = getLocationOptions(filters)
+  const locationOptions = useMemo(() => getLocationOptions(filters), [filters])
 
-  const handleChange = (field) => (event) => {
+  const handleChange = useCallback((field) => (event) => {
     onFieldChange?.(field, event.target.value)
-  }
+  }, [onFieldChange])
 
   return (
     <form onSubmit={onSubmit} className={`space-y-4 ${className}`}>

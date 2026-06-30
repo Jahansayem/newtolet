@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AddPropertyProvider, useAddProperty } from '../../contexts/AddPropertyContext'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
@@ -215,6 +215,19 @@ const AddPropertyContent = () => {
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState('')
   const [showLocationPicker, setShowLocationPicker] = useState(false)
   const [showOptionalLocation, setShowOptionalLocation] = useState(false)
+  const isMountedRef = useRef(true)
+  const redirectTimerRef = useRef(null)
+
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current)
+      }
+    }
+  }, [])
 
   // Location hierarchy states
   const [selectedDivision, setSelectedDivision] = useState('')
@@ -328,10 +341,14 @@ const AddPropertyContent = () => {
       let userId = storedUser?.id
 
       if (!userId) {
-        setSubmitError('Please login to add a property')
-        setIsSubmitting(false)
-        setTimeout(() => {
-          navigate('/login', { state: { from: '/addproperty' } })
+        if (isMountedRef.current) {
+          setSubmitError('Please login to add a property')
+          setIsSubmitting(false)
+        }
+        redirectTimerRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            navigate('/login', { state: { from: '/addproperty' } })
+          }
         }, 2000)
         return
       }
@@ -344,26 +361,34 @@ const AddPropertyContent = () => {
       )
 
       if (result.success) {
-        setSubmitSuccessMessage(
-          result.message || `Property listing #${result.propertyId} created successfully!`
-        )
-        setSubmitSuccess(true)
-        resetForm()
-        setTimeout(() => {
-          navigate('/my-properties', {
-            state: {
-              message: result.message || `Property listing #${result.propertyId} created successfully!`,
-            },
-          })
+        if (isMountedRef.current) {
+          setSubmitSuccessMessage(
+            result.message || `Property listing #${result.propertyId} created successfully!`
+          )
+          setSubmitSuccess(true)
+          resetForm()
+        }
+        redirectTimerRef.current = setTimeout(() => {
+          if (isMountedRef.current) {
+            navigate('/my-properties', {
+              state: {
+                message: result.message || `Property listing #${result.propertyId} created successfully!`,
+              },
+            })
+          }
         }, 2000)
       } else {
-        setSubmitError(result.error || 'Failed to submit property listing')
-        setIsSubmitting(false)
+        if (isMountedRef.current) {
+          setSubmitError(result.error || 'Failed to submit property listing')
+          setIsSubmitting(false)
+        }
       }
     } catch (error) {
       console.error('Submission error:', error)
-      setSubmitError(error.message || 'An unexpected error occurred')
-      setIsSubmitting(false)
+      if (isMountedRef.current) {
+        setSubmitError(error.message || 'An unexpected error occurred')
+        setIsSubmitting(false)
+      }
     }
   }
 

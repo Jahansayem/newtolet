@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { resetPassword } from '../../services/authService';
@@ -13,6 +13,19 @@ const ResetPassword = () => {
     const [errorMessage, setErrorMessage] = useState('');
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
+    const isMountedRef = useRef(true);
+    const redirectTimerRef = useRef(null);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+            if (redirectTimerRef.current) {
+                clearTimeout(redirectTimerRef.current);
+            }
+        };
+    }, []);
 
     const {
         register,
@@ -26,6 +39,11 @@ const ResetPassword = () => {
     // Check if we're in password recovery mode on component mount
     useEffect(() => {
         const checkRecoverySession = async () => {
+            // SSR guard
+            if (typeof window === 'undefined') {
+                return
+            }
+
             try {
                 console.log('🔍 Checking for password recovery session...');
                 console.log('📍 Current URL:', window.location.href);
@@ -59,14 +77,18 @@ const ResetPassword = () => {
 
                     if (sessionError) {
                         console.error('❌ Session error:', sessionError);
-                        setErrorMessage(
-                            'Invalid or expired reset link. The link may have been used already or has expired (links expire in 1 hour). Please request a new password reset.'
-                        );
+                        if (isMountedRef.current) {
+                            setErrorMessage(
+                                'Invalid or expired reset link. The link may have been used already or has expired (links expire in 1 hour). Please request a new password reset.'
+                            );
+                        }
                         return;
                     }
 
                     console.log('✅ Session set successfully:', sessionData.session?.user?.email);
-                    setIsRecoveryMode(true);
+                    if (isMountedRef.current) {
+                        setIsRecoveryMode(true);
+                    }
                     return;
                 }
 
@@ -86,12 +108,16 @@ const ResetPassword = () => {
 
                     if (sessionError) {
                         console.error('❌ Session error:', sessionError);
-                        setErrorMessage('Invalid or expired reset link. Please request a new password reset.');
+                        if (isMountedRef.current) {
+                            setErrorMessage('Invalid or expired reset link. Please request a new password reset.');
+                        }
                         return;
                     }
 
                     console.log('✅ Session set successfully:', sessionData.session?.user?.email);
-                    setIsRecoveryMode(true);
+                    if (isMountedRef.current) {
+                        setIsRecoveryMode(true);
+                    }
                     return;
                 }
 
@@ -101,7 +127,9 @@ const ResetPassword = () => {
 
                 if (session) {
                     console.log('✅ User logged in:', session.user?.email);
-                    setIsRecoveryMode(true);
+                    if (isMountedRef.current) {
+                        setIsRecoveryMode(true);
+                    }
                     return;
                 }
 
@@ -114,22 +142,28 @@ const ResetPassword = () => {
                     pathname: location.pathname
                 });
 
-                setErrorMessage(
-                    'Invalid or expired password reset link. Please request a new password reset.'
-                );
+                if (isMountedRef.current) {
+                    setErrorMessage(
+                        'Invalid or expired password reset link. Please request a new password reset.'
+                    );
+                }
 
             } catch (error) {
                 console.error('❌ Error checking recovery session:', error);
-                setErrorMessage(
-                    'Failed to verify reset link. Please request a new password reset.'
-                );
+                if (isMountedRef.current) {
+                    setErrorMessage(
+                        'Failed to verify reset link. Please request a new password reset.'
+                    );
+                }
             } finally {
-                setIsCheckingSession(false);
+                if (isMountedRef.current) {
+                    setIsCheckingSession(false);
+                }
             }
         };
 
         checkRecoverySession();
-    }, [location.hash, location.search]);
+    }, [location.hash, location.pathname, location.search]);
 
     const onSubmit = async (data) => {
         // Prevent submission if not in recovery mode
@@ -146,20 +180,30 @@ const ResetPassword = () => {
             const result = await resetPassword(data.newPassword);
 
             if (result.success) {
-                setSuccessMessage(result.message);
+                if (isMountedRef.current) {
+                    setSuccessMessage(result.message);
+                }
 
                 // Redirect to login after 1.5 seconds
-                setTimeout(() => {
-                    navigate('/login?reset=success', { replace: true });
+                redirectTimerRef.current = setTimeout(() => {
+                    if (isMountedRef.current) {
+                        navigate('/login?reset=success', { replace: true });
+                    }
                 }, 1500);
             } else {
-                setErrorMessage(result.error);
+                if (isMountedRef.current) {
+                    setErrorMessage(result.error);
+                }
             }
         } catch (error) {
-            setErrorMessage('Failed to reset password. Please try again.');
+            if (isMountedRef.current) {
+                setErrorMessage('Failed to reset password. Please try again.');
+            }
             console.error('Password reset error:', error);
         } finally {
-            setIsLoading(false);
+            if (isMountedRef.current) {
+                setIsLoading(false);
+            }
         }
     };
 

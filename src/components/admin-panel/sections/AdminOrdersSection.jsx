@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RxCross2 } from 'react-icons/rx'
 import { MdDelete, MdEdit } from 'react-icons/md'
 import {
@@ -60,15 +60,28 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
     isPosted: false,
   })
   const [jobFeedSaving, setJobFeedSaving] = useState(false)
+  const isMountedRef = useRef(true)
+  const messageTimerRef = useRef(null)
 
-  const showMessage = (type, text) => {
+  const showMessage = useCallback((type, text) => {
     setMessage({ type, text })
-    window.setTimeout(() => setMessage({ type: '', text: '' }), 3000)
-  }
+    if (messageTimerRef.current) {
+      window.clearTimeout(messageTimerRef.current)
+    }
+    messageTimerRef.current = window.setTimeout(() => {
+      if (isMountedRef.current) {
+        setMessage({ type: '', text: '' })
+      }
+    }, 3000)
+  }, [])
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true)
     const { data, error } = await getAllOrders()
+
+    if (!isMountedRef.current) {
+      return
+    }
 
     if (error) {
       showMessage('error', 'Failed to load orders')
@@ -78,11 +91,19 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
     }
 
     setLoading(false)
-  }
+  }, [showMessage])
 
   useEffect(() => {
+    isMountedRef.current = true
     void fetchOrders()
-  }, [])
+
+    return () => {
+      isMountedRef.current = false
+      if (messageTimerRef.current) {
+        window.clearTimeout(messageTimerRef.current)
+      }
+    }
+  }, [fetchOrders])
 
   const filteredOrders = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -177,7 +198,9 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
       updated_at: new Date().toISOString(),
     })
 
-    setJobFeedSaving(false)
+    if (isMountedRef.current) {
+      setJobFeedSaving(false)
+    }
 
     if (error) {
       showMessage('error', 'Failed to update homepage job feed')

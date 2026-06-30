@@ -31,12 +31,7 @@ export const getOptimizedImageUrl = (imageUrl, options = {}) => {
     resize = 'cover', // cover, contain, fill
   } = options;
 
-  // Check if it's a Supabase Storage URL
-  const isSupabaseUrl =
-    imageUrl.includes('supabase.co/storage/v1/object/public') ||
-    imageUrl.includes('supabase.co/storage/v1/render/image/public');
-
-  if (!isSupabaseUrl) {
+  if (!isSupabaseImage(imageUrl)) {
     // Not a Supabase URL, return original URL (works for external URLs, data URLs, etc.)
     return imageUrl;
   }
@@ -130,10 +125,20 @@ export const preloadImages = (imageUrls, options = {}) => {
  * @returns {boolean}
  */
 export const isSupabaseImage = (url) => {
-  return (
-    url?.includes('supabase.co/storage/v1/object/public') ||
-    url?.includes('supabase.co/storage/v1/render/image/public')
-  );
+  if (!url) return false;
+
+  try {
+    const parsedUrl = new URL(url);
+    return (
+      parsedUrl.pathname.includes('/storage/v1/object/public/') ||
+      parsedUrl.pathname.includes('/storage/v1/render/image/public/')
+    );
+  } catch {
+    return (
+      url.includes('/storage/v1/object/public/') ||
+      url.includes('/storage/v1/render/image/public/')
+    );
+  }
 };
 
 /**

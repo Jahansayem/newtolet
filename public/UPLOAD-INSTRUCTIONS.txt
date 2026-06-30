@@ -1,0 +1,15 @@
+Upload instructions for newtolet.com static hosting
+
+1. In hosting File Manager, open public_html.
+2. Delete the old extracted site files first, including index.html, _next, sw.js, and route folders.
+3. Extract this zip directly into public_html.
+4. Confirm these paths exist:
+   public_html/index.html
+   public_html/_next/static
+   public_html/sw.js
+   public_html/about/index.html
+5. Purge LiteSpeed/cache/CDN cache if enabled.
+6. Test in Incognito:
+   https://newtolet.com/?v=sw-cleanup-20260524
+
+Do not extract into public_html/out or public_html/new-tolet-static-out.

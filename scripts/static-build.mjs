@@ -10,6 +10,7 @@ const tempPrefix = path.join(tempBaseDir, 'build-')
 const outputDir = path.join(rootDir, 'out')
 const fallbackOutputDir = path.join(rootDir, 'out-static')
 const exportDirName = 'dist-next'
+const optionalEntries = new Set(['.env', '.env.local'])
 const includedEntries = [
   '.env',
   '.env.local',
@@ -48,10 +49,18 @@ async function main() {
 
 async function copyProject(tempDir) {
   for (const entryName of includedEntries) {
-    await cp(path.join(rootDir, entryName), path.join(tempDir, entryName), {
-      recursive: true,
-      force: false,
-    })
+    try {
+      await cp(path.join(rootDir, entryName), path.join(tempDir, entryName), {
+        recursive: true,
+        force: false,
+      })
+    } catch (error) {
+      if (optionalEntries.has(entryName) && error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        continue
+      }
+
+      throw error
+    }
   }
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getOptimizedImageUrl, generateBlurDataURL } from '../utils/imageOptimization';
+import { getOptimizedImageUrl, generateBlurDataURL, isSupabaseImage } from '../utils/imageOptimization';
 
 /**
  * OptimizedImage component with lazy loading, blur placeholder, and responsive images
@@ -61,8 +61,7 @@ const OptimizedImage = ({
     if (!src || hasError) return '';
 
     // Only generate srcset for Supabase images
-    const isSupabaseUrl = src?.includes('supabase.co/storage/v1');
-    if (!isSupabaseUrl) return ''; // Let browser use single src for non-Supabase images
+    if (!isSupabaseImage(src)) return ''; // Let browser use single src for non-Supabase images
 
     const sizes = [
       { width: Math.round(width * 0.5), descriptor: '1x' },

@@ -16,6 +16,27 @@ const BANNER_TARGET_LONG_EDGE = 2560
 const BANNER_MAX_SIZE_KB = 1200
 const BANNER_OUTPUT_QUALITY = 0.92
 
+const getErrorMessage = (error) => {
+  if (!error) {
+    return 'Unknown error'
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  return error.message || error.details || error.hint || JSON.stringify(error)
+}
+
+const isSupabaseQuotaError = (error) => {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('exceed_storage_size_quota') ||
+    message.includes('quota') ||
+    message.includes('restricted')
+  )
+}
+
 export const COVER_BANNER_GUIDANCE = {
   minimumWidth: BANNER_MIN_WIDTH,
   minimumHeight: BANNER_MIN_HEIGHT,
@@ -77,14 +98,22 @@ export const getActiveCoverPhotos = async (limit = 6) => {
       writeSnapshot(cacheKey, activePhotos)
       return { data: activePhotos, error: null }
     } catch (error) {
-      console.error('Error fetching active cover photos:', error)
-
       const cachedPhotos = readSnapshot(cacheKey)
       if (cachedPhotos) {
+        if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+          console.warn(
+            `Using cached active cover photos after fetch failed: ${getErrorMessage(error)}`
+          )
+        }
+
         return { data: cachedPhotos, error: null }
       }
 
-      return { data: [], error }
+      if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+        console.warn(`Active cover photos unavailable: ${getErrorMessage(error)}`)
+      }
+
+      return { data: [], error: null }
     } finally {
       activeCoverPhotoRequests.delete(cacheKey)
     }

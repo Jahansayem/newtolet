@@ -40,8 +40,9 @@ export const matchesKeywordSearch = (item, searchQuery = '') => {
     item?.property_id_number,
     item?.category,
     item?.property_type,
-    item?.location?.area,
+    item?.location?.division,
     item?.location?.state_district,
+    item?.location?.area,
     item?.location?.sub_area,
     item?.location?.short_description,
   ]

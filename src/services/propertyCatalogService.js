@@ -9,6 +9,27 @@ const HOMEPAGE_PROPERTIES_LIMIT = 72
 const SEARCHABLE_PROPERTIES_LIMIT = 200
 const PROPERTY_CATALOG_CACHE_VERSION = 'v2'
 
+const getErrorMessage = (error) => {
+  if (!error) {
+    return 'Unknown error'
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  return error.message || error.details || error.hint || JSON.stringify(error)
+}
+
+const isSupabaseQuotaError = (error) => {
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('exceed_storage_size_quota') ||
+    message.includes('quota') ||
+    message.includes('restricted')
+  )
+}
+
 export const getAllPropertiesCacheKey = (options = {}) => {
   const limit =
     Number.isInteger(options.limit) && options.limit > 0 ? options.limit : 'all'
@@ -255,14 +276,22 @@ export const getAllProperties = async (options = {}) => {
 
     return transformedProperties
   } catch (error) {
-    console.error('Error fetching all properties:', error)
+    const errorMessage = getErrorMessage(error)
+    console.error('Error fetching all properties:', errorMessage, error)
 
     const cachedProperties = readSnapshot(cacheKey)
     if (cachedProperties) {
+      if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+        console.warn('Using cached properties after fetch failed')
+      }
       return cachedProperties
     }
 
-    throw error
+    if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+      console.warn('Properties unavailable and no cache:', errorMessage)
+    }
+
+    return []
   }
 }
 
@@ -359,14 +388,22 @@ export const getHomepageProperties = async () => {
 
     return transformedProperties
   } catch (error) {
-    console.error('Error fetching homepage properties:', error)
-
     const cachedProperties = readSnapshot(cacheKey)
     if (cachedProperties) {
+      if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+        console.warn(
+          `Using cached homepage properties after fetch failed: ${getErrorMessage(error)}`
+        )
+      }
+
       return cachedProperties
     }
 
-    throw error
+    if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+      console.warn(`Homepage properties unavailable: ${getErrorMessage(error)}`)
+    }
+
+    return []
   }
 }
 
@@ -428,13 +465,21 @@ export const getSearchableProperties = async (limit = SEARCHABLE_PROPERTIES_LIMI
 
     return transformedProperties
   } catch (error) {
-    console.error('Error fetching searchable properties:', error)
+    const errorMessage = getErrorMessage(error)
+    console.error('Error fetching searchable properties:', errorMessage, error)
 
     const cachedProperties = readSnapshot(cacheKey)
     if (cachedProperties) {
+      if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+        console.warn('Using cached searchable properties after fetch failed')
+      }
       return cachedProperties
     }
 
-    throw error
+    if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
+      console.warn('Searchable properties unavailable and no cache:', errorMessage)
+    }
+
+    return []
   }
 }

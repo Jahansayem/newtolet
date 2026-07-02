@@ -7,7 +7,6 @@ const nextConfig = {
   distDir: 'dist-next',
   output: 'export',
   trailingSlash: true,
-  outputFileTracingRoot: configDir,
   typescript: {
     ignoreBuildErrors: true,
   },

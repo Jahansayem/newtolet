@@ -1,75 +1,34 @@
-import { cp, mkdir, mkdtemp, rm, symlink } from 'node:fs/promises'
-import os from 'node:os'
+import { cp, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const tempBaseDir = path.join(os.tmpdir(), 'eight-static-builds')
-const tempPrefix = path.join(tempBaseDir, 'build-')
 const outputDir = path.join(rootDir, 'out')
 const fallbackOutputDir = path.join(rootDir, 'out-static')
 const exportDirName = 'dist-next'
-const includedEntries = [
-  '.env',
-  '.env.local',
-  '.gitignore',
-  'app',
-  'components',
-  'next.config.mjs',
-  'package-lock.json',
-  'package.json',
-  'postcss.config.mjs',
-  'public',
-  'scripts',
-  'src',
-]
 
 async function main() {
-  await mkdir(tempBaseDir, { recursive: true })
-  const tempDir = await mkdtemp(tempPrefix)
-  let shouldCleanup = process.env.KEEP_STATIC_BUILD !== '1'
-
   try {
-    await copyProject(tempDir)
-    await linkNodeModules(tempDir)
-    await runNextBuild(tempDir)
-    await publishOutput(path.join(tempDir, exportDirName))
+    await runNextBuild()
+    await publishOutput(path.join(rootDir, exportDirName))
   } catch (error) {
-    shouldCleanup = false
-    console.error(`Static build workspace preserved at: ${tempDir}`)
+    console.error(`Static build failed: ${error.message}`)
     throw error
-  } finally {
-    if (shouldCleanup) {
-      await rm(tempDir, { recursive: true, force: true })
-    }
   }
 }
 
-async function copyProject(tempDir) {
-  for (const entryName of includedEntries) {
-    await cp(path.join(rootDir, entryName), path.join(tempDir, entryName), {
-      recursive: true,
-      force: false,
-    })
-  }
-}
-
-async function linkNodeModules(tempDir) {
-  const nodeModulesSource = path.join(rootDir, 'node_modules')
-  const nodeModulesTarget = path.join(tempDir, 'node_modules')
-  const linkType = process.platform === 'win32' ? 'junction' : 'dir'
-
-  await symlink(nodeModulesSource, nodeModulesTarget, linkType)
-}
-
-function runNextBuild(tempDir) {
+function runNextBuild() {
   return new Promise((resolve, reject) => {
-    const command = process.execPath
-    const child = spawn(command, [path.join(rootDir, 'node_modules', 'next', 'dist', 'bin', 'next'), 'build', '--webpack'], {
-      cwd: tempDir,
+    const isWindows = process.platform === 'win32'
+    const command = isWindows ? 'cmd' : 'sh'
+    const args = isWindows ? ['/c', 'npm', 'run', 'build:next'] : ['-c', 'npm run build:next']
+
+    const child = spawn(command, args, {
+      cwd: rootDir,
       stdio: 'inherit',
-      env: process.env,
+      env: { ...process.env, NODE_ENV: 'production' },
+      shell: true,
     })
 
     child.on('error', reject)
@@ -78,7 +37,6 @@ function runNextBuild(tempDir) {
         resolve()
         return
       }
-
       reject(new Error(`next build failed with exit code ${code ?? 'unknown'}`))
     })
   })

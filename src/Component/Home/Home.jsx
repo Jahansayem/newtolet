@@ -25,14 +25,23 @@ import {
     COMPARE_PROPERTIES_BROWSER_EVENT,
     getComparedPropertyIds,
 } from '../../services/propertyCompareService';
+import AdsterraBanner from './Ads';
 
-const Cover = dynamic(() => import('./Cover'), {
-    loading: () => <CoverSkeleton />,
-});
-const JobFeedSection = dynamic(() => import('../../components/JobFeedSection'), {
-    loading: () => <ContentSectionFallback height='260px' />,
-});
-const Feedback = dynamic(() => import('./Feadback'));
+const Cover = dynamic(
+    () => import('./Cover').then((mod) => mod.default),
+    {
+        loading: () => <CoverSkeleton />,
+    }
+);
+const JobFeedSection = dynamic(
+    () => import('../../components/JobFeedSection').then((mod) => mod.default),
+    {
+        loading: () => <ContentSectionFallback height='260px' />,
+    }
+);
+const Feedback = dynamic(
+    () => import('./Feadback').then((mod) => mod.default)
+);
 
 const CategorySectionsFallback = () => (
     <div className='bg-gray-50 min-h-[720px] py-12 animate-pulse'>
@@ -467,6 +476,13 @@ const Home = () => {
             >
                 <About />
             </DeferredSection>
+             <DeferredSection
+                className='px-0  md:px-4 xl:px-8'
+                fallback={<ContentSectionFallback height='180px' />}
+                rootMargin='0px 0px 120px 0px'
+            >
+                <AdsterraBanner></AdsterraBanner>
+            </DeferredSection>
 
             <DeferredSection
                 className='px-0 pb-10 md:px-4 xl:px-8'
@@ -474,6 +490,13 @@ const Home = () => {
                 rootMargin='0px 0px 120px 0px'
             >
                 <Feedback />
+            </DeferredSection>
+             <DeferredSection
+                className='px-0  md:px-4 xl:px-8'
+                fallback={<ContentSectionFallback height='180px' />}
+                rootMargin='0px 0px 120px 0px'
+            >
+                <AdsterraBanner></AdsterraBanner>
             </DeferredSection>
         </div>
     );

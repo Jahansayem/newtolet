@@ -66,6 +66,16 @@ const isEmptyPlainObjectError = (error) =>
   Object.keys(error).length === 0 &&
   error.constructor === Object
 
+const isSupabaseQuotaError = (error) => {
+  const message = String(error?.message || error?.details || error?.hint || error || '').toLowerCase()
+
+  return (
+    message.includes('exceed_storage_size_quota') ||
+    message.includes('quota') ||
+    message.includes('restricted')
+  )
+}
+
 const isSavedPropertyFallbackError = (error) => {
   if (!error) {
     return true
@@ -78,6 +88,7 @@ const isSavedPropertyFallbackError = (error) => {
 
   return (
     isMissingResourceError(error) ||
+    isSupabaseQuotaError(error) ||
     isEmptyPlainObjectError(error) ||
     code === '42501' ||
     code === '401' ||
@@ -111,6 +122,7 @@ const isSuppressiblePropertyViewError = (error) => {
 
   return (
     isMissingResourceError(error) ||
+    isSupabaseQuotaError(error) ||
     code === '42501' ||
     code === '401' ||
     code === '403' ||

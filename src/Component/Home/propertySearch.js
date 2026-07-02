@@ -331,17 +331,95 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
 export const getLocationOptions = (filters = DEFAULT_SEARCH_FILTERS) => {
   const normalizedFilters = buildLocationTrail(filters)
 
+  // Get all districts - either from selected division or all districts
+  const getDistricts = () => {
+    if (normalizedFilters.division) {
+      return LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
+    }
+    // Return all districts from all divisions (sorted and deduplicated)
+    const allDistricts = new Set()
+    LOCATION_INDEX.divisions.forEach((division) => {
+      const districts = LOCATION_INDEX.districtsByDivision[division] || []
+      districts.forEach((district) => allDistricts.add(district))
+    })
+    return Array.from(allDistricts).sort()
+  }
+
+  // Get all upazillas - either from selected district, all upazillas in selected division, or all upazillas
+  const getUpazillas = () => {
+    if (normalizedFilters.district) {
+      return LOCATION_INDEX.upazillasByDistrict[normalizedFilters.district] || []
+    }
+    if (normalizedFilters.division) {
+      // Return all upazillas within the selected division (sorted and deduplicated)
+      const allUpazillas = new Set()
+      const districts = LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
+      districts.forEach((district) => {
+        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
+        upazillas.forEach((upazilla) => allUpazillas.add(upazilla))
+      })
+      return Array.from(allUpazillas).sort()
+    }
+    // Return all upazillas from all districts (sorted and deduplicated)
+    const allUpazillas = new Set()
+    LOCATION_INDEX.divisions.forEach((division) => {
+      const districts = LOCATION_INDEX.districtsByDivision[division] || []
+      districts.forEach((district) => {
+        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
+        upazillas.forEach((upazilla) => allUpazillas.add(upazilla))
+      })
+    })
+    return Array.from(allUpazillas).sort()
+  }
+
+  // Get all sub-areas - either from selected upazilla, all sub-areas in selected district/division, or all sub-areas
+  const getSubAreas = () => {
+    if (normalizedFilters.upazilla) {
+      return LOCATION_INDEX.subAreasByUpazilla[normalizedFilters.upazilla] || []
+    }
+    if (normalizedFilters.district) {
+      // Return all sub-areas within the selected district (sorted and deduplicated)
+      const allSubAreas = new Set()
+      const upazillas = LOCATION_INDEX.upazillasByDistrict[normalizedFilters.district] || []
+      upazillas.forEach((upazilla) => {
+        const subAreas = LOCATION_INDEX.subAreasByUpazilla[upazilla] || []
+        subAreas.forEach((subArea) => allSubAreas.add(subArea))
+      })
+      return Array.from(allSubAreas).sort()
+    }
+    if (normalizedFilters.division) {
+      // Return all sub-areas within the selected division (sorted and deduplicated)
+      const allSubAreas = new Set()
+      const districts = LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
+      districts.forEach((district) => {
+        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
+        upazillas.forEach((upazilla) => {
+          const subAreas = LOCATION_INDEX.subAreasByUpazilla[upazilla] || []
+          subAreas.forEach((subArea) => allSubAreas.add(subArea))
+        })
+      })
+      return Array.from(allSubAreas).sort()
+    }
+    // Return all sub-areas from all upazillas (sorted and deduplicated)
+    const allSubAreas = new Set()
+    LOCATION_INDEX.divisions.forEach((division) => {
+      const districts = LOCATION_INDEX.districtsByDivision[division] || []
+      districts.forEach((district) => {
+        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
+        upazillas.forEach((upazilla) => {
+          const subAreas = LOCATION_INDEX.subAreasByUpazilla[upazilla] || []
+          subAreas.forEach((subArea) => allSubAreas.add(subArea))
+        })
+      })
+    })
+    return Array.from(allSubAreas).sort()
+  }
+
   return {
     divisions: LOCATION_INDEX.divisions,
-    districts: normalizedFilters.division
-      ? LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
-      : [],
-    upazillas: normalizedFilters.district
-      ? LOCATION_INDEX.upazillasByDistrict[normalizedFilters.district] || []
-      : [],
-    subAreas: normalizedFilters.upazilla
-      ? LOCATION_INDEX.subAreasByUpazilla[normalizedFilters.upazilla] || []
-      : [],
+    districts: getDistricts(),
+    upazillas: getUpazillas(),
+    subAreas: getSubAreas(),
   }
 }
 
@@ -368,19 +446,45 @@ export const updateSearchFilters = (filters, key, value) => {
     nextFilters.sort = DEFAULT_SEARCH_FILTERS.sort
   }
 
+  // When division changes, clear downstream filters
   if (key === 'division') {
     nextFilters.district = ''
     nextFilters.upazilla = ''
     nextFilters.subArea = ''
   }
 
+  // When district changes to empty (All), clear division to show all districts from all divisions
+  // When district changes to a specific value, clear downstream filters
   if (key === 'district') {
+    if (!nextFilters.district) {
+      // User selected "All Districts" - clear division to show all districts
+      nextFilters.division = ''
+    }
     nextFilters.upazilla = ''
     nextFilters.subArea = ''
   }
 
+  // When upazilla changes to empty (All), clear district to show all upazillas
+  // When upazilla changes to a specific value, clear downstream filters
   if (key === 'upazilla') {
+    if (!nextFilters.upazilla) {
+      // User selected "All Areas" - clear district to show all areas
+      nextFilters.district = ''
+      // Also clear division since district is cleared
+      nextFilters.division = ''
+    }
     nextFilters.subArea = ''
+  }
+
+  // When subArea changes to empty (All), clear upazilla to show all sub-areas
+  if (key === 'subArea') {
+    if (!nextFilters.subArea) {
+      // User selected "All Sub-areas" - clear upazilla to show all sub-areas
+      nextFilters.upazilla = ''
+      // Cascade clearing: district and division should also be cleared
+      nextFilters.district = ''
+      nextFilters.division = ''
+    }
   }
 
   return buildLocationTrail(nextFilters)

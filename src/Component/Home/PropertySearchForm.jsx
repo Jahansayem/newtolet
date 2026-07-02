@@ -1,10 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
-import { BiSearch } from 'react-icons/bi'
 import { HOME_CATEGORIES } from './categoryConfig'
 import {
   DEFAULT_SEARCH_FILTERS,
-  PROPERTY_TYPE_OPTIONS,
-  ROOM_FILTER_OPTIONS,
   SORT_OPTIONS,
   getLocationOptions,
 } from './propertySearch'
@@ -36,16 +33,13 @@ const PropertySearchForm = ({
           <span className='mb-2 block text-xs font-semibold uppercase tracking-[0.24em] text-gray-500'>
             Keyword
           </span>
-          <div className='relative'>
-            <BiSearch className='pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lg text-gray-400' />
-            <input
-              type='text'
-              value={filters.search}
-              onChange={handleChange('search')}
-              placeholder='Search by area, sub-area, property ID or keyword'
-              className={`${baseInputClassName} pl-11`}
-            />
-          </div>
+          <input
+            type='text'
+            value={filters.search}
+            onChange={handleChange('search')}
+            placeholder='Search by area, sub-area, property ID or keyword'
+            className={baseInputClassName}
+          />
         </label>
 
         <label>
@@ -128,62 +122,6 @@ const PropertySearchForm = ({
             {HOME_CATEGORIES.map((category) => (
               <option key={category} value={category}>
                 {category}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span className='mb-2 block text-xs font-semibold uppercase tracking-[0.24em] text-gray-500'>
-            Property Type
-          </span>
-          <select value={filters.propertyType} onChange={handleChange('propertyType')} className={baseInputClassName}>
-            <option value='All'>All Property Types</option>
-            {PROPERTY_TYPE_OPTIONS.map((propertyType) => (
-              <option key={propertyType} value={propertyType}>
-                {propertyType}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          <span className='mb-2 block text-xs font-semibold uppercase tracking-[0.24em] text-gray-500'>
-            Minimum Budget
-          </span>
-          <input
-            type='text'
-            inputMode='numeric'
-            value={filters.minPrice}
-            onChange={handleChange('minPrice')}
-            placeholder='e.g. 8000'
-            className={baseInputClassName}
-          />
-        </label>
-
-        <label>
-          <span className='mb-2 block text-xs font-semibold uppercase tracking-[0.24em] text-gray-500'>
-            Maximum Budget
-          </span>
-          <input
-            type='text'
-            inputMode='numeric'
-            value={filters.maxPrice}
-            onChange={handleChange('maxPrice')}
-            placeholder='e.g. 25000'
-            className={baseInputClassName}
-          />
-        </label>
-
-        <label>
-          <span className='mb-2 block text-xs font-semibold uppercase tracking-[0.24em] text-gray-500'>
-            Rooms
-          </span>
-          <select value={filters.rooms} onChange={handleChange('rooms')} className={baseInputClassName}>
-            <option value=''>Any rooms</option>
-            {ROOM_FILTER_OPTIONS.map((roomCount) => (
-              <option key={roomCount} value={roomCount}>
-                {roomCount}+ rooms
               </option>
             ))}
           </select>

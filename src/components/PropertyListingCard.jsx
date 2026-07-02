@@ -292,7 +292,7 @@ const PropertyListingCard = ({
 
     return (
         <>
-            <div className='group relative flex h-auto flex-col rounded-[14px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md md:h-[380px]'>
+            <div className='group relative flex h-auto flex-col rounded-[14px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md'>
                 <Link
                     to={buildListDetailsHref(item.id)}
                     className='absolute inset-0 z-10 rounded-[14px]'
@@ -319,11 +319,11 @@ const PropertyListingCard = ({
                         <p className='line-clamp-1 text-base font-bold leading-6 text-[#1E73B8] flex-shrink-0'>
                             {cardTitle}
                         </p>
-                        <p className='line-clamp-1 text-sm leading-5 text-slate-700 flex-shrink-0'>
+                        <p className='line-clamp-1 text-sm leading-tight text-slate-700 flex-shrink-0 mb-0'>
                             {item.location?.area || 'Area not set'}{item.location?.state_district ? `, ${item.location.state_district}` : ''}
                         </p>
 
-                        <div className='mt-2 space-y-1 text-sm leading-5 text-slate-900 md:mt-auto'>
+                        <div className='mt-1 text-sm leading-tight text-slate-900 space-y-0'>
                             <p className='line-clamp-1'>
                                 Bed: {item.total_rooms ?? item.specifications?.total_rooms ?? 0}, Bath: {item.total_bathrooms ?? item.specifications?.total_bathrooms ?? 0}
                             </p>

@@ -20,7 +20,7 @@ import {
 } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
 import { buildDashboardHref, getRoutePage } from '../../lib/routePaths'
-import { HOME_CHROME_SCROLL_EVENT } from '../../lib/homeScrollChrome'
+import { HOME_CHROME_SCROLL_EVENT, OPEN_SEARCH_OVERLAY_EVENT } from '../../lib/homeScrollChrome'
 import {
   buildLegacyPropertyDivisionHref,
   buildLegacyPropertyListHref,
@@ -38,10 +38,13 @@ const DIVISIONS = [
   'Rangpur',
   'Mymensingh',
 ]
-const NavSearchOverlay = dynamic(() => import('./NavSearchOverlay'), {
-  ssr: false,
-  loading: () => null,
-})
+const NavSearchOverlay = dynamic(
+  () => import('./NavSearchOverlay').then((mod) => mod.default),
+  {
+    ssr: false,
+    loading: () => null,
+  }
+)
 
 const desktopLinkClassName = (isActive) =>
   `inline-flex items-center gap-1.5 border-b-2 px-1 py-4 text-[14px] lg:text-[15px] font-medium transition ${
@@ -189,6 +192,20 @@ const Navber = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
+  // Listen for search overlay open event from FloatingQuickRail
+  useEffect(() => {
+    const handleOpenSearchOverlay = () => {
+      setSearchOpen(true)
+      setMobileSearchOpen(true)
+    }
+
+    window.addEventListener(OPEN_SEARCH_OVERLAY_EVENT, handleOpenSearchOverlay)
+
+    return () => {
+      window.removeEventListener(OPEN_SEARCH_OVERLAY_EVENT, handleOpenSearchOverlay)
     }
   }, [])
 

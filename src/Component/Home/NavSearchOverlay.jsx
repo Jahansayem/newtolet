@@ -1,20 +1,18 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import ReactDOM from 'react-dom'
 import { RxCross2 } from 'react-icons/rx'
 import { FiSearch } from 'react-icons/fi'
-import { Link, useNavigate } from 'react-router-dom'
-import { buildListDetailsHref } from '../../lib/routePaths'
+import { useNavigate } from 'react-router-dom'
 import { getSearchableProperties } from '../../services/propertyCatalogService'
-import { PropertyThumbnailImage } from '../../components/PropertyCardMedia'
-import PropertySearchForm from './PropertySearchForm'
 import {
   buildSearchHref as buildPropertySearchHref,
+  getLocationOptions,
   updateSearchFilters,
 } from './propertySearch'
-import { DEFAULT_SEARCH_FILTERS, matchesKeywordSearch } from './propertySearchCore'
-import RentDisplay from '../../components/RentDisplay'
+import { DEFAULT_SEARCH_FILTERS } from './propertySearchCore'
+import { HOME_CATEGORIES } from './categoryConfig'
 
 export default function NavSearchOverlay({
   searchOpen,
@@ -25,6 +23,7 @@ export default function NavSearchOverlay({
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchFilters, setSearchFilters] = useState({ ...DEFAULT_SEARCH_FILTERS })
+  const [selectedCategory, setSelectedCategory] = useState('All')
   const [searchProperties, setSearchProperties] = useState([])
   const [searchLoaded, setSearchLoaded] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -63,50 +62,384 @@ export default function NavSearchOverlay({
     }
   }, [mobileSearchOpen, searchLoaded, searchLoading, searchOpen])
 
+  const locationOptions = useMemo(() => getLocationOptions(searchFilters), [searchFilters])
+
   const activeSearchFilters = useMemo(
-    () => ({ ...searchFilters, search: searchQuery }),
-    [searchFilters, searchQuery]
+    () => ({ ...searchFilters, search: searchQuery, category: selectedCategory }),
+    [searchFilters, searchQuery, selectedCategory]
   )
   const searchHref = useMemo(
     () => buildPropertySearchHref(activeSearchFilters),
     [activeSearchFilters]
   )
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return []
-    }
-
-    return searchProperties.filter((item) => matchesKeywordSearch(item, searchQuery)).slice(0, 5)
-  }, [searchProperties, searchQuery])
-
   const resetSearchFilters = () => {
     setSearchQuery('')
     setSearchFilters({ ...DEFAULT_SEARCH_FILTERS })
+    setSelectedCategory('All')
   }
 
-  const handleSearchSubmit = (event) => {
-    event.preventDefault()
+  const handleSearchSubmit = useCallback(() => {
     navigate(searchHref)
     setSearchOpen(false)
     setMobileSearchOpen(false)
     resetSearchFilters()
     closeMenu()
-  }
+  }, [searchHref, navigate, setSearchOpen, setMobileSearchOpen, closeMenu])
 
-  const handleSearchFilterChange = (field, value) => {
+  const handleFieldChange = useCallback((field, value) => {
     if (field === 'search') {
       setSearchQuery(value)
+    } else if (field === 'category') {
+      setSelectedCategory(value)
     } else {
       setSearchFilters((current) => updateSearchFilters(current, field, value))
     }
+  }, [])
+
+  const handleCategoryClick = useCallback((category) => {
+    const newCategory = selectedCategory === category ? 'All' : category
+    setSelectedCategory(newCategory)
+  }, [selectedCategory])
+
+  const isDistrictDisabled = !searchFilters.division
+  const isAreaDisabled = !searchFilters.division
+
+  // Desktop Modal Search
+  const renderDesktopSearch = () => {
+    if (!searchOpen) return null
+
+    return ReactDOM.createPortal(
+      <div className="fixed inset-0 z-[10001] hidden md:flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+            <h2 className="text-lg font-bold text-gray-800">Property search</h2>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Close search"
+            >
+              <RxCross2 className="text-xl" />
+            </button>
+          </div>
+
+          {/* Form Content */}
+          <div className="space-y-4 p-5">
+            {/* Location Input */}
+            <div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleFieldChange('search', e.target.value)}
+                placeholder="Search by location"
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Property ID Input */}
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleFieldChange('search', e.target.value)}
+                placeholder="Property ID.."
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pr-10 text-sm text-gray-700 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              />
+              <FiSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+
+            {/* OR Divider */}
+            <div className="relative flex items-center">
+              <div className="flex-1 border-t border-gray-300" />
+              <span className="mx-4 text-sm text-gray-500">OR</span>
+              <div className="flex-1 border-t border-gray-300" />
+            </div>
+
+            {/* Category Section */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Category</label>
+              <div className="flex flex-wrap gap-2">
+                {HOME_CATEGORIES.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => handleCategoryClick(category)}
+                    className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                      selectedCategory === category
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Division Dropdown */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Division</label>
+              <div className="relative">
+                <select
+                  value={searchFilters.division}
+                  onChange={(e) => handleFieldChange('division', e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  <option value="">Select division</option>
+                  {locationOptions.divisions.map((division) => (
+                    <option key={division} value={division}>
+                      {division}
+                    </option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* District Dropdown */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">District</label>
+              <div className="relative">
+                <select
+                  value={searchFilters.district}
+                  onChange={(e) => handleFieldChange('district', e.target.value)}
+                  disabled={isDistrictDisabled}
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  <option value="">
+                    {isDistrictDisabled ? 'Select division first' : 'Select district'}
+                  </option>
+                  {locationOptions.districts.map((district) => (
+                    <option key={district} value={district}>
+                      {district}
+                    </option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Area/Thana Dropdown */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Area / Thana :</label>
+              <div className="relative">
+                <select
+                  value={searchFilters.upazilla}
+                  onChange={(e) => handleFieldChange('upazilla', e.target.value)}
+                  disabled={isAreaDisabled}
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  <option value="">
+                    {isAreaDisabled ? 'Select division first' : 'Select area'}
+                  </option>
+                  {locationOptions.upazillas.map((upazilla) => (
+                    <option key={upazilla} value={upazilla}>
+                      {upazilla}
+                    </option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(false)}
+                className="rounded-lg bg-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSearchSubmit}
+                className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Search
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
   }
 
-  const handleResultClick = () => {
-    closeMenu()
-    setSearchOpen(false)
-    setMobileSearchOpen(false)
-    resetSearchFilters()
+  // Mobile Search Overlay
+  const renderMobileSearch = () => {
+    if (!mobileSearchOpen) return null
+
+    return ReactDOM.createPortal(
+      <div className="fixed inset-0 z-[10000] md:hidden">
+        <div
+          className="absolute inset-0 bg-black/50"
+          onClick={() => setMobileSearchOpen(false)}
+        />
+        <div className="absolute inset-0 flex flex-col bg-white animate-fade-in-down">
+          <form
+            onSubmit={(e) => { e.preventDefault(); handleSearchSubmit(); }}
+            className="flex items-center gap-3 border-b border-gray-100 px-4 py-3 shrink-0"
+          >
+            <button
+              type="submit"
+              className="text-gray-500 transition-colors hover:text-gray-700"
+              aria-label="Search properties"
+            >
+              <FiSearch className="text-xl" />
+            </button>
+            <input
+              type="text"
+              placeholder="Search by area, sub-area, property ID..."
+              className="flex-1 bg-transparent py-2 text-base text-gray-700 outline-none placeholder-gray-400"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              autoFocus
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-gray-400 transition-colors hover:text-gray-600"
+              >
+                <RxCross2 className="text-xl" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileSearchOpen(false)
+                setSearchQuery('')
+              }}
+              className="text-base font-medium text-[#1E73B8]"
+            >
+              Cancel
+            </button>
+          </form>
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+            {/* Category Section */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Category</label>
+              <div className="flex flex-wrap gap-2">
+                {HOME_CATEGORIES.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => handleCategoryClick(category)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      selectedCategory === category
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Division Dropdown */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Division</label>
+              <div className="relative">
+                <select
+                  value={searchFilters.division}
+                  onChange={(e) => handleFieldChange('division', e.target.value)}
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Select division</option>
+                  {locationOptions.divisions.map((division) => (
+                    <option key={division} value={division}>
+                      {division}
+                    </option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* District Dropdown */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">District</label>
+              <div className="relative">
+                <select
+                  value={searchFilters.district}
+                  onChange={(e) => handleFieldChange('district', e.target.value)}
+                  disabled={isDistrictDisabled}
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  <option value="">
+                    {isDistrictDisabled ? 'Select division first' : 'Select district'}
+                  </option>
+                  {locationOptions.districts.map((district) => (
+                    <option key={district} value={district}>
+                      {district}
+                    </option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Area/Thana Dropdown */}
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">Area / Thana</label>
+              <div className="relative">
+                <select
+                  value={searchFilters.upazilla}
+                  onChange={(e) => handleFieldChange('upazilla', e.target.value)}
+                  disabled={isAreaDisabled}
+                  className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+                >
+                  <option value="">
+                    {isAreaDisabled ? 'Select division first' : 'Select area'}
+                  </option>
+                  {locationOptions.upazillas.map((upazilla) => (
+                    <option key={upazilla} value={upazilla}>
+                      {upazilla}
+                    </option>
+                  ))}
+                </select>
+                <svg className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setMobileSearchOpen(false)}
+                className="rounded-lg bg-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSearchSubmit}
+                className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Search
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
   }
 
   if ((!searchOpen && !mobileSearchOpen) || typeof document === 'undefined') {
@@ -115,183 +448,8 @@ export default function NavSearchOverlay({
 
   return (
     <>
-      {searchOpen
-        ? ReactDOM.createPortal(
-            <div className="fixed inset-0 z-[10001] hidden md:block">
-              <div
-                className="absolute inset-0 bg-slate-950/55"
-                onClick={() => setSearchOpen(false)}
-              />
-              <div className="absolute inset-x-0 top-24 mx-auto w-[min(960px,calc(100vw-48px))] rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
-                      Search
-                    </p>
-                    <h2 className="mt-2 text-2xl font-bold text-slate-900">
-                      Find Your Next Rental
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSearchOpen(false)}
-                    className="rounded-full bg-slate-100 p-2 text-slate-700 transition hover:bg-slate-200"
-                    aria-label="Close search"
-                  >
-                    <RxCross2 className="text-xl" />
-                  </button>
-                </div>
-                <div className="px-6 py-6">
-                  <PropertySearchForm
-                    filters={activeSearchFilters}
-                    onFieldChange={handleSearchFilterChange}
-                    onSubmit={handleSearchSubmit}
-                    onReset={resetSearchFilters}
-                    showSort={false}
-                    submitLabel="Search"
-                    resetLabel="Reset"
-                  />
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
-
-      {mobileSearchOpen
-        ? ReactDOM.createPortal(
-            <div className="fixed inset-0 z-[10000] md:hidden">
-              <div
-                className="absolute inset-0 bg-black/50"
-                onClick={() => setMobileSearchOpen(false)}
-              />
-              <div className="absolute left-0 right-0 top-0 bg-white shadow-2xl animate-fade-in-down">
-                <form
-                  onSubmit={handleSearchSubmit}
-                  className="flex items-center gap-3 border-b border-gray-100 px-4 py-3"
-                >
-                  <button
-                    type="submit"
-                    className="text-gray-500 transition-colors hover:text-gray-700"
-                    aria-label="Search properties"
-                  >
-                    <FiSearch className="text-xl" />
-                  </button>
-                  <input
-                    type="text"
-                    placeholder="Search by area, sub-area, property ID..."
-                    className="flex-1 bg-transparent py-2 text-base text-gray-700 outline-none placeholder-gray-400"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    autoFocus
-                  />
-                  {searchQuery ? (
-                    <button
-                      type="button"
-                      onClick={() => setSearchQuery('')}
-                      className="text-gray-400 transition-colors hover:text-gray-600"
-                    >
-                      <RxCross2 className="text-xl" />
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileSearchOpen(false)
-                      setSearchQuery('')
-                    }}
-                    className="text-base font-medium text-[#1E73B8]"
-                  >
-                    Cancel
-                  </button>
-                </form>
-                <div className="border-b border-gray-100 px-4 py-4">
-                  <PropertySearchForm
-                    filters={activeSearchFilters}
-                    onFieldChange={handleSearchFilterChange}
-                    onSubmit={handleSearchSubmit}
-                    onReset={resetSearchFilters}
-                    showSort={false}
-                    submitLabel="Search"
-                    resetLabel="Reset"
-                    compact
-                  />
-                </div>
-                <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
-                  {searchQuery && searchResults.length > 0 ? (
-                    <div className="space-y-2 p-3">
-                      {searchResults.map((item) => (
-                        <Link
-                          key={item.id}
-                          to={buildListDetailsHref(item.id)}
-                          onClick={handleResultClick}
-                          className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3 transition-all duration-200 hover:bg-[#1E73B8]/10"
-                        >
-                          <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200">
-                            <PropertyThumbnailImage
-                              src={item.primary_image}
-                              alt={item.category}
-                              propertyType={item.property_type}
-                              category={item.category}
-                              pricing={item.pricing}
-                              fallbackTextClassName="space-y-0"
-                              compact
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              <span className="text-xs font-bold text-[#1E73B8]">
-                                #{item.property_id_number || ''}
-                              </span>
-                              <p className="truncate text-sm font-medium text-gray-800">
-                                {item.category || 'Property'}
-                              </p>
-                            </div>
-                            <p className="truncate text-xs text-gray-500">
-                              {item.location?.area || ''}, {item.location?.state_district || ''}
-                            </p>
-                            <p className="mt-1 text-sm font-bold text-[#1E73B8]">
-                              <RentDisplay pricing={item.pricing} prefix="৳" />
-                            </p>
-                          </div>
-                        </Link>
-                      ))}
-                      <Link
-                        to={searchHref}
-                        onClick={handleResultClick}
-                        className="block w-full rounded-xl bg-[#1E73B8] py-2.5 text-center font-medium text-white transition-colors hover:bg-[#1665a0]"
-                      >
-                        View All Results
-                      </Link>
-                    </div>
-                  ) : searchQuery && searchLoading ? (
-                    <div className="py-16 text-center">
-                      <FiSearch className="mx-auto mb-3 animate-pulse text-4xl text-gray-300" />
-                      <p className="text-gray-500">Loading properties...</p>
-                    </div>
-                  ) : searchQuery ? (
-                    <div className="py-16 text-center">
-                      <FiSearch className="mx-auto mb-3 text-4xl text-gray-300" />
-                      <p className="text-gray-500">No properties found</p>
-                      <p className="mt-1 text-sm text-gray-400">
-                        Try a different search term
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="py-16 text-center">
-                      <FiSearch className="mx-auto mb-3 text-4xl text-gray-300" />
-                      <p className="text-gray-500">Search for properties</p>
-                      <p className="mt-1 text-sm text-gray-400">
-                        Enter property ID, area, sub-area or category
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      {renderDesktopSearch()}
+      {renderMobileSearch()}
     </>
   )
 }

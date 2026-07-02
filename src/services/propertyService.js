@@ -155,6 +155,12 @@ const isMissingPropertyDetailRpcError = (error) =>
   error?.message?.includes(`Could not find the function public.${PROPERTY_DETAIL_RPC}`) ||
   error?.message?.includes('does not exist')
 
+const isSupabaseQuotaError = (error) =>
+  error?.message?.includes('exceed_storage_size_quota') ||
+  error?.message?.includes('quota') ||
+  error?.message?.includes('restricted') ||
+  String(error).includes('exceed_storage_size_quota')
+
 const logPropertyDetailFallback = () => {
   console.warn(`Using property detail fallback because ${PROPERTY_DETAIL_RPC} is unavailable.`)
 }
@@ -541,6 +547,10 @@ export const submitPropertyListing = async (
  * @returns {Promise<Object>}
  */
 export const getPropertyById = async (propertyId, viewer = {}) => {
+  if (!propertyId) {
+    throw new Error('Property ID is required')
+  }
+
   const cacheKey = getPropertyByIdCacheKey(propertyId, viewer)
 
   try {
@@ -551,7 +561,8 @@ export const getPropertyById = async (propertyId, viewer = {}) => {
     })
 
     if (propertyError && !isMissingPropertyDetailRpcError(propertyError)) {
-      throw propertyError
+      const errorMsg = propertyError?.message || propertyError?.error_description || JSON.stringify(propertyError)
+      throw new Error(`Failed to fetch property: ${errorMsg}`)
     }
 
     if (!propertyError) {
@@ -624,16 +635,26 @@ export const getPropertyById = async (propertyId, viewer = {}) => {
 
     return normalizedProperty
   } catch (error) {
+    const isQuotaError = isSupabaseQuotaError(error)
+
     if (isMissingPropertyDetailRpcError(error)) {
       console.warn(`Property detail unavailable because ${PROPERTY_DETAIL_RPC} could not be loaded.`)
-    } else {
-      console.error('Error fetching property:', error)
+    } else if (!isQuotaError) {
+      const errorMessage = error?.message || error?.error_description || JSON.stringify(error) || 'Unknown error'
+      console.error('Error fetching property:', errorMessage, { propertyId })
     }
 
     const cachedProperty = readSnapshot(cacheKey)
     if (cachedProperty) {
-      console.warn('Using cached property details after fetch error:', propertyId)
+      if (!isQuotaError) {
+        console.warn('Using cached property details after fetch error:', propertyId)
+      }
       return cachedProperty
+    }
+
+    // For quota errors, throw a more user-friendly message
+    if (isQuotaError) {
+      throw new Error('Service temporarily unavailable. Please try again later.')
     }
 
     throw error

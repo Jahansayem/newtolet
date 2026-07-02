@@ -1,0 +1,40 @@
+{
+  "name": "NewTolet.Com - Property Rental Marketplace Bangladesh",
+  "short_name": "NewTolet",
+  "description": "Find rental properties in Bangladesh. Browse verified listings of apartments, flats, houses, and commercial spaces for rent.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1E73B8",
+  "orientation": "portrait-primary",
+  "categories": ["real estate", "property", "rental"],
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable any"
+    }
+  ]
+}

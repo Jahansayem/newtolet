@@ -1821,6 +1821,20 @@ const isMissingTableError = (error) =>
   error?.code === 'PGRST205' ||
   error?.message?.includes('Could not find the table')
 
+const isSupabaseQuotaError = (error) =>
+  error?.message?.includes('exceed_storage_size_quota') ||
+  error?.message?.includes('quota') ||
+  error?.message?.includes('restricted') ||
+  String(error).includes('exceed_storage_size_quota')
+
+const logAdminError = (message, error) => {
+  if (isSupabaseQuotaError(error)) {
+    return // Silently skip quota errors
+  }
+  const errorMsg = error?.message || error?.toString() || 'Unknown error'
+  console.error(message, errorMsg)
+}
+
 const SITE_THEME_STORAGE_KEY = 'siteTheme'
 const SITE_THEME_SETTING_KEY = 'site_theme'
 const DEFAULT_SITE_THEME = 'light'
@@ -2109,7 +2123,7 @@ export const getCreditPackages = async () => {
 
     return (data || []).map((record, index) => mapCreditPackageRecord(record, index))
   } catch (error) {
-    console.error('Error getting credit packages:', error)
+    logAdminError('Error getting credit packages:', error)
     return []
   }
 }
@@ -2239,15 +2253,17 @@ export const getCreditCosts = async () => {
   try {
     return await getCreditCostsFromTable()
   } catch (error) {
-    if (!isMissingTableError(error)) {
-      console.error('Error getting credit costs from credit_settings:', error)
+    if (!isMissingTableError(error) && !isSupabaseQuotaError(error)) {
+      const errorMsg = error?.message || error?.toString() || 'Unknown error'
+      console.error('Error getting credit costs from credit_settings:', errorMsg)
     }
 
     try {
       return await getCreditCostsFromSiteSettings()
     } catch (siteSettingsError) {
-      if (!isMissingTableError(siteSettingsError)) {
-        console.error('Error getting credit costs from site_settings:', siteSettingsError)
+      if (!isMissingTableError(siteSettingsError) && !isSupabaseQuotaError(siteSettingsError)) {
+        const errorMsg = siteSettingsError?.message || siteSettingsError?.toString() || 'Unknown error'
+        console.error('Error getting credit costs from site_settings:', errorMsg)
       }
 
       return { ...DEFAULT_CREDIT_COSTS }
@@ -2268,7 +2284,7 @@ export const saveCreditCosts = async (costs) => {
     await saveCreditCostsToSiteSettings(normalizedCosts)
     return { success: true, error: null }
   } catch (error) {
-    console.error('Error saving credit costs:', error)
+    logAdminError('Error saving credit costs:', error)
     return { success: false, error }
   }
 }
@@ -2280,7 +2296,7 @@ export const getSiteTheme = async () => {
     try {
       theme = await getSiteThemeFromKeyValueSettings()
     } catch (error) {
-      if (!isMissingColumnError(error)) {
+      if (!isMissingColumnError(error) && !isSupabaseQuotaError(error)) {
         console.warn('Unable to read key/value site theme setting:', error)
       }
     }
@@ -2289,7 +2305,7 @@ export const getSiteTheme = async () => {
       try {
         theme = await getSiteThemeFromFlatSettings()
       } catch (error) {
-        if (!isMissingColumnError(error)) {
+        if (!isMissingColumnError(error) && !isSupabaseQuotaError(error)) {
           console.warn('Unable to read flat site theme setting:', error)
         }
       }
@@ -2301,7 +2317,7 @@ export const getSiteTheme = async () => {
     writeLocalJson(SITE_THEME_STORAGE_KEY, normalizedTheme)
     return normalizedTheme
   } catch (error) {
-    console.error('Error getting site theme:', error)
+    logAdminError('Error getting site theme:', error)
     return normalizeSiteTheme(readLocalJson(SITE_THEME_STORAGE_KEY, DEFAULT_SITE_THEME))
   }
 }
@@ -2322,7 +2338,7 @@ export const saveSiteTheme = async (theme) => {
     writeLocalJson(SITE_THEME_STORAGE_KEY, normalizedTheme)
     return { success: true, error: null, theme: normalizedTheme }
   } catch (error) {
-    console.error('Error saving site theme:', error)
+    logAdminError('Error saving site theme:', error)
     writeLocalJson(SITE_THEME_STORAGE_KEY, normalizedTheme)
     return { success: false, error, theme: normalizedTheme }
   }
@@ -2355,7 +2371,7 @@ export const updateUserCredits = async (userId, credits, action = 'set') => {
     if (error) throw error
     return { data, error: null }
   } catch (error) {
-    console.error('Error updating user credits:', error)
+    logAdminError('Error updating user credits:', error)
     return { data: null, error }
   }
 }
@@ -2371,7 +2387,7 @@ export const getAllUsersWithCredits = async () => {
     if (error) throw error
     return { data, error: null }
   } catch (error) {
-    console.error('Error fetching users with credits:', error)
+    logAdminError('Error fetching users with credits:', error)
     return { data: [], error }
   }
 }
@@ -2393,7 +2409,7 @@ export const getSiteSettings = async () => {
     }
     return { data, error: null }
   } catch (error) {
-    console.error('Error fetching site settings:', error)
+    logAdminError('Error fetching site settings:', error)
     return { data: {}, error: null }
   }
 }
@@ -2409,7 +2425,7 @@ export const updateSiteSettings = async (settings) => {
     if (error) throw error
     return { data, error: null }
   } catch (error) {
-    console.error('Error updating site settings:', error)
+    logAdminError('Error updating site settings:', error)
     return { data: null, error }
   }
 }
@@ -2430,7 +2446,7 @@ export const getAutoApproveProperties = async () => {
       if (isMissingTableError(error)) {
         missingTable = true
       }
-      if (!isMissingColumnError(error)) {
+      if (!isMissingColumnError(error) && !isSupabaseQuotaError(error)) {
         console.warn('Unable to read flat auto-approve setting:', error)
       }
     }
@@ -2446,7 +2462,7 @@ export const getAutoApproveProperties = async () => {
         if (isMissingTableError(error)) {
           missingTable = true
         }
-        if (!isMissingColumnError(error)) {
+        if (!isMissingColumnError(error) && !isSupabaseQuotaError(error)) {
           console.warn('Unable to read key/value auto-approve setting:', error)
         }
       }
@@ -2467,7 +2483,7 @@ export const getAutoApproveProperties = async () => {
       }
     }
   } catch (error) {
-    console.error('Error fetching auto-approve setting:', error)
+    logAdminError('Error fetching auto-approve setting:', error)
     const fallbackValue = normalizeAutoApproveProperties(
       readLocalJson(AUTO_APPROVE_STORAGE_KEY, false)
     )
@@ -2516,7 +2532,7 @@ export const toggleAutoApproveProperties = async (enabled) => {
       }
     }
   } catch (error) {
-    console.error('Error toggling auto-approve setting:', error)
+    logAdminError('Error toggling auto-approve setting:', error)
     writeLocalJson(AUTO_APPROVE_STORAGE_KEY, normalizedValue)
     return {
       data: { auto_approve_properties: normalizedValue },

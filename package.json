@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next --webpack",
     "build": "node scripts/static-build.mjs",
-    "build:next": "next build",
+    "build:next": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "preview": "next start"

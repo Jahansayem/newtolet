@@ -146,10 +146,24 @@ const Listdetails = () => {
                     setLists(property);
                 }
             } catch (error) {
-                console.error('Error loading property details:', error);
+                const errorMsg = error?.message || error?.toString() || 'Unknown error occurred';
+
+                // Only log for non-quota errors to reduce console noise
+                if (!errorMsg.includes('temporarily unavailable')) {
+                    console.error('Error loading property details:', errorMsg, { id });
+                }
+
+                // Show user-friendly error messages
+                let displayError = 'Property not found.';
+                if (errorMsg.includes('temporarily unavailable')) {
+                    displayError = 'Service is temporarily unavailable. Please try again later.';
+                } else if (!errorMsg.includes('not found')) {
+                    displayError = `Error loading property. Please try again.`;
+                }
+
                 if (isMounted && !hasCachedProperty) {
                     setLists(null);
-                    setLoadError('Property not found.');
+                    setLoadError(displayError);
                 }
             } finally {
                 if (isMounted) {

@@ -18,6 +18,15 @@ dotenv.config({ path: envPath })
 const supabaseUrl = process.env.VITE_SUPABASE_URL
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY
 
+// Try to get service role key for admin operations
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY
+
+// Use service role if available, otherwise fall back to anon key
+const supabase = createClient(
+  supabaseUrl,
+  serviceRoleKey || supabaseKey
+)
+
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase credentials. Check your .env.local file.')
   process.exit(1)
@@ -54,8 +63,19 @@ const LOCATIONS = [
   { district: 'Chittagong', area: 'Agrabad', lat: 22.3456, lng: 91.8256 },
   { district: 'Chittagong', area: 'Halishahar', lat: 22.3654, lng: 91.8056 },
   { district: 'Chittagong', area: 'Nasirabad', lat: 22.3756, lng: 91.8156 },
+  // Sylhet Division - More locations
   { district: 'Sylhet', area: 'Zindabazar', lat: 24.8875, lng: 91.8833 },
   { district: 'Sylhet', area: 'Ambarkhana', lat: 24.8925, lng: 91.8783 },
+  { district: 'Sylhet', area: 'Akhalia', lat: 24.9050, lng: 91.8700 },
+  { district: 'Sylhet', area: 'Kumarpara', lat: 24.8800, lng: 91.8750 },
+  { district: 'Sylhet', area: 'Chowhatta', lat: 24.8950, lng: 91.8800 },
+  { district: 'Sylhet', area: 'Mirabazar', lat: 24.8700, lng: 91.8900 },
+  { district: 'Sylhet', area: ' Shibganj', lat: 24.8650, lng: 91.8600 },
+  { district: 'Sylhet', area: 'Tilagarh', lat: 24.9100, lng: 91.8850 },
+  { district: 'Sylhet', area: 'Baluchor', lat: 24.8500, lng: 91.8950 },
+  { district: 'Moulvibazar', area: 'Sadar', lat: 24.4800, lng: 91.7700 },
+  { district: 'Habiganj', area: 'Sadar', lat: 24.3800, lng: 91.4100 },
+  { district: 'Sunamganj', area: 'Sadar', lat: 24.9100, lng: 91.3900 },
   { district: 'Rajshahi', area: 'Sadar', lat: 24.3733, lng: 88.5861 },
   { district: 'Khulna', area: 'Sadar', lat: 22.8206, lng: 89.5526 },
   { district: 'Bogra', area: 'Sadar', lat: 24.8516, lng: 89.3702 },
@@ -114,6 +134,10 @@ function generateProperty(index) {
     basePrice = 25000
   } else if (location.district === 'Chittagong') {
     basePrice = 20000
+  } else if (location.district === 'Sylhet' && ['Zindabazar', 'Ambarkhana', 'Akhalia'].includes(location.area)) {
+    basePrice = 22000
+  } else if (location.district === 'Sylhet') {
+    basePrice = 18000
   }
 
   if (category === 'Office' || category === 'Shop') {
@@ -174,46 +198,33 @@ function generateAllProperties(count = 52) {
 
 // Get or create admin user for properties
 async function getOrCreateAdminUser() {
-  // First try to get an existing admin user
-  const { data: existingAdmin, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('is_admin', true)
+  // Try to get any existing user from properties table
+  const { data: existingProperty } = await supabase
+    .from('properties')
+    .select('user_id')
     .limit(1)
     .single()
 
-  if (existingAdmin) {
-    console.log('Using existing admin user:', existingAdmin.email)
-    return existingAdmin.id
+  if (existingProperty?.user_id) {
+    console.log('Using existing user_id from properties:', existingProperty.user_id)
+    return existingProperty.user_id
   }
 
-  // Create a demo admin user (you should change these credentials)
-  const demoEmail = 'admin@demo.com'
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email: demoEmail,
-    password: 'Admin123456',
-  })
-
-  if (authError && !authError.message.includes('already registered')) {
-    console.error('Error creating admin user:', authError)
-    return null
-  }
-
-  // Get or create user record
-  const { data: userRecord } = await supabase
+  // Try to list users
+  const { data: usersList, error: listError } = await supabase
     .from('users')
-    .upsert({
-      id: authData.user?.id || crypto.randomUUID(),
-      email: demoEmail,
-      name: 'Demo Admin',
-      is_admin: true,
-      is_active: true,
-    })
-    .select()
-    .single()
+    .select('id, email')
+    .limit(1)
 
-  console.log('Created admin user:', demoEmail)
-  return userRecord.id
+  if (!listError && usersList && usersList.length > 0) {
+    console.log('Using existing user:', usersList[0].email || usersList[0].id)
+    return usersList[0].id
+  }
+
+  // Generate a UUID for the user - RLS might allow properties with valid UUID
+  const userId = crypto.randomUUID()
+  console.log('Generated user_id (properties may need user to exist):', userId)
+  return userId
 }
 
 // Insert properties into database

@@ -1,14 +1,15 @@
 'use client'
 
+import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BiBuildings, BiCoin } from 'react-icons/bi'
+import { BiBuildings, BiCoin, BiDollarCircle } from 'react-icons/bi'
 import { CgMenuGridO } from 'react-icons/cg'
-import { FiHeart, FiHome, FiMessageSquare, FiPhone, FiPlus } from 'react-icons/fi'
-import { Link } from '../../src/lib/react-router-dom.jsx'
-import { buildPageHref, getRoutePage } from '../../src/lib/routePaths.js'
+import { FiHeart, FiHome, FiMessageSquare, FiPhone, FiPlus, FiSearch, FiUser } from 'react-icons/fi'
+import { buildDashboardHref, buildPageHref, getRoutePage } from '../../src/lib/routePaths.js'
+import { OPEN_SEARCH_OVERLAY_EVENT } from '../../src/lib/homeScrollChrome.js'
 
-const PHONE_NUMBER = '+8801707346634'
+const PHONE_NUMBER = '+8809649551551'
 const SAVED_PROPERTIES_EVENT = 'saved-properties-updated'
 
 const menuItems = [
@@ -152,6 +153,13 @@ const FloatingQuickRail = () => {
 
   const quickActions = useMemo(
     () => [
+      {
+        key: 'add-property',
+        href: buildPageHref('addproperty'),
+        label: 'Add Property',
+        icon: FiPlus,
+        isActive: false,
+      },
       // {
       //   key: 'home',
       //   href: buildPageHref(),
@@ -161,21 +169,15 @@ const FloatingQuickRail = () => {
       // },
       ...(!page
         ? [
-            {
-              key: 'add-property',
-              href: buildPageHref('addproperty'),
-              label: 'Add Property',
-              icon: FiPlus,
-              isActive: false,
-            },
-            {
-              key: 'order-home',
-              href: buildPageHref('my-orders'),
-              label: 'Order Home',
-              icon: FiHome,
-              isActive: false,
-            },
-          ]
+
+          {
+            key: 'order-home',
+            href: buildPageHref('my-orders'),
+            label: 'Order Home',
+            icon: FiHome,
+            isActive: false,
+          },
+        ]
         : []),
       {
         key: 'properties',
@@ -205,14 +207,14 @@ const FloatingQuickRail = () => {
   )
 
   const railButtonClass = (active) =>
-    `relative flex h-11 w-11 items-center justify-center rounded-full border text-base shadow-md transition-all duration-200 md:h-12 md:w-12 ${
-      active
-        ? 'border-[#1E73B8] bg-blue-50 text-[#1E73B8] shadow-lg'
-        : 'border-[#1E73B8]/45 bg-white/98 text-[#1E73B8] hover:-translate-y-0.5 hover:shadow-lg'
+    `relative flex h-11 w-11 items-center justify-center rounded-full border text-base shadow-md transition-all duration-200 md:h-12 md:w-12 ${active
+      ? 'border-[#1E73B8] bg-blue-50 text-[#1E73B8] shadow-lg'
+      : 'border-[#1E73B8]/45 bg-white/98 text-[#1E73B8] hover:-translate-y-0.5 hover:shadow-lg'
     }`
 
   return (
     <>
+      {/* Desktop: Right side floating rail */}
       <div
         ref={desktopRailRef}
         className="fixed bottom-6 right-3 z-40 hidden flex-col gap-3 sm:flex md:right-4 lg:right-6"
@@ -279,9 +281,144 @@ const FloatingQuickRail = () => {
             </div>
           </div>
         ) : null}
+
+        {/* Earn Money - Desktop */}
+        <Link
+          href="/earnmoney"
+          aria-label="Earn Money"
+          className={`relative flex h-11 w-11 items-center justify-center rounded-full border text-base shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+            page === 'earnmoney'
+              ? 'border-[#1E73B8] bg-blue-50 text-[#1E73B8] shadow-lg'
+              : 'border-[#1E73B8]/45 bg-white/98 text-[#1E73B8]'
+          }`}
+        >
+          <BiDollarCircle />
+        </Link>
       </div>
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 px-3 sm:hidden">
+      {/* Mobile: Bottom floating bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white px-2 py-2 sm:hidden">
+        <div className="mx-auto flex items-center justify-around">
+          {/* Property */}
+          <Link
+            href={buildPageHref('propertylist2')}
+            className="flex flex-col items-center gap-1 px-2 py-1"
+          >
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full transition ${['propertylist', 'propertylist2', 'listdetails'].includes(page)
+                ? 'bg-[#1E73B8] text-white'
+                : 'bg-gray-100 text-gray-600'
+              }`}>
+              <BiBuildings className="text-lg" />
+            </div>
+            <span className={`text-[10px] font-medium ${['propertylist', 'propertylist2', 'listdetails'].includes(page)
+                ? 'text-[#1E73B8]'
+                : 'text-gray-600'
+              }`}>Property</span>
+          </Link>
+
+          {/* Order Home */}
+          <Link
+            href={buildPageHref('orderhome')}
+            className="flex flex-col items-center gap-1 px-2 py-1"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-600 transition">
+              <FiHome className="text-lg" />
+            </div>
+            <span className="text-[10px] font-medium text-gray-600">Order Home</span>
+          </Link>
+
+          {/* Add Property */}
+          <Link
+            href={buildPageHref('addproperty')}
+            className="flex flex-col items-center gap-1 px-2 py-1"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#1E73B8] text-white shadow-lg transition">
+              <FiPlus className="text-xl font-bold" />
+            </div>
+            <span className="text-[11px] font-bold text-[#1E73B8]">Add Property</span>
+          </Link>
+
+          {/* Buy Credits */}
+          <Link
+            href="/book/buy-credits"
+            className="flex flex-col items-center gap-1 px-2 py-1"
+          >
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full transition ${page === 'book-buy-credits'
+                ? 'bg-[#1E73B8] text-white'
+                : 'bg-gray-100 text-gray-600'
+              }`}>
+              <BiCoin className="text-lg" />
+            </div>
+            <span className={`text-[10px] font-medium ${page === 'book-buy-credits'
+                ? 'text-[#1E73B8]'
+                : 'text-gray-600'
+              }`}>Buy Credits</span>
+          </Link>
+
+          {/* Profile */}
+          <Link
+            href={buildDashboardHref('profile')}
+            className="flex flex-col items-center gap-1 px-2 py-1"
+          >
+            <div className={`flex h-10 w-10 items-center justify-center rounded-full transition ${page === 'dashboard' ? 'bg-[#1E73B8] text-white' : 'bg-gray-100 text-gray-600'
+              }`}>
+              <FiUser className="text-lg" />
+            </div>
+            <span className={`text-[10px] font-medium ${page === 'dashboard'
+                ? 'text-[#1E73B8]'
+                : 'text-gray-600'
+              }`}>Profile</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Mobile: Right side floating rail (Search, Saved, Call) */}
+      <div className="fixed bottom-30 right-3 z-40 flex flex-col gap-3 sm:hidden">
+        {/* Search */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent(OPEN_SEARCH_OVERLAY_EVENT))}
+          aria-label="Open search"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#1E73B8]/45 bg-white/98 text-[#1E73B8] shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+        >
+          <FiSearch className="text-base" />
+        </button>
+
+        {/* Saved */}
+        <Link
+          href={buildDashboardHref('saved')}
+          className="relative flex h-11 w-11 items-center justify-center rounded-full border border-[#1E73B8]/45 bg-white/98 text-[#1E73B8] shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+        >
+          <FiHeart className="text-base" />
+          {savedCount > 0 ? (
+            <span className="absolute -right-1 -top-1 min-h-5 min-w-5 rounded-full bg-[#1E73B8] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              {savedCount > 99 ? '99+' : savedCount}
+            </span>
+          ) : null}
+        </Link>
+
+        {/* Call */}
+        <a
+          href={`tel:${PHONE_NUMBER}`}
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-[#1E73B8]/45 bg-white/98 text-[#1E73B8] shadow-md transition hover:-translate-y-0.5 hover:shadow-lg"
+        >
+          <FiPhone className="text-base" />
+        </a>
+
+        {/* Earn Money - Mobile */}
+        <Link
+          href="/earnmoney"
+          className={`flex h-11 w-11 items-center justify-center rounded-full border shadow-md transition hover:-translate-y-0.5 hover:shadow-lg ${
+            page === 'earnmoney'
+              ? 'border-[#1E73B8] bg-blue-50 text-[#1E73B8]'
+              : 'border-[#1E73B8]/45 bg-white/98 text-[#1E73B8]'
+          }`}
+        >
+          <BiDollarCircle className="text-base" />
+        </Link>
+      </div>
+
+      {/* <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 px-3 sm:hidden">
         <div ref={mobileRailRef} className="pointer-events-auto flex justify-end">
           {menuOpen ? (
             <>
@@ -363,7 +500,7 @@ const FloatingQuickRail = () => {
             )}
           </div>
         </div>
-      </div>
+      </div> */}
     </>
   )
 }

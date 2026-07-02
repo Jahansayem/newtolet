@@ -9,7 +9,6 @@ import HomePageSkeleton from './HomePageSkeleton.jsx'
 import { getRoutePage } from '../../src/lib/routePaths.js'
 
 const STANDALONE_PAGES = new Set([
-  'dashboard',
   'admin',
   'admin-dashboard',
   'book-buy-credits',
@@ -18,8 +17,6 @@ const STANDALONE_PAGES = new Set([
   'registration',
   'forgot-password',
   'reset-password',
-  'my-orders',
-  'my-properties',
 ])
 
 // Inner component that uses useSearchParams - wrapped in Suspense

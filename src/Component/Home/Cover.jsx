@@ -7,6 +7,7 @@ import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import { getActiveCoverPhotos, getActiveCoverPhotosCacheKey } from '../../services/coverPhotoService';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
+import { COVER_FRAME_CLASSES } from './coverFrame';
 import './Cover.css';
 
 const COVER_PHOTO_LIMIT = 6;
@@ -90,7 +91,7 @@ const Cover = () => {
     if (loading) {
         return (
             <div className='w-full animate-fade-in-up'>
-                <div className="site-card-strong flex h-[180px] w-full items-center justify-center overflow-hidden rounded-[5px] bg-gray-200 md:h-[350px] xl:h-[400px]">
+                <div className={`site-card-strong flex items-center justify-center overflow-hidden rounded-[5px] bg-gray-200 ${COVER_FRAME_CLASSES}`}>
                     <div className="text-gray-500 text-sm md:text-base">Loading cover photos...</div>
                 </div>
             </div>
@@ -101,7 +102,7 @@ const Cover = () => {
     if (slides.length === 0) {
         return (
             <div className='w-full animate-fade-in-up'>
-                <div className="site-card-strong relative flex h-[180px] w-full items-end overflow-hidden rounded-none bg-gradient-to-r from-[#1E73B8] to-[#1665a0] px-5 py-6 shadow-lg sm:px-8 sm:py-8 md:h-[350px] xl:h-[400px]">
+                <div className={`site-card-strong relative flex items-end overflow-hidden rounded-none bg-gradient-to-r from-[#1E73B8] to-[#1665a0] px-5 py-6 shadow-lg sm:px-8 sm:py-8 ${COVER_FRAME_CLASSES}`}>
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%),linear-gradient(135deg,rgba(30,115,184,0.98),rgba(11,37,64,0.92))]" />
                     <div className="relative max-w-2xl text-white">
                         <h2 className="text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">Welcome to NewTolet.Com</h2>
@@ -131,7 +132,7 @@ const Cover = () => {
                     }}
                     autoplay={{ delay: 5000, disableOnInteraction: false }}
                     loop
-                    className="site-card-strong relative h-[180px] w-full overflow-hidden rounded-[5px] bg-slate-100 shadow-lg group md:h-[350px] xl:h-[400px]"
+                    className={`site-card-strong relative overflow-hidden rounded-[5px] bg-slate-100 shadow-lg group ${COVER_FRAME_CLASSES}`}
                 >
                     {slides.map((slide, index) => {
                         return (

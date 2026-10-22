@@ -1,3 +1,5 @@
+import { COVER_FRAME_CLASSES } from '../../src/Component/Home/coverFrame.js'
+
 const HomePageSkeleton = () => (
   <div className="min-h-screen bg-gray-50">
     <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/95">
@@ -22,7 +24,7 @@ const HomePageSkeleton = () => (
       </div>
 
       <div className="mb-10 md:mb-12">
-        <div className="site-card-strong h-[260px] w-full animate-pulse rounded-[5px] bg-slate-200 sm:h-[180px] md:h-[350px] xl:h-[400px]" />
+        <div className={`site-card-strong animate-pulse rounded-[5px] bg-slate-200 ${COVER_FRAME_CLASSES}`} />
         <div className="mx-auto mt-6 h-4 w-64 max-w-full animate-pulse rounded-full bg-slate-200" />
       </div>
 

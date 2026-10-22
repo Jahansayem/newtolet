@@ -1,0 +1,5 @@
+# These files are executed on the Linux VPS. CRLF line endings would make bash
+# fail with "\r: command not found" and nginx reject the config, so keep LF
+# regardless of the checkout platform or core.autocrlf.
+*.sh text eol=lf
+*.conf text eol=lf

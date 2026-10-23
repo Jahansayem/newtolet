@@ -7,6 +7,7 @@ import {
   getLocationOptions,
   updateSearchFilters,
 } from './propertySearch'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const ModalSearchForm = ({
   isOpen = false,
@@ -17,6 +18,7 @@ const ModalSearchForm = ({
   const [filters, setFilters] = useState({ ...DEFAULT_SEARCH_FILTERS, ...initialFilters })
   const [selectedCategory, setSelectedCategory] = useState(filters.category || 'All')
 
+  const { t, tv } = useLanguage()
   const locationOptions = useMemo(() => getLocationOptions(filters), [filters])
 
   const handleFieldChange = useCallback((field, value) => {
@@ -49,12 +51,12 @@ const ModalSearchForm = ({
       <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-          <h2 className="text-lg font-bold text-gray-800">Property search</h2>
+          <h2 className="text-lg font-bold text-gray-800">{t('search.overlay.title')}</h2>
           <button
             type="button"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Close search"
+            aria-label={t('search.overlay.close')}
           >
             <RxCross2 className="text-xl" />
           </button>
@@ -68,7 +70,7 @@ const ModalSearchForm = ({
               type="text"
               value={filters.search}
               onChange={(e) => handleFieldChange('search', e.target.value)}
-              placeholder="Search by location"
+              placeholder={t('search.overlay.locationPlaceholder')}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
@@ -79,7 +81,7 @@ const ModalSearchForm = ({
               type="text"
               value={filters.search}
               onChange={(e) => handleFieldChange('search', e.target.value)}
-              placeholder="Property ID.."
+              placeholder={t('search.overlay.propertyIdPlaceholder')}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 pr-10 text-sm text-gray-700 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             <FiSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -88,13 +90,13 @@ const ModalSearchForm = ({
           {/* OR Divider */}
           <div className="relative flex items-center">
             <div className="flex-1 border-t border-gray-300" />
-            <span className="mx-4 text-sm text-gray-500">OR</span>
+            <span className="mx-4 text-sm text-gray-500">{t('search.overlay.or')}</span>
             <div className="flex-1 border-t border-gray-300" />
           </div>
 
           {/* Category Section */}
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Category</label>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">{t('search.form.category')}</label>
             <div className="flex flex-wrap gap-2">
               {HOME_CATEGORIES.map((category) => (
                 <button
@@ -107,7 +109,7 @@ const ModalSearchForm = ({
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
-                  {category}
+                  {tv('categories', category)}
                 </button>
               ))}
             </div>
@@ -115,16 +117,16 @@ const ModalSearchForm = ({
 
           {/* Division Dropdown */}
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Division</label>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">{t('search.form.division')}</label>
             <select
               value={filters.division}
               onChange={(e) => handleFieldChange('division', e.target.value)}
               className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
             >
-              <option value="">Select division</option>
+              <option value="">{t('search.overlay.selectDivision')}</option>
               {locationOptions.divisions.map((division) => (
                 <option key={division} value={division}>
-                  {division}
+                  {tv('divisions', division)}
                 </option>
               ))}
             </select>
@@ -132,7 +134,7 @@ const ModalSearchForm = ({
 
           {/* District Dropdown */}
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-700">District</label>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">{t('search.form.district')}</label>
             <select
               value={filters.district}
               onChange={(e) => handleFieldChange('district', e.target.value)}
@@ -140,7 +142,7 @@ const ModalSearchForm = ({
               className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
             >
               <option value="">
-                {isDistrictDisabled ? 'Select division first' : 'Select district'}
+                {isDistrictDisabled ? t('search.overlay.selectDivisionFirst') : t('search.overlay.selectDistrict')}
               </option>
               {locationOptions.districts.map((district) => (
                 <option key={district} value={district}>
@@ -152,7 +154,7 @@ const ModalSearchForm = ({
 
           {/* Area/Thana Dropdown */}
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Area / Thana :</label>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">{t('search.overlay.areaThanaWithColon')}</label>
             <select
               value={filters.upazilla}
               onChange={(e) => handleFieldChange('upazilla', e.target.value)}
@@ -160,7 +162,7 @@ const ModalSearchForm = ({
               className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-sm text-gray-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
             >
               <option value="">
-                {isAreaDisabled ? 'Select division first' : 'Select area'}
+                {isAreaDisabled ? t('search.overlay.selectDivisionFirst') : t('search.overlay.selectArea')}
               </option>
               {locationOptions.upazillas.map((upazilla) => (
                 <option key={upazilla} value={upazilla}>
@@ -177,13 +179,13 @@ const ModalSearchForm = ({
               onClick={handleCancel}
               className="rounded-lg bg-gray-200 px-6 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-300"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
             >
-              Search
+              {t('common.search')}
             </button>
           </div>
         </form>

@@ -1,14 +1,42 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
 import { FaGift } from 'react-icons/fa';
+import { FcGoogle } from 'react-icons/fc';
 import { getPublicReferralCandidate } from '../../services/referralService';
+import { signInWithGoogle } from '../../services/authService';
+import { buildDashboardHref, buildPageHref } from '../../lib/routePaths.js';
+import { useAuth } from '../../hooks/useAuth';
+import { useLanguage } from '../../i18n/useLanguage';
+import LanguageToggle from '../../components/LanguageToggle.jsx';
+import PasswordInput from './PasswordInput.jsx';
 import './Login.css';
 
+const getOAuthErrorMessage = (locationSearch = '', locationHash = '', t) => {
+    const params = new URLSearchParams(locationSearch);
+    const hashParams = new URLSearchParams(locationHash.replace(/^#/, ''));
+    const error = params.get('error') || hashParams.get('error');
+    const description = params.get('error_description') || hashParams.get('error_description');
+
+    if (!error && !description) {
+        return '';
+    }
+
+    if (description?.toLowerCase().includes('already') || description?.toLowerCase().includes('identity')) {
+        return t('auth.google.linkFailed');
+    }
+
+    return description || t('auth.google.signUpFailed');
+};
+
 const Registration = () => {
+    const { t } = useLanguage();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
+    const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
     const [formData, setFormData] = useState({
         name: '',
@@ -22,6 +50,8 @@ const Registration = () => {
     const [referralPreviewError, setReferralPreviewError] = useState('');
     const isMountedRef = useRef(true);
     const redirectTimerRef = useRef(null);
+    const hasNavigatedRef = useRef(false);
+    const redirectTarget = buildDashboardHref();
 
     // Cleanup on unmount
     useEffect(() => {
@@ -33,6 +63,32 @@ const Registration = () => {
             }
         };
     }, []);
+
+    useEffect(() => {
+        if (!isMountedRef.current) return;
+
+        const oauthError = getOAuthErrorMessage(location.search, location.hash, t);
+
+        if (!oauthError) {
+            return;
+        }
+
+        setMessage({ type: 'error', text: oauthError });
+        setIsGoogleLoading(false);
+
+        if (typeof window !== 'undefined') {
+            window.history.replaceState({}, '', buildPageHref('registration'));
+        }
+    }, [location.search, location.hash, t]);
+
+    useEffect(() => {
+        if (hasNavigatedRef.current || isAuthLoading || !isAuthenticated) {
+            return;
+        }
+
+        hasNavigatedRef.current = true;
+        navigate(redirectTarget, { replace: true });
+    }, [isAuthLoading, isAuthenticated, navigate, redirectTarget]);
 
     // Check for referral link in URL on mount
     useEffect(() => {
@@ -61,7 +117,7 @@ const Registration = () => {
                 setReferralPreviewError('');
             } else if (isMountedRef.current) {
                 setReferrerName('');
-                setReferralPreviewError(referralInput.length >= 4 ? 'Referral username not found.' : '');
+                setReferralPreviewError(referralInput.length >= 4 ? t('auth.register.referral.notFound') : '');
             }
         } catch (error) {
             console.error('Error validating referral input:', error);
@@ -85,31 +141,31 @@ const Registration = () => {
         const newErrors = {};
 
         if (!formData.name.trim()) {
-            newErrors.name = 'Name is required';
+            newErrors.name = t('auth.validation.nameRequired');
         }
 
         if (!formData.email.trim()) {
-            newErrors.email = 'Email is required';
+            newErrors.email = t('auth.validation.emailRequired');
         } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email)) {
-            newErrors.email = 'Invalid email address';
+            newErrors.email = t('auth.validation.emailInvalid');
         }
 
         if (!formData.phone.trim()) {
-            newErrors.phone = 'Phone number is required';
+            newErrors.phone = t('auth.validation.phoneRequired');
         } else if (!/^[0-9]{10,15}$/.test(formData.phone.replace(/[\s-]/g, ''))) {
-            newErrors.phone = 'Invalid phone number (10-15 digits)';
+            newErrors.phone = t('auth.validation.phoneInvalid');
         }
 
         if (!formData.password) {
-            newErrors.password = 'Password is required';
+            newErrors.password = t('auth.validation.passwordRequired');
         } else if (formData.password.length < 6) {
-            newErrors.password = 'Password must be at least 6 characters';
+            newErrors.password = t('auth.validation.passwordMin');
         } else if (formData.password.length > 20) {
-            newErrors.password = 'Password must be less than 20 characters';
+            newErrors.password = t('auth.validation.passwordMax');
         }
 
         if (formData.referralCode.trim() && !referrerName) {
-            newErrors.referralCode = 'Please enter a valid referral username or code.';
+            newErrors.referralCode = t('auth.validation.referralInvalid');
         }
 
         setErrors(newErrors);
@@ -151,7 +207,7 @@ const Registration = () => {
             }
 
             if (!data.user) {
-                throw new Error('Registration failed - no user created');
+                throw new Error(t('auth.register.messages.noUser'));
             }
 
             // Check if email confirmation is required
@@ -159,7 +215,7 @@ const Registration = () => {
                 if (isMountedRef.current) {
                     setMessage({
                         type: 'error',
-                        text: 'This email is already registered. Please login or use a different email.'
+                        text: t('auth.register.messages.alreadyRegistered')
                     });
                 }
                 return;
@@ -168,7 +224,7 @@ const Registration = () => {
             if (isMountedRef.current) {
                 setMessage({
                     type: 'success',
-                    text: 'Registration successful! Please verify your email. If you used a referral username, bonus rules will apply automatically after paid credit purchases.'
+                    text: t('auth.register.messages.success')
                 });
 
                 setFormData({ name: '', email: '', phone: '', password: '', referralCode: '' });
@@ -186,13 +242,13 @@ const Registration = () => {
         } catch (error) {
             console.error('Registration error:', error);
 
-            let errorMessage = 'Registration failed. Please try again.';
+            let errorMessage = t('auth.register.messages.failed');
 
             if (error.message) {
                 if (error.message.includes('already registered')) {
-                    errorMessage = 'This email is already registered. Please login.';
+                    errorMessage = t('auth.register.messages.alreadyRegisteredShort');
                 } else if (error.message.includes('valid email')) {
-                    errorMessage = 'Please enter a valid email address.';
+                    errorMessage = t('auth.register.messages.invalidEmail');
                 } else if (error.message.includes('Password')) {
                     errorMessage = error.message;
                 } else {
@@ -207,6 +263,24 @@ const Registration = () => {
             if (isMountedRef.current) {
                 setIsLoading(false);
             }
+        }
+    };
+
+    const handleGoogleSignUp = async () => {
+        setIsGoogleLoading(true);
+        setMessage({ type: '', text: '' });
+
+        const redirectUrl = new URL(buildPageHref('registration'), window.location.origin);
+        redirectUrl.searchParams.set('oauth', 'google');
+        redirectUrl.searchParams.set('next', redirectTarget);
+
+        const result = await signInWithGoogle({
+            redirectTo: redirectUrl.toString(),
+        });
+
+        if (!result.success && isMountedRef.current) {
+            setMessage({ type: 'error', text: result.error });
+            setIsGoogleLoading(false);
         }
     };
 
@@ -233,17 +307,20 @@ const Registration = () => {
             </div>
 
             {/* Geometric Shapes */}
-            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-[#1E73B8] opacity-20 rotate-45 animate-spin-slow'></div>
-            <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
+            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-brand opacity-20 rotate-45 animate-spin-slow'></div>
+            <div className='absolute bottom-32 left-16 w-16 h-16 bg-brand opacity-10 rounded-full animate-pulse-slow'></div>
             <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
             <form onSubmit={handleSubmit} className='auth-form-shell'>
                 <div className='auth-card auth-card-wide login-card-border text-sm'>
-                <p className='auth-title'>Registration Here</p>
-                <p className='auth-subtitle'>Create your account to save properties, manage listings, and unlock contact details faster.</p>
+                <div className='flex w-full justify-end'>
+                    <LanguageToggle size='sm' />
+                </div>
+                <h1 className='auth-title'>{t('auth.register.title')}</h1>
+                <p className='auth-subtitle'>{t('auth.register.subtitle')}</p>
 
                 {message.text && (
-                    <div className={`auth-message ${
+                    <div role={message.type === 'success' ? 'status' : 'alert'} className={`auth-message ${
                         message.type === 'success'
                             ? 'auth-message-success'
                             : 'auth-message-error'
@@ -253,80 +330,97 @@ const Registration = () => {
                 )}
 
                 <div className='w-full'>
-                    <p className='auth-label'>Full Name</p>
+                    <label htmlFor='register-name' className='auth-label'>{t('auth.fields.fullName')}</label>
                     <input
+                        id='register-name'
+                        autoComplete='name'
+                        aria-invalid={errors.name ? 'true' : undefined}
+                        aria-describedby={errors.name ? 'register-name-error' : undefined}
                         type="text"
                         name="name"
                         value={formData.name}
                         onChange={handleChange}
-                        placeholder='Full Name'
+                        placeholder={t('auth.placeholders.fullName')}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.name && <p className='text-red-700 text-xs'>{errors.name}</p>}
+                    {errors.name && <p id='register-name-error' role='alert' className='text-red-700 text-xs'>{errors.name}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='auth-label'>Email</p>
+                    <label htmlFor='register-email' className='auth-label'>{t('auth.fields.email')}</label>
                     <input
+                        id='register-email'
+                        autoComplete='email'
+                        aria-invalid={errors.email ? 'true' : undefined}
+                        aria-describedby={errors.email ? 'register-email-error' : undefined}
                         type="email"
                         name="email"
                         value={formData.email}
                         onChange={handleChange}
-                        placeholder='Email'
+                        placeholder={t('auth.placeholders.email')}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.email && <p className='text-red-700 text-xs'>{errors.email}</p>}
+                    {errors.email && <p id='register-email-error' role='alert' className='text-red-700 text-xs'>{errors.email}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='auth-label'>Phone Number</p>
+                    <label htmlFor='register-phone' className='auth-label'>{t('auth.fields.phone')}</label>
                     <input
+                        id='register-phone'
+                        autoComplete='tel'
+                        inputMode='tel'
+                        aria-invalid={errors.phone ? 'true' : undefined}
+                        aria-describedby={errors.phone ? 'register-phone-error' : undefined}
                         type="tel"
                         name="phone"
                         value={formData.phone}
                         onChange={handleChange}
-                        placeholder='Phone Number (e.g., 01712345678)'
+                        placeholder={t('auth.placeholders.phone')}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.phone && <p className='text-red-700 text-xs'>{errors.phone}</p>}
+                    {errors.phone && <p id='register-phone-error' role='alert' className='text-red-700 text-xs'>{errors.phone}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='auth-label'>Password</p>
-                    <input
-                        type="password"
+                    <label htmlFor='register-password' className='auth-label'>{t('auth.fields.password')}</label>
+                    <PasswordInput
+                        id='register-password'
+                        autoComplete='new-password'
+                        aria-invalid={errors.password ? 'true' : undefined}
+                        aria-describedby={errors.password ? 'register-password-error' : undefined}
                         name="password"
                         value={formData.password}
                         onChange={handleChange}
-                        placeholder="Password (6-20 characters)"
+                        placeholder={t('auth.placeholders.passwordRange')}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.password && <p className='text-red-700 text-xs'>{errors.password}</p>}
+                    {errors.password && <p id='register-password-error' role='alert' className='text-red-700 text-xs'>{errors.password}</p>}
                 </div>
 
                 {/* Referral Field */}
                 <div className='w-full'>
-                    <p className='auth-label flex items-center gap-2'>
-                        <FaGift className='text-green-500' />
-                        Referral Username or Code (Optional)
-                    </p>
+                    <label htmlFor='register-referral' className='auth-label flex items-center gap-2'>
+                        <FaGift className='text-green-500' aria-hidden='true' />
+                        {t('auth.register.referral.label')}
+                    </label>
                     <input
+                        id='register-referral'
                         type="text"
                         name="referralCode"
                         value={formData.referralCode}
                         onChange={handleReferralCodeChange}
-                        placeholder='Enter referral username or legacy code'
+                        placeholder={t('auth.placeholders.referral')}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                         maxLength={32}
                     />
                     {referrerName && (
                         <p className='text-green-600 text-xs flex items-center gap-1'>
-                            <FaGift /> Referred by: {referrerName}
+                            <FaGift /> {t('auth.register.referral.referredBy', { name: referrerName })}
                         </p>
                     )}
                     {errors.referralCode && (
@@ -336,22 +430,38 @@ const Registration = () => {
                         <p className='text-red-600 text-xs'>{referralPreviewError}</p>
                     )}
                     <p className='text-gray-400 text-xs'>
-                        Referred users can receive bonus credits on paid purchases, and referrers earn commission automatically.
+                        {t('auth.register.referral.hint')}
                     </p>
                 </div>
 
                 <button
                     type="submit"
                     className='auth-submit disabled:cursor-not-allowed disabled:opacity-50'
-                    disabled={isLoading}
+                    disabled={isLoading || isGoogleLoading}
                 >
-                    {isLoading ? "Registering..." : "Register"}
+                    {isLoading ? t('auth.register.submitting') : t('auth.register.submit')}
+                </button>
+
+                <div className='auth-divider' aria-hidden='true'>
+                    <span></span>
+                    <p>{t('auth.or')}</p>
+                    <span></span>
+                </div>
+
+                <button
+                    type='button'
+                    className='auth-google-button'
+                    onClick={handleGoogleSignUp}
+                    disabled={isLoading || isGoogleLoading}
+                >
+                    <FcGoogle className='auth-google-icon' aria-hidden='true' />
+                    <span>{isGoogleLoading ? t('auth.google.connecting') : t('auth.google.continue')}</span>
                 </button>
 
                 <p className='w-full py-2 text-center'>
-                    Already have an account?{' '}
-                    <Link to='/login' className='text-[#1E73B8] font-medium cursor-pointer hover:underline'>
-                        Login
+                    {t('auth.register.haveAccount')}{' '}
+                    <Link to='/login' className='text-brand font-medium cursor-pointer hover:underline'>
+                        {t('auth.register.loginLink')}
                     </Link>
                 </p>
             </div>

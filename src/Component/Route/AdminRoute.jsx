@@ -50,7 +50,7 @@ const AdminRoute = ({ children }) => {
                     </p>
                     <button
                         onClick={() => { window.location.href = buildPageHref() }}
-                        className="bg-[#1E73B8] text-white px-6 py-2 rounded-lg hover:bg-[#1665a0] transition-colors"
+                        className="bg-brand text-white px-6 py-2 rounded-lg hover:bg-brand-hover transition-colors"
                     >
                         Go to Homepage
                     </button>

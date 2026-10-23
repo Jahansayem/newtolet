@@ -1,20 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import {
     FiMapPin,
     FiPhone,
     FiHome,
-    FiUsers,
     FiLayers,
     FiMaximize2,
-    FiArrowLeft,
     FiHeart,
     FiShare2,
     FiChevronLeft,
     FiChevronRight,
     FiLock,
-    FiUser
+    FiCopy,
+    FiCheck,
+    FiSun,
+    FiCoffee,
+    FiGrid,
+    FiShield,
 } from 'react-icons/fi';
+import { LuBath, LuBedDouble } from 'react-icons/lu';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -33,12 +37,43 @@ import {
     SAVED_PROPERTIES_BROWSER_EVENT,
 } from '../../services/userPanelService';
 import RentDisplay from '../../components/RentDisplay';
+import { PropertyThumbnailImage } from '../../components/PropertyCardMedia';
+import Dialog from '../../components/ui/Dialog';
 import { isRentNegotiable } from '../../utils/rentDisplay';
+import { getPropertyIdNumber } from '../../utils/propertyDisplaySerial';
+import { useLanguage } from '../../i18n/useLanguage';
+import { translate, readStoredLanguage } from '../../i18n';
+
+const hasValue = (value) => value !== null && value !== undefined && value !== '';
+
+const DetailSkeleton = () => (
+    <div className="site-shell py-6" aria-busy="true" aria-hidden="true">
+        <div className="mb-6 aspect-[4/3] w-full animate-pulse rounded-2xl bg-slate-200 sm:aspect-video sm:max-h-[480px]" />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+            <div className="space-y-6">
+                <div className="ui-card animate-pulse space-y-4 p-6">
+                    <div className="h-8 w-2/3 rounded-md bg-slate-200" />
+                    <div className="h-4 w-1/2 rounded-md bg-slate-200" />
+                    <div className="h-10 w-48 rounded-md bg-slate-200" />
+                    <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
+                        {Array.from({ length: 4 }).map((_, index) => (
+                            <div key={index} className="h-20 rounded-xl bg-slate-200" />
+                        ))}
+                    </div>
+                </div>
+                <div className="ui-card h-40 animate-pulse p-6" />
+            </div>
+            <div className="ui-card h-80 animate-pulse p-6" />
+        </div>
+    </div>
+);
 
 const Listdetails = () => {
     const [searchParams] = useSearchParams();
     const id = searchParams.get('id') || '';
-    const { user, session, isLoading: isAuthLoading, updateUserInContext } = useAuth();
+    const { t, tv } = useLanguage();
+    const routerLocation = useLocation();
+    const { user, session, updateUserInContext } = useAuth();
     const viewer = useMemo(() => ({
         viewerId: user?.id || null,
         canViewProtected: user?.is_admin === true
@@ -51,6 +86,7 @@ const Listdetails = () => {
     } = useHydratedSnapshot(propertyCacheKey);
     const [lists, setLists] = useState(null);
     const [loading, setLoading] = useState(true);
+    // Holds a dictionary key so the message follows the active language.
     const [loadError, setLoadError] = useState(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isFavorite, setIsFavorite] = useState(false);
@@ -60,6 +96,26 @@ const Listdetails = () => {
     const [currentCredits, setCurrentCredits] = useState(0);
     const [unlockError, setUnlockError] = useState('');
     const [isUnlocking, setIsUnlocking] = useState(false);
+    const [shareStatus, setShareStatus] = useState('');
+    // 'copied' | 'failed' | '' — feedback for the Property ID copy button.
+    const [idCopyStatus, setIdCopyStatus] = useState('');
+
+    useEffect(() => {
+        if (!idCopyStatus) {
+            return undefined;
+        }
+        const timer = setTimeout(() => setIdCopyStatus(''), 2000);
+        return () => clearTimeout(timer);
+    }, [idCopyStatus]);
+
+    useEffect(() => {
+        if (!shareStatus) {
+            return undefined;
+        }
+
+        const timer = setTimeout(() => setShareStatus(''), 2500);
+        return () => clearTimeout(timer);
+    }, [shareStatus]);
 
     useEffect(() => {
         if (!isHydrated) {
@@ -120,7 +176,7 @@ const Listdetails = () => {
     }, [user?.id]);
 
     useEffect(() => {
-        if (!isHydrated || isAuthLoading) {
+        if (!isHydrated) {
             return;
         }
 
@@ -129,7 +185,7 @@ const Listdetails = () => {
         const loadProperty = async () => {
             if (!id) {
                 setLists(null);
-                setLoadError('Property ID is missing.');
+                setLoadError('listing.detail.errors.missingId');
                 setLoading(false);
                 return;
             }
@@ -146,7 +202,7 @@ const Listdetails = () => {
                     setLists(property);
                 }
             } catch (error) {
-                const errorMsg = error?.message || error?.toString() || 'Unknown error occurred';
+                const errorMsg = error?.message || error?.toString() || translate(readStoredLanguage(), 'listing.detail.unknownError');
 
                 // Only log for non-quota errors to reduce console noise
                 if (!errorMsg.includes('temporarily unavailable')) {
@@ -154,11 +210,11 @@ const Listdetails = () => {
                 }
 
                 // Show user-friendly error messages
-                let displayError = 'Property not found.';
+                let displayError = 'listing.detail.errors.notFound';
                 if (errorMsg.includes('temporarily unavailable')) {
-                    displayError = 'Service is temporarily unavailable. Please try again later.';
+                    displayError = 'listing.detail.errors.temporarilyUnavailable';
                 } else if (!errorMsg.includes('not found')) {
-                    displayError = `Error loading property. Please try again.`;
+                    displayError = 'listing.detail.errors.loadFailed';
                 }
 
                 if (isMounted && !hasCachedProperty) {
@@ -181,7 +237,6 @@ const Listdetails = () => {
     }, [
         hasCachedProperty,
         id,
-        isAuthLoading,
         isHydrated,
         viewer
     ]);
@@ -244,7 +299,7 @@ const Listdetails = () => {
 
     const handleUnlockProtectedInfo = async () => {
         if (!user?.id) {
-            setUnlockError('Please login to unlock contact information.');
+            setUnlockError(t('listing.detail.unlock.errors.loginRequired'));
             return;
         }
 
@@ -262,11 +317,11 @@ const Listdetails = () => {
             console.error('Error unlocking property contact:', error);
             const normalizedMessage = error.message || '';
             if (normalizedMessage.toLowerCase().includes('insufficient credits') || normalizedMessage.toLowerCase().includes('enough points')) {
-                setUnlockError('You do not have enough points. Buy points to unlock this property.');
+                setUnlockError(t('listing.detail.unlock.errors.notEnoughPoints'));
             } else if (normalizedMessage.toLowerCase().includes('schema cache') || normalizedMessage.toLowerCase().includes('could not find the function')) {
-                setUnlockError('Unlock is temporarily unavailable. Please try again shortly.');
+                setUnlockError(t('listing.detail.unlock.errors.temporarilyUnavailable'));
             } else {
-                setUnlockError(normalizedMessage || 'Failed to unlock contact information.');
+                setUnlockError(normalizedMessage || t('listing.detail.unlock.errors.failed'));
             }
         } finally {
             setIsUnlocking(false);
@@ -282,26 +337,72 @@ const Listdetails = () => {
         }
     };
 
-    if (loading || isAuthLoading) {
+    const handleCopyPropertyId = async (value) => {
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(String(value));
+                setIdCopyStatus('copied');
+                return;
+            }
+            setIdCopyStatus('failed');
+        } catch {
+            setIdCopyStatus('failed');
+        }
+    };
+
+    const handleShare = async () => {
+        const shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+        const shareTitle = typeof document !== 'undefined' ? document.title : '';
+
+        try {
+            if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+                await navigator.share({ title: shareTitle, url: shareUrl });
+                return;
+            }
+
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(shareUrl);
+                setShareStatus('copied');
+                return;
+            }
+
+            setShareStatus('failed');
+        } catch (error) {
+            if (error?.name !== 'AbortError') {
+                setShareStatus('failed');
+            }
+        }
+    };
+
+    if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="text-center">
-                    <div className="w-16 h-16 border-4 border-[#1E73B8] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading property details...</p>
-                </div>
+            <div className="min-h-screen">
+                <p className="sr-only" role="status">{t('listing.detail.loading')}</p>
+                <DetailSkeleton />
             </div>
         );
     }
 
     if (!lists || loadError) {
+        const isNotFound = !loadError || loadError === 'listing.detail.errors.notFound' || loadError === 'listing.detail.errors.missingId';
+
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 text-center max-w-md">
-                    <p className="text-xl font-semibold text-gray-900">Property not found</p>
-                    <p className="text-gray-600 mt-2">{loadError || 'The requested property is unavailable.'}</p>
-                    <Link to="/" className="inline-block mt-6 bg-[#1E73B8] text-white px-6 py-3 rounded-xl font-semibold">
-                        Browse Properties
-                    </Link>
+            <div className="site-shell flex min-h-[60vh] items-center justify-center py-10">
+                <div className="ui-panel w-full max-w-md p-8 text-center" role="alert">
+                    <h1 className="text-xl font-bold text-ink">
+                        {isNotFound ? t('listing.detail.notFound') : t('listing.detail.unavailableTitle')}
+                    </h1>
+                    <p className="mt-2 text-body text-muted">{loadError ? t(loadError) : t('listing.detail.unavailable')}</p>
+                    <div className="mt-6 flex flex-wrap justify-center gap-3">
+                        {!isNotFound ? (
+                            <button type="button" onClick={() => window.location.reload()} className="ui-btn ui-btn-secondary">
+                                {t('common.retry')}
+                            </button>
+                        ) : null}
+                        <Link to="/propertylist2" className="ui-btn ui-btn-primary">
+                            {t('listing.detail.browseProperties')}
+                        </Link>
+                    </div>
                 </div>
             </div>
         );
@@ -312,15 +413,46 @@ const Listdetails = () => {
     const isNegotiableRent = isRentNegotiable(pricing);
     const specifications = lists.specifications || {};
     const amenities = lists.amenities || [];
-    const images = lists.images?.length
-        ? lists.images
-        : [lists.image_url || 'https://via.placeholder.com/800x600'];
+    const images = [
+        ...(Array.isArray(lists.images) ? lists.images : []),
+        lists.primary_image,
+        lists.image_url,
+    ].filter((image, index, imageList) => (
+        typeof image === 'string' &&
+        image.trim() !== '' &&
+        imageList.indexOf(image) === index
+    ));
+    const propertyIdNumber = getPropertyIdNumber(lists);
     const isProtectedUnlocked = Boolean(lists.protected_contact_unlocked);
     const hasEnoughPoints = currentCredits >= unlockCost;
     const publicLocationText = [location.sub_area, location.area, location.state_district].filter(Boolean).join(', ');
     const protectedLocationText = [location.house_plot, location.road, location.sector].filter(Boolean).join(', ');
-    const visibleLocationText = publicLocationText || location.state_district || 'Bangladesh';
-    const imageLocationLabel = location.area || location.state_district || 'Bangladesh';
+    const visibleLocationText = publicLocationText || location.state_district || t('listing.detail.defaultCountry');
+    const imageLocationLabel = location.area || location.state_district || t('listing.detail.defaultCountry');
+    const propertyTitle = tv('propertyTypes', lists.property_type) || t('listing.detail.propertyFallback');
+    const categoryLabel = tv('categories', lists.category) || t('listing.detail.categoryFallback');
+    // Split the translated template around {points} so the points keep their own styling.
+    const [confirmDescriptionBefore, confirmDescriptionAfter] = t('listing.detail.unlock.confirmDescription').split('{points}');
+
+    const bedrooms = lists.total_rooms ?? specifications.total_rooms;
+    const bathrooms = lists.total_bathrooms ?? specifications.total_bathrooms;
+    const floorLevel = lists.floor_level ?? specifications.floor_level;
+    const roomSize = lists.room_size_sqft ?? specifications.room_size;
+    const balconyCount = lists.balcony ?? specifications.total_balcony ?? specifications.balcony;
+    const kitchenCount = lists.kitchen ?? lists.total_kitchen ?? specifications.total_kitchen ?? specifications.kitchen;
+    const hasDrawingRoom = Number(lists.living_rooms ?? specifications.living_rooms ?? 0) > 0;
+    const diningRooms = lists.dining_rooms ?? specifications.dining_rooms;
+
+    const specTiles = [
+        { key: 'bedrooms', icon: LuBedDouble, label: t('listing.detail.specs.bedrooms'), value: hasValue(bedrooms) ? bedrooms : t('common.na') },
+        { key: 'bathrooms', icon: LuBath, label: t('listing.detail.specs.bathrooms'), value: hasValue(bathrooms) ? bathrooms : t('common.na') },
+        { key: 'floor', icon: FiLayers, label: t('listing.detail.specs.floor'), value: hasValue(floorLevel) ? floorLevel : t('common.na') },
+        ...(hasValue(roomSize) ? [{ key: 'size', icon: FiMaximize2, label: t('listing.detail.specs.size'), value: t('listing.detail.specs.sizeValue', { size: roomSize }) }] : []),
+        { key: 'balcony', icon: FiSun, label: t('listing.detail.specs.balcony'), value: hasValue(balconyCount) ? balconyCount : 0 },
+        { key: 'kitchen', icon: FiCoffee, label: t('listing.detail.specs.kitchen'), value: hasValue(kitchenCount) ? kitchenCount : 0 },
+        { key: 'drawingRoom', icon: FiHome, label: t('listing.detail.specs.drawingRoom'), value: hasDrawingRoom ? t('common.yes') : t('common.no') },
+        { key: 'dining', icon: FiGrid, label: t('listing.detail.specs.rooms'), value: hasValue(diningRooms) ? diningRooms : 0 },
+    ];
 
     const handlePrevImage = () => {
         setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
@@ -330,158 +462,194 @@ const Listdetails = () => {
         setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
     };
 
-    const renderLoginPromptPanel = () => (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex-1">
-                    <p className="text-lg font-bold text-gray-900">Please login for show the contact information.</p>
-                    <p className="mt-2 text-sm text-gray-600">
-                        Please log in or register to view the full property details. We protect the privacy of owners and do not
-                        share contact information with unregistered users.
-                    </p>
-                    <p className="mt-1 text-xs font-medium text-red-500">(Terms &amp; conditions apply)</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                    <Link
-                        to="/login"
-                        className="inline-flex items-center justify-center rounded-xl bg-[#1E73B8] px-4 py-2 font-semibold text-white transition hover:bg-[#1665a0]"
-                    >
-                        <FiUser className="mr-2" />
-                        Login
-                    </Link>
-                    <Link
-                        to="/registration"
-                        className="inline-flex items-center justify-center rounded-xl border border-[#1E73B8] px-4 py-2 font-semibold text-[#1E73B8] transition hover:bg-[#1E73B8] hover:text-white"
-                    >
-                        Register
-                    </Link>
-                </div>
+    const renderLockedRow = (icon, label, value) => (
+        <div className="flex items-start gap-3 rounded-xl border border-line bg-canvas p-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand" aria-hidden="true">
+                {icon}
             </div>
+            <div className="min-w-0">
+                <p className="text-caption text-muted">{label}</p>
+                <p className="break-words font-semibold text-ink">{value}</p>
+            </div>
+        </div>
+    );
+
+    const renderGuestContactPanel = () => (
+        <div className="mt-5 space-y-3">
+            <p className="text-base font-semibold text-ink">{t('listing.detail.guest.title')}</p>
+            <p className="text-caption text-muted">{t('listing.detail.guest.description')}</p>
+            <Link
+                to="/login"
+                state={{ from: `${routerLocation.pathname}${routerLocation.search || ''}` }}
+                className="ui-btn ui-btn-primary w-full"
+            >
+                <FiLock className="text-base" aria-hidden="true" />
+                <span>{t('listing.detail.guest.login')}</span>
+            </Link>
+            <Link to="/terms" className="inline-flex min-h-9 items-center text-caption text-muted underline underline-offset-2 hover:text-ink">
+                {t('listing.detail.guest.terms')}
+            </Link>
         </div>
     );
 
     const renderLockedUnlockPanel = () => (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                        <FiLock className="text-red-500" size={18} />
-                        <p className="text-lg font-bold text-gray-900">Unlock Contact Details</p>
-                    </div>
-                    <p className="mt-2 text-sm text-red-500">
-                        Press the unlock button to get the specific address and publisher/owner contact information of this property.
-                    </p>
-                    <p className="mt-3 text-sm text-gray-500">
-                        Available points: <span className="font-semibold text-gray-900">{currentCredits}</span>
-                    </p>
-                    {unlockError && (
-                        <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
-                            {unlockError}
-                        </p>
-                    )}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                    <button
-                        onClick={() => {
-                            setUnlockError('');
-                            setShowUnlockModal(true);
-                        }}
-                        disabled={isUnlocking}
-                        className="inline-flex items-center justify-center rounded-xl bg-red-500 px-5 py-3 font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                        <FiLock className="mr-2" />
-                        {isUnlocking ? 'Unlocking...' : 'Unlock'}
-                    </button>
-                </div>
-            </div>
+        <div className="mt-5 space-y-3">
+            <p className="text-base font-semibold text-ink">{t('listing.detail.unlock.title')}</p>
+            <p className="text-caption text-muted">{t('listing.detail.unlock.description')}</p>
+            <p className="text-caption text-muted">
+                {t('listing.detail.unlock.availablePoints')} <span className="font-semibold text-ink">{currentCredits}</span>
+            </p>
+            {unlockError && (
+                <p role="alert" className="ui-note ui-note-danger text-danger">
+                    {unlockError}
+                </p>
+            )}
+            <button
+                type="button"
+                onClick={() => {
+                    setUnlockError('');
+                    setShowUnlockModal(true);
+                }}
+                disabled={isUnlocking}
+                className="ui-btn ui-btn-primary w-full"
+            >
+                <FiLock className="text-base" aria-hidden="true" />
+                <span>{isUnlocking ? t('listing.detail.unlock.unlocking') : t('listing.detail.unlock.button')}</span>
+            </button>
+        </div>
+    );
+
+    const renderUnlockedActions = () => (
+        <div className="mt-5 space-y-3">
+            <button
+                type="button"
+                onClick={() => setShowContactModal(true)}
+                className="ui-btn ui-btn-primary w-full"
+            >
+                <FiPhone className="text-base" aria-hidden="true" />
+                <span>{t('listing.detail.contact.contactOwner')}</span>
+            </button>
+            {location.contact_number ? (
+                <a href={`tel:${location.contact_number}`} className="ui-btn ui-btn-secondary w-full">
+                    <FiPhone className="text-base" aria-hidden="true" />
+                    <span>{t('listing.detail.contact.callNow')}</span>
+                </a>
+            ) : null}
         </div>
     );
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-10">
-            <div className="bg-white shadow-sm">
-                <div className="site-shell py-3">
-                    <nav className="flex items-center gap-2 text-sm flex-wrap">
-                        <Link to="/" className="text-[#1E73B8] hover:text-[#1665a0] transition">
-                            Home
-                        </Link>
-                        <span className="text-gray-400">&gt;</span>
-                        <span className="text-[#1E73B8]">
-                            {location.state_district || 'Dhaka'}
-                        </span>
-                        {Boolean(location.area || location.sub_area) && (
-                            <>
-                                <span className="text-gray-400">&gt;</span>
-                                <span className="text-[#1E73B8]">
-                                    {[location.sub_area, location.area].filter(Boolean).join(', ')}
-                                </span>
-                            </>
-                        )}
-                        <span className="text-gray-400">&gt;</span>
-                        <span className="text-[#1E73B8] font-medium">
-                            {lists.category || 'Category'}
-                        </span>
+        <div className="min-h-screen pb-10">
+            {/* Sticky bar: breadcrumb + save/share. One bar instead of two. */}
+            <div className="sticky top-[var(--nav-h)] z-40 border-b border-line bg-white/95 backdrop-blur">
+                <div className="site-shell flex items-center justify-between gap-3 py-2.5">
+                    <nav aria-label={t('listing.detail.breadcrumb')} className="min-w-0">
+                        <ol className="flex min-w-0 items-center gap-1.5 text-caption text-muted">
+                            <li className="shrink-0">
+                                <Link to="/" className="inline-flex min-h-9 items-center text-brand hover:text-brand-pressed">{t('common.home')}</Link>
+                            </li>
+                            <li className="shrink-0" aria-hidden="true">/</li>
+                            <li className="shrink-0">
+                                <Link to="/propertylist2" className="inline-flex min-h-9 items-center text-brand hover:text-brand-pressed">
+                                    {location.state_district || tv('divisions', 'Dhaka')}
+                                </Link>
+                            </li>
+                            {Boolean(location.area || location.sub_area) && (
+                                <>
+                                    <li className="shrink-0" aria-hidden="true">/</li>
+                                    <li className="hidden min-w-0 truncate sm:block">
+                                        {[location.sub_area, location.area].filter(Boolean).join(', ')}
+                                    </li>
+                                </>
+                            )}
+                            <li className="hidden shrink-0 sm:block" aria-hidden="true">/</li>
+                            <li className="shrink-0 font-medium text-ink" aria-current="page">{categoryLabel}</li>
+                        </ol>
                     </nav>
-                </div>
-            </div>
-
-            <div className="sticky top-[72px] z-40 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur md:top-[118px]">
-                <div className="site-shell-wide flex flex-wrap items-center justify-between gap-3 py-4">
-                    <Link to="/" className="flex min-w-0 items-center gap-2 text-[#1E73B8] transition hover:text-[#1665a0]">
-                        <FiArrowLeft size={24} />
-                        <span className="truncate font-medium">Back to Home</span>
-                    </Link>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <button
-                            onClick={handleToggleFavorite}
-                            className={`rounded-full p-2.5 transition ${isFavorite ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        <span
+                            role="status"
+                            aria-live="polite"
+                            className={shareStatus ? `text-caption font-medium ${shareStatus === 'failed' ? 'text-danger' : 'text-success'}` : 'sr-only'}
                         >
-                            <FiHeart size={22} fill={isFavorite ? 'currentColor' : 'none'} />
+                            {shareStatus === 'copied' ? t('listing.detail.share.copied') : shareStatus === 'failed' ? t('listing.detail.share.failed') : ''}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleToggleFavorite}
+                            aria-pressed={isFavorite}
+                            aria-label={isFavorite ? t('listing.detail.aria.unsave') : t('listing.detail.aria.save')}
+                            className={`ui-btn ui-btn-icon-lg ${isFavorite ? 'bg-danger-soft text-danger' : 'ui-btn-secondary text-muted hover:text-danger'}`}
+                        >
+                            <FiHeart size={20} fill={isFavorite ? 'currentColor' : 'none'} aria-hidden="true" />
                         </button>
-                        <button className="rounded-full bg-gray-100 p-2.5 text-gray-600 transition hover:bg-gray-200">
-                            <FiShare2 size={22} />
+                        <button
+                            type="button"
+                            onClick={handleShare}
+                            aria-label={t('listing.detail.aria.share')}
+                            className="ui-btn ui-btn-secondary ui-btn-icon-lg text-muted"
+                        >
+                            <FiShare2 size={20} aria-hidden="true" />
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div className="site-shell-wide py-6">
+            <div className="site-shell py-5 md:py-6">
                 <div className="site-card-strong mb-6 overflow-hidden">
                     <div className="relative">
-                        <div className="aspect-[4/3] bg-gray-200 sm:aspect-video md:aspect-[21/9]">
-                            <img
+                        <div className="aspect-[4/3] bg-slate-200 sm:aspect-video sm:max-h-[480px]">
+                            <PropertyThumbnailImage
                                 src={images[currentImageIndex] || images[0]}
-                                alt={`${lists.property_type} in ${imageLocationLabel}`}
-                                className="w-full h-full object-cover"
+                                alt={t('listing.detail.imageAlt', {
+                                    type: propertyTitle,
+                                    location: imageLocationLabel,
+                                })}
+                                className="h-full w-full object-cover"
+                                fallbackClassName="h-full w-full"
+                                propertyType={lists.property_type}
+                                category={lists.category}
+                                pricing={pricing}
+                                loading="eager"
+                                showRent={false}
                             />
                         </div>
 
                         {images.length > 1 && (
                             <>
                                 <button
+                                    type="button"
                                     onClick={handlePrevImage}
-                                    className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 shadow-lg transition hover:bg-white sm:left-4"
+                                    aria-label={t('listing.detail.aria.previousImage')}
+                                    className="ui-btn ui-btn-icon-lg absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 text-ink shadow-raised hover:bg-white sm:left-4"
                                 >
-                                    <FiChevronLeft size={20} />
+                                    <FiChevronLeft size={22} aria-hidden="true" />
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={handleNextImage}
-                                    className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 shadow-lg transition hover:bg-white sm:right-4"
+                                    aria-label={t('listing.detail.aria.nextImage')}
+                                    className="ui-btn ui-btn-icon-lg absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 text-ink shadow-raised hover:bg-white sm:right-4"
                                 >
-                                    <FiChevronRight size={20} />
+                                    <FiChevronRight size={22} aria-hidden="true" />
                                 </button>
 
-                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                                <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1">
                                     {images.map((_, idx) => (
                                         <button
                                             key={idx}
+                                            type="button"
                                             onClick={() => setCurrentImageIndex(idx)}
-                                            className={`w-2 h-2 rounded-full transition ${currentImageIndex === idx ? 'bg-white w-6' : 'bg-white/50'}`}
-                                        />
+                                            aria-label={t('listing.detail.aria.goToImage', { number: idx + 1 })}
+                                            aria-current={currentImageIndex === idx ? 'true' : undefined}
+                                            className="flex h-6 w-6 items-center justify-center rounded-full"
+                                        >
+                                            <span className={`block h-2 rounded-full transition-all ${currentImageIndex === idx ? 'w-6 bg-white' : 'w-2 bg-white/60'}`} />
+                                        </button>
                                     ))}
                                 </div>
 
-                                <div className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-sm text-white sm:right-4 sm:top-4">
+                                <div className="absolute right-3 top-3 rounded-full bg-ink/70 px-2.5 py-1 text-caption font-medium text-white sm:right-4 sm:top-4">
                                     {currentImageIndex + 1} / {images.length}
                                 </div>
                             </>
@@ -489,330 +657,278 @@ const Listdetails = () => {
                     </div>
 
                     {images.length > 1 && (
-                        <div className="flex gap-3 overflow-x-auto p-4">
+                        <div className="flex gap-2 overflow-x-auto p-3 scrollbar-hide">
                             {images.map((img, idx) => (
                                 <button
                                     key={idx}
+                                    type="button"
                                     onClick={() => setCurrentImageIndex(idx)}
-                                    className={`h-16 w-20 flex-shrink-0 overflow-hidden rounded-xl border-2 transition sm:h-20 sm:w-28 ${currentImageIndex === idx ? 'border-[#1E73B8]' : 'border-transparent'}`}
+                                    aria-label={t('listing.detail.aria.goToImage', { number: idx + 1 })}
+                                    aria-pressed={currentImageIndex === idx}
+                                    className={`h-16 w-20 flex-shrink-0 overflow-hidden rounded-xl border-2 transition sm:h-20 sm:w-28 ${currentImageIndex === idx ? 'border-brand' : 'border-transparent hover:border-line'}`}
                                 >
-                                    <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                                    <PropertyThumbnailImage
+                                        src={img}
+                                        alt={t('listing.detail.thumbnailAlt', { number: idx + 1 })}
+                                        className="h-full w-full object-cover"
+                                        fallbackClassName="h-full w-full"
+                                        propertyType={lists.property_type}
+                                        category={lists.category}
+                                        pricing={pricing}
+                                        compact
+                                    />
                                 </button>
                             ))}
                         </div>
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.8fr)_minmax(320px,0.9fr)]">
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="site-card p-5 sm:p-6">
-                            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="min-w-0">
-                                    <div className='mb-2 flex items-center gap-3'>
-                                        {lists.property_id_number && (
-                                            <p className='rounded-full bg-[#1E73B8]/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-[#1E73B8] sm:text-sm'>
-                                                Property ID: #{lists.property_id_number}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <h1 className="text-2xl font-bold leading-tight text-gray-900 md:text-3xl">
-                                        {lists.property_type || 'Property'}
-                                    </h1>
-                                    <div className="mt-2 flex items-start gap-2 text-gray-600">
-                                        <FiMapPin className="text-[#1E73B8]" />
-                                        <span className="leading-6">{visibleLocationText}</span>
-                                    </div>
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+                    <div className="space-y-6">
+                        {/* Title → location → price → quotable ID. */}
+                        <section className="ui-card p-5 sm:p-6" aria-labelledby="listing-title">
+                            <p className="ui-eyebrow">{categoryLabel}</p>
+                            <h1 id="listing-title" className="mt-2 text-2xl font-bold leading-tight text-ink md:text-3xl">
+                                {propertyTitle}
+                            </h1>
+                            <p className="mt-2 flex items-start gap-2 text-body text-muted">
+                                <FiMapPin className="mt-1 shrink-0 text-brand" aria-hidden="true" />
+                                <span>{visibleLocationText}</span>
+                            </p>
+
+                            <div className="mt-5 flex flex-wrap items-end justify-between gap-4 border-t border-line pt-5">
+                                <div>
+                                    <p className="text-caption text-muted">{t('listing.detail.rentLabel')}</p>
+                                    {isNegotiableRent ? (
+                                        <p className="mt-1"><span className="ui-badge ui-badge-neutral text-base">{t('listing.negotiable')}</span></p>
+                                    ) : (
+                                        <p className="ui-price mt-1 text-[28px] leading-9 md:text-[32px] md:leading-10">
+                                            <RentDisplay pricing={pricing} prefix="৳ " />
+                                            <span className="ml-1.5 text-base font-medium text-muted">
+                                                / {pricing.rent_period ? tv('rentPeriods', pricing.rent_period) : t('common.perMonth')}
+                                            </span>
+                                        </p>
+                                    )}
                                 </div>
-                                <div className="rounded-2xl bg-slate-50 px-4 py-3 sm:min-w-[220px] sm:text-right">
-                                    <p className="text-3xl font-bold text-[#1E73B8] md:text-4xl">
-                                        <RentDisplay pricing={pricing} />
-                                    </p>
-                                    {!isNegotiableRent && (
-                                        <p className="text-gray-500">/ {pricing.rent_period || 'month'}</p>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-caption text-muted">{t('listing.detail.propertyId.title')}</span>
+                                    {propertyIdNumber ? (
+                                        <>
+                                            <span className="ui-id-ticket text-base" title={t('listing.card.idTicketTitle')}>{propertyIdNumber}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCopyPropertyId(propertyIdNumber)}
+                                                className="ui-btn ui-btn-secondary ui-btn-sm"
+                                            >
+                                                {idCopyStatus === 'copied' ? <FiCheck className="text-success" aria-hidden="true" /> : <FiCopy aria-hidden="true" />}
+                                                <span>{t('listing.detail.propertyId.copy')}</span>
+                                            </button>
+                                            <span
+                                                role="status"
+                                                aria-live="polite"
+                                                className={idCopyStatus ? `text-caption font-medium ${idCopyStatus === 'failed' ? 'text-danger' : 'text-success'}` : 'sr-only'}
+                                            >
+                                                {idCopyStatus === 'copied'
+                                                    ? t('listing.detail.propertyId.copied')
+                                                    : idCopyStatus === 'failed'
+                                                        ? t('listing.detail.propertyId.failed')
+                                                        : ''}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <span className="text-caption text-muted">{t('listing.detail.propertyId.unavailable')}</span>
                                     )}
                                 </div>
                             </div>
 
-                            <div className="mt-6 grid grid-cols-2 gap-3 border-t pt-6 sm:grid-cols-2 lg:grid-cols-4">
-                                <div className="rounded-2xl bg-blue-50 p-3 text-center">
-                                    <FiHome className="mx-auto text-[#1E73B8] mb-1" size={24} />
-                                    <p className="text-sm text-gray-600">Category</p>
-                                    <p className="font-semibold">{lists.category || 'N/A'}</p>
-                                </div>
-                                <div className="rounded-2xl bg-blue-50 p-3 text-center">
-                                    <FiLayers className="mx-auto text-[#1E73B8] mb-1" size={24} />
-                                    <p className="text-sm text-gray-600">Type</p>
-                                    <p className="font-semibold">{lists.property_type || 'N/A'}</p>
-                                </div>
-                                <div className="rounded-2xl bg-blue-50 p-3 text-center">
-                                    <FiUsers className="mx-auto text-[#1E73B8] mb-1" size={24} />
-                                    <p className="text-sm text-gray-600">Floor</p>
-                                    <p className="font-semibold">{specifications.floor_level || lists.floor_level || 'N/A'}</p>
-                                </div>
-                                <div className="rounded-2xl bg-blue-50 p-3 text-center">
-                                    <FiMaximize2 className="mx-auto text-[#1E73B8] mb-1" size={24} />
-                                    <p className="text-sm text-gray-600">Bathrooms</p>
-                                    <p className="font-semibold">{specifications.total_bathrooms || lists.total_bathrooms || 'N/A'}</p>
-                                </div>
-                            </div>
-
-                            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                <div className="rounded-2xl bg-green-50 p-3 text-center">
-                                    <p className="text-sm text-gray-600">Rooms</p>
-                                    <p className="font-semibold text-green-700">
-                                        {lists.dining_rooms ?? specifications.dining_rooms ?? 0}
-                                    </p>
-                                </div>
-                                <div className="rounded-2xl bg-yellow-50 p-3 text-center">
-                                    <p className="text-sm text-gray-600">Drawing Room</p>
-                                    <p className="font-semibold text-yellow-700">
-                                        {Number(lists.living_rooms ?? specifications.living_rooms ?? 0) > 0 ? 'Yes' : 'No'}
-                                    </p>
-                                </div>
-                                <div className="rounded-2xl bg-purple-50 p-3 text-center">
-                                    <p className="text-sm text-gray-600">Balcony</p>
-                                    <p className="font-semibold text-purple-700">
-                                        {lists.balcony ?? specifications.total_balcony ?? specifications.balcony ?? 0}
-                                    </p>
-                                </div>
-                                <div className="rounded-2xl bg-orange-50 p-3 text-center">
-                                    <p className="text-sm text-gray-600">Kitchen</p>
-                                    <p className="font-semibold text-orange-700">
-                                        {lists.kitchen ?? lists.total_kitchen ?? specifications.total_kitchen ?? specifications.kitchen ?? 0}
-                                    </p>
-                                </div>
-                            </div>
+                            <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                                {specTiles.map((tile) => (
+                                    <div key={tile.key} className="rounded-xl border border-line bg-canvas p-3">
+                                        <dt className="flex items-center gap-1.5 text-caption text-muted">
+                                            <tile.icon className="text-base text-brand" aria-hidden="true" />
+                                            <span>{tile.label}</span>
+                                        </dt>
+                                        <dd className="mt-1 text-base font-semibold text-ink">{tile.value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
 
                             {lists.occupancy && (
-                                <div className="mt-4 p-4 bg-red-50 rounded-xl border border-red-200">
-                                    <p className="text-sm text-red-600 font-semibold">Occupancy Restrictions</p>
-                                    <p className="text-gray-700 mt-1">{lists.occupancy}</p>
+                                <div className="ui-note mt-4">
+                                    <p className="font-semibold text-ink">{t('listing.detail.occupancyRestrictions')}</p>
+                                    <p className="mt-0.5 text-muted">{lists.occupancy}</p>
                                 </div>
                             )}
-                        </div>
+                        </section>
 
-                        <div className="site-card p-5 sm:p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">Description</h2>
-                            <p className="text-gray-600 leading-relaxed">
-                                {location.short_description || location.description || 'No description available for this property.'}
+                        <section className="ui-card p-5 sm:p-6" aria-labelledby="listing-description">
+                            <h2 id="listing-description" className="text-lg font-bold text-ink">{t('listing.detail.description')}</h2>
+                            <p className="mt-3 max-w-[70ch] text-body text-muted">
+                                {location.short_description || location.description || t('listing.detail.noDescription')}
                             </p>
-                        </div>
+                        </section>
 
-                        <div className="site-card p-5 sm:p-6">
-                            <h2 className="text-xl font-bold text-gray-900 mb-4">Facilities</h2>
+                        <section className="ui-card p-5 sm:p-6" aria-labelledby="listing-facilities">
+                            <h2 id="listing-facilities" className="text-lg font-bold text-ink">{t('listing.detail.facilities')}</h2>
                             {amenities.length > 0 ? (
-                                <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-3">
+                                <ul className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 md:grid-cols-3">
                                     {amenities.map((amenity, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 text-gray-700">
-                                            <div className="w-2 h-2 bg-[#1E73B8] rounded-full"></div>
-                                            <span>{amenity}</span>
-                                        </div>
+                                        <li key={idx} className="flex items-center gap-2 text-body text-ink">
+                                            <FiCheck className="shrink-0 text-success" aria-hidden="true" />
+                                            <span>{tv('amenities', amenity)}</span>
+                                        </li>
                                     ))}
-                                </div>
+                                </ul>
                             ) : (
-                                <p className="text-gray-500 italic">No facilities listed for this property.</p>
+                                <p className="mt-3 text-body text-muted">{t('listing.detail.noFacilities')}</p>
                             )}
-                        </div>
+                        </section>
                     </div>
 
-                    <div className="lg:col-span-1">
-                        <div className="site-card p-5 sm:p-6 xl:sticky xl:top-[calc(118px+1rem)]">
-                            <h3 className="text-lg font-bold text-gray-900 mb-4">Contact Information</h3>
+                    <aside>
+                        <div className="ui-card p-5 sm:p-6 xl:sticky xl:top-[calc(var(--nav-h)+1rem)]">
+                            <h2 className="text-lg font-bold text-ink">{t('listing.detail.contact.title')}</h2>
 
-                            <div className="space-y-4">
-                                <div className="flex items-start gap-3 rounded-xl bg-blue-50 p-3">
-                                    <div className="w-10 h-10 bg-[#1E73B8] rounded-full flex items-center justify-center">
-                                        <FiPhone className="text-white" size={18} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-gray-500">Contact Number</p>
-                                        <p className="break-words font-semibold text-gray-900">
-                                            {isProtectedUnlocked ? (location.contact_number || 'N/A') : 'Unlock to view contact number'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-start gap-3 rounded-xl bg-blue-50 p-3">
-                                    <div className="w-10 h-10 bg-[#1E73B8] rounded-full flex items-center justify-center">
-                                        <FiMapPin className="text-white" size={18} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-gray-500">Short Address</p>
-                                        <p className="break-words font-semibold text-gray-900">
-                                            {isProtectedUnlocked ? (protectedLocationText || 'Short address not available') : 'Unlock to view short address'}
-                                        </p>
-                                    </div>
-                                </div>
+                            <div className="mt-4 space-y-3">
+                                {renderLockedRow(
+                                    isProtectedUnlocked ? <FiPhone size={18} aria-hidden="true" /> : <FiLock size={18} aria-hidden="true" />,
+                                    t('listing.detail.contact.number'),
+                                    isProtectedUnlocked ? (location.contact_number || t('common.na')) : t('listing.detail.contact.unlockToViewNumber')
+                                )}
+                                {renderLockedRow(
+                                    isProtectedUnlocked ? <FiMapPin size={18} aria-hidden="true" /> : <FiLock size={18} aria-hidden="true" />,
+                                    t('listing.detail.contact.shortAddress'),
+                                    isProtectedUnlocked ? (protectedLocationText || t('listing.detail.contact.shortAddressUnavailable')) : t('listing.detail.contact.unlockToViewAddress')
+                                )}
                             </div>
 
-                            {isProtectedUnlocked ? (
-                                <div className="mt-6 space-y-3">
-                                    <button
-                                        onClick={() => setShowContactModal(true)}
-                                        className="w-full bg-[#1E73B8] hover:bg-[#1665a0] text-white py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2"
-                                    >
-                                        <FiPhone size={20} />
-                                        Contact Owner
-                                    </button>
-                                    <a
-                                        href={location.contact_number ? `tel:${location.contact_number}` : undefined}
-                                        className="block w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2"
-                                    >
-                                        <FiPhone size={20} />
-                                        Call Now
-                                    </a>
-                                </div>
-                            ) : !user?.id ? (
-                                renderLoginPromptPanel()
-                            ) : (
-                                renderLockedUnlockPanel()
-                            )}
+                            {isProtectedUnlocked
+                                ? renderUnlockedActions()
+                                : !user?.id
+                                    ? renderGuestContactPanel()
+                                    : renderLockedUnlockPanel()}
 
-                            <div className="mt-6 p-4 bg-yellow-50 rounded-xl border border-yellow-200">
-                                <h4 className="font-semibold text-yellow-800 mb-2">Safety Tips</h4>
-                                <ul className="text-xs text-yellow-700 space-y-1">
-                                    <li>- Meet in a safe, public location</li>
-                                    <li>- Verify the property before payment</li>
-                                    <li>- Do not pay in advance</li>
+                            <div className="ui-note mt-6">
+                                <p className="flex items-center gap-2 font-semibold text-ink">
+                                    <FiShield className="text-brand" aria-hidden="true" />
+                                    <span>{t('listing.detail.safety.title')}</span>
+                                </p>
+                                <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
+                                    <li>{t('listing.detail.safety.meetSafe')}</li>
+                                    <li>{t('listing.detail.safety.verify')}</li>
+                                    <li>{t('listing.detail.safety.noAdvance')}</li>
                                 </ul>
                             </div>
                         </div>
-                    </div>
+                    </aside>
                 </div>
             </div>
 
-            {showContactModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowContactModal(false)}>
-                    <div className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-xl font-bold">Contact Owner</h3>
-                            <button onClick={() => setShowContactModal(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                                <FiChevronLeft size={24} />
-                            </button>
-                        </div>
+            <Dialog
+                open={showContactModal}
+                onClose={() => setShowContactModal(false)}
+                title={t('listing.detail.contact.contactOwner')}
+                closeLabel={t('listing.detail.aria.closeDialog')}
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <dl className="rounded-xl border border-line bg-canvas p-4 text-body">
+                        <dt className="text-caption text-muted">{t('listing.detail.contact.property')}</dt>
+                        <dd className="font-semibold text-ink">{propertyTitle}</dd>
+                        <dt className="mt-3 text-caption text-muted">{t('listing.detail.contact.district')}</dt>
+                        <dd className="font-semibold text-ink">{location.state_district || t('common.na')}</dd>
+                        <dt className="mt-3 text-caption text-muted">{t('listing.detail.contact.shortAddress')}</dt>
+                        <dd className="font-semibold text-ink">
+                            {isProtectedUnlocked ? (protectedLocationText || t('listing.detail.contact.shortAddressUnavailable')) : t('listing.detail.contact.unlockToViewAddress')}
+                        </dd>
+                    </dl>
 
-                        <div className="space-y-4">
-                            <div className="p-4 bg-blue-50 rounded-xl">
-                                <p className="text-sm text-gray-600 mb-1">Property</p>
-                                <p className="font-semibold">{lists.property_type}</p>
-                                <p className="text-sm text-gray-600 mt-2">District</p>
-                                <p className="font-semibold">{location.state_district || 'N/A'}</p>
-                                <p className="text-sm text-gray-600 mt-2">Short Address</p>
-                                <p className="font-semibold">
-                                    {isProtectedUnlocked ? (protectedLocationText || 'Short address not available') : 'Unlock to view short address'}
-                                </p>
-                            </div>
-
-                            {isProtectedUnlocked ? (
-                                <a
-                                    href={location.contact_number ? `tel:${location.contact_number}` : undefined}
-                                    className="block w-full bg-[#1E73B8] hover:bg-[#1665a0] text-white py-3 rounded-xl font-semibold text-center transition"
-                                >
-                                    <FiPhone className="inline mr-2" />
-                                    {location.contact_number || 'Contact Number Not Available'}
-                                </a>
-                            ) : !user?.id ? (
-                                renderLoginPromptPanel()
-                            ) : (
-                                renderLockedUnlockPanel()
-                            )}
-                        </div>
-                    </div>
+                    {isProtectedUnlocked ? (
+                        location.contact_number ? (
+                            <a href={`tel:${location.contact_number}`} className="ui-btn ui-btn-primary w-full">
+                                <FiPhone aria-hidden="true" />
+                                <span>{location.contact_number}</span>
+                            </a>
+                        ) : (
+                            <p className="ui-note">{t('listing.detail.contact.numberUnavailable')}</p>
+                        )
+                    ) : !user?.id ? (
+                        renderGuestContactPanel()
+                    ) : (
+                        renderLockedUnlockPanel()
+                    )}
                 </div>
-            )}
+            </Dialog>
 
-            {showUnlockModal && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-                    onClick={() => {
-                        if (!isUnlocking) {
-                            setShowUnlockModal(false);
-                        }
-                    }}
-                >
-                    <div
-                        className="max-h-[calc(100vh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h3 className="text-xl font-bold text-gray-900">Are you sure?</h3>
-                                <p className="mt-2 text-sm text-gray-600">
-                                    Viewing all locked information requires <span className="font-semibold text-[#1E73B8]">{unlockCost} points</span>.
-                                    After unlocking, you will gain access to the exact address and publisher/owner details of this property.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowUnlockModal(false)}
-                                disabled={isUnlocking}
-                                className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100"
-                            >
-                                <FiChevronLeft size={20} />
-                            </button>
-                        </div>
-
-                        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <p className="text-sm font-semibold text-gray-900">{lists.property_type || lists.category}</p>
-                            <p className="mt-2 text-sm text-gray-600">
-                                District: <span className="font-medium text-gray-900">{location.state_district || 'N/A'}</span>
-                            </p>
-                            <p className="mt-1 text-sm text-gray-600">
-                                Points available: <span className="font-medium text-gray-900">{currentCredits}</span>
-                            </p>
-                        </div>
-
-                        <div className="mt-4 rounded-2xl border border-[#1E73B8]/15 bg-[#1E73B8]/5 p-4">
-                            <p className="text-sm font-semibold text-gray-900">Refund claim option</p>
-                            <p className="mt-1 text-sm text-gray-600">
-                                If the property is no longer available and qualifies under policy, you can submit a review-based refund claim within 72 hours of unlocking.
-                            </p>
-                            <Link to="/refund" className="mt-3 inline-flex text-sm font-semibold text-[#1E73B8] hover:underline">
-                                Read Refund Policy
+            <Dialog
+                open={showUnlockModal}
+                onClose={() => setShowUnlockModal(false)}
+                title={t('listing.detail.unlock.confirmTitle')}
+                closeLabel={t('listing.detail.aria.closeDialog')}
+                dismissible={!isUnlocking}
+                size="md"
+                footer={(
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setShowUnlockModal(false)}
+                            disabled={isUnlocking}
+                            className="ui-btn ui-btn-secondary ui-btn-sm"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                        {!hasEnoughPoints ? (
+                            <Link to="/book/buy-credits" className="ui-btn ui-btn-secondary ui-btn-sm">
+                                {t('listing.detail.unlock.buyPoints')}
                             </Link>
-                        </div>
+                        ) : null}
+                        <button
+                            type="button"
+                            onClick={handleUnlockProtectedInfo}
+                            disabled={isUnlocking || !hasEnoughPoints}
+                            className="ui-btn ui-btn-primary ui-btn-sm"
+                        >
+                            <FiLock aria-hidden="true" />
+                            <span>{isUnlocking ? t('listing.detail.unlock.unlocking') : t('listing.detail.unlock.confirm')}</span>
+                        </button>
+                    </>
+                )}
+            >
+                <p className="text-body text-muted">
+                    {confirmDescriptionBefore}<span className="font-semibold text-ink">{t('listing.detail.unlock.pointsCount', { count: unlockCost })}</span>{confirmDescriptionAfter}
+                </p>
 
-                        {!hasEnoughPoints && (
-                            <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-700">
-                                You do not have enough points to unlock this property. Buy more points to continue.
-                            </div>
-                        )}
+                <dl className="mt-4 rounded-xl border border-line bg-canvas p-4 text-body">
+                    <dt className="sr-only">{t('listing.detail.contact.property')}</dt>
+                    <dd className="font-semibold text-ink">{propertyTitle}</dd>
+                    <dt className="mt-2 inline text-muted">{t('listing.detail.unlock.district')} </dt>
+                    <dd className="inline font-medium text-ink">{location.state_district || t('common.na')}</dd>
+                    <br />
+                    <dt className="mt-1 inline text-muted">{t('listing.detail.unlock.pointsAvailable')} </dt>
+                    <dd className="inline font-medium text-ink">{currentCredits}</dd>
+                </dl>
 
-                        {unlockError && (
-                            <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
-                                {unlockError}
-                            </p>
-                        )}
-
-                        <div className="mt-6 flex flex-wrap justify-end gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setShowUnlockModal(false)}
-                                disabled={isUnlocking}
-                                className="rounded-xl border border-slate-200 px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleUnlockProtectedInfo}
-                                disabled={isUnlocking || !hasEnoughPoints}
-                                className="rounded-xl bg-red-500 px-4 py-2 font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                                {isUnlocking ? 'Unlocking...' : 'Yes, confirm'}
-                            </button>
-                            {!hasEnoughPoints && (
-                                <Link
-                                    to="/book/buy-credits"
-                                    className="rounded-xl bg-[#1E73B8] px-4 py-2 font-semibold text-white transition hover:bg-[#1665a0]"
-                                >
-                                    Buy Points
-                                </Link>
-                            )}
-                        </div>
-                    </div>
+                <div className="ui-note mt-4">
+                    <p className="font-semibold text-ink">{t('listing.detail.unlock.refundTitle')}</p>
+                    <p className="mt-1 text-muted">{t('listing.detail.unlock.refundDescription')}</p>
+                    <Link to="/refund" className="mt-2 inline-flex font-semibold text-brand hover:underline">
+                        {t('listing.detail.unlock.readRefundPolicy')}
+                    </Link>
                 </div>
-            )}
+
+                {!hasEnoughPoints && (
+                    <p className="ui-note ui-note-danger mt-4" role="status">
+                        {t('listing.detail.unlock.notEnoughPoints')}
+                    </p>
+                )}
+
+                {unlockError && (
+                    <p role="alert" className="ui-note ui-note-danger mt-4 text-danger">
+                        {unlockError}
+                    </p>
+                )}
+            </Dialog>
         </div>
     );
 };

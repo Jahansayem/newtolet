@@ -14,13 +14,15 @@ import {
 } from '../../services/userPanelService'
 import { PropertyThumbnailImage } from '../PropertyCardMedia'
 import RentDisplay from '../RentDisplay'
+import { useLanguage } from '../../i18n/useLanguage'
 import { EmptyState, formatPanelDate, PanelCard, PanelCardHeader } from './UserPanelPrimitives'
+import { getPropertyIdNumber } from '../../utils/propertyDisplaySerial'
 
 const REFUND_REASON_OPTIONS = [
-  ['rented_out', 'Already Rented Out'],
-  ['unreachable', 'Phone Unreachable'],
-  ['wrong_location', 'Wrong Location'],
-  ['other', 'Other'],
+  ['rented_out', 'dashboard.collections.refundReasons.rented_out'],
+  ['unreachable', 'dashboard.collections.refundReasons.unreachable'],
+  ['wrong_location', 'dashboard.collections.refundReasons.wrong_location'],
+  ['other', 'dashboard.collections.refundReasons.other'],
 ]
 
 const REFUND_STATUS_STYLES = {
@@ -31,37 +33,48 @@ const REFUND_STATUS_STYLES = {
 
 const PANEL_BY_TYPE = {
   saved: {
-    title: 'Property Saveds',
-    subtitle: 'Listings you saved from across the site are collected here.',
-    emptyTitle: 'No property saveds',
-    emptyDescription: 'Save properties while browsing and they will appear here.',
+    titleKey: 'dashboard.collections.saved.title',
+    subtitleKey: 'dashboard.collections.saved.subtitle',
+    emptyTitleKey: 'dashboard.collections.saved.emptyTitle',
+    emptyDescriptionKey: 'dashboard.collections.saved.emptyDescription',
+    loadingKey: 'dashboard.collections.saved.loading',
     icon: FiHeart,
     loader: getSavedProperties,
     metadata: () => null,
   },
   unlocked: {
-    title: 'Unlocked Listings',
-    subtitle: 'Properties whose protected contact details were unlocked with points.',
-    emptyTitle: 'No unlocked listings',
-    emptyDescription: 'Unlock a property contact to keep it listed here for quick access.',
+    titleKey: 'dashboard.collections.unlocked.title',
+    subtitleKey: 'dashboard.collections.unlocked.subtitle',
+    emptyTitleKey: 'dashboard.collections.unlocked.emptyTitle',
+    emptyDescriptionKey: 'dashboard.collections.unlocked.emptyDescription',
+    loadingKey: 'dashboard.collections.unlocked.loading',
     icon: FiUnlock,
     loader: getUnlockedProperties,
-    metadata: (entry) =>
-      entry.unlocked_at ? `Unlocked: ${formatPanelDate(entry.unlocked_at)}` : null,
+    metadata: (entry, { t, language }) =>
+      entry.unlocked_at
+        ? t('dashboard.collections.unlockedAt', {
+            date: formatPanelDate(entry.unlocked_at, true, language),
+          })
+        : null,
   },
   viewed: {
-    title: 'Recently Viewed',
-    subtitle: 'Your latest authenticated property visits, ordered by the most recent view.',
-    emptyTitle: 'No recently viewed listings',
-    emptyDescription: 'Open property details while signed in and they will appear here.',
+    titleKey: 'dashboard.collections.viewed.title',
+    subtitleKey: 'dashboard.collections.viewed.subtitle',
+    emptyTitleKey: 'dashboard.collections.viewed.emptyTitle',
+    emptyDescriptionKey: 'dashboard.collections.viewed.emptyDescription',
+    loadingKey: 'dashboard.collections.viewed.loading',
     icon: FiEye,
     loader: getRecentlyViewedProperties,
-    metadata: (entry) =>
-      `Total Views: ${entry.view_count || 0} • Last Viewed: ${formatPanelDate(entry.last_viewed_at)}`,
+    metadata: (entry, { t, language }) =>
+      t('dashboard.collections.viewedMeta', {
+        count: entry.view_count || 0,
+        date: formatPanelDate(entry.last_viewed_at, true, language),
+      }),
   },
 }
 
 const PropertyCollectionsPanel = ({ type }) => {
+  const { t, tv, language } = useLanguage()
   const { user, isLoading } = useAuth()
   const [selectedRefundEntry, setSelectedRefundEntry] = useState(null)
   const [refundReason, setRefundReason] = useState(REFUND_REASON_OPTIONS[0][0])
@@ -89,9 +102,15 @@ const PropertyCollectionsPanel = ({ type }) => {
 
   const isUnlockedPanel = type === 'unlocked'
   const refundReasonLabel = useMemo(
-    () => Object.fromEntries(REFUND_REASON_OPTIONS),
-    []
+    () => Object.fromEntries(REFUND_REASON_OPTIONS.map(([value, labelKey]) => [value, t(labelKey)])),
+    [t]
   )
+
+  const getRefundStatusLabel = (status) => {
+    const raw = String(status)
+    const translated = tv('refundStatus', raw)
+    return translated === raw ? raw.replace(/_/g, ' ') : translated
+  }
 
   const resetRefundModal = () => {
     setSelectedRefundEntry(null)
@@ -116,11 +135,11 @@ const PropertyCollectionsPanel = ({ type }) => {
     setSubmittingRefund(false)
 
     if (error) {
-      setRefundNotice(error.message || 'Unable to create refund request.')
+      setRefundNotice(error.message || t('dashboard.collections.refundError'))
       return
     }
 
-    setRefundNotice('Refund request submitted for review.')
+    setRefundNotice(t('dashboard.collections.refundSubmitted'))
     resetRefundModal()
     setRefreshKey((current) => current + 1)
   }
@@ -132,7 +151,7 @@ const PropertyCollectionsPanel = ({ type }) => {
   if (isLoading || itemsLoading) {
     return (
       <PanelCard className="p-8">
-        <p className="text-slate-500">Loading {config.title.toLowerCase()}...</p>
+        <p className="text-slate-500">{t(config.loadingKey)}</p>
       </PanelCard>
     )
   }
@@ -140,9 +159,9 @@ const PropertyCollectionsPanel = ({ type }) => {
   return (
     <PanelCard>
       <PanelCardHeader
-        title={config.title}
-        subtitle={config.subtitle}
-        status={isRefreshing ? 'Refreshing...' : null}
+        title={t(config.titleKey)}
+        subtitle={t(config.subtitleKey)}
+        status={isRefreshing ? t('dashboard.common.refreshing') : null}
       />
 
       <div className="px-6 py-6">
@@ -153,7 +172,7 @@ const PropertyCollectionsPanel = ({ type }) => {
         ) : null}
 
         {items.length === 0 ? (
-          <EmptyState title={config.emptyTitle} description={config.emptyDescription} />
+          <EmptyState title={t(config.emptyTitleKey)} description={t(config.emptyDescriptionKey)} />
         ) : (
           <div className="space-y-4">
             {items.map((item) => {
@@ -166,7 +185,7 @@ const PropertyCollectionsPanel = ({ type }) => {
                     <div className="h-24 w-28 shrink-0 overflow-hidden rounded-2xl bg-slate-100">
                       <PropertyThumbnailImage
                         src={item.primary_image}
-                        alt={item.category}
+                        alt={tv('categories', item.category)}
                         propertyType={item.property_type}
                         category={item.category}
                         pricing={item.pricing}
@@ -175,18 +194,16 @@ const PropertyCollectionsPanel = ({ type }) => {
 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-[#1E73B8]">
-                          {item.category}
+                        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-brand">
+                          {tv('categories', item.category)}
                         </span>
-                        {item.property_id_number ? (
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                            ID: {item.property_id_number}
-                          </span>
-                        ) : null}
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                          {t('listing.card.idLabel', { id: getPropertyIdNumber(item) })}
+                        </span>
                       </div>
 
                       <p className="mt-3 text-lg font-semibold text-slate-900">
-                        {item.property_type || item.category}
+                        {item.property_type ? tv('propertyTypes', item.property_type) : tv('categories', item.category)}
                       </p>
                       <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
                         <FiMapPin className="shrink-0" />
@@ -197,12 +214,15 @@ const PropertyCollectionsPanel = ({ type }) => {
                         </span>
                       </p>
                       <p className="mt-2 text-sm text-slate-500">
-                        {config.metadata(item) || `Created: ${formatPanelDate(item.created_at)}`}
+                        {config.metadata(item, { t, language }) ||
+                          t('dashboard.collections.createdAt', {
+                            date: formatPanelDate(item.created_at, true, language),
+                          })}
                       </p>
                       {isUnlockedPanel ? (
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                            Spent: {Number(item.credits_spent || 0)} points
+                            {t('dashboard.collections.spentPoints', { count: Number(item.credits_spent || 0) })}
                           </span>
                           {item.refund_status ? (
                             <span
@@ -211,7 +231,9 @@ const PropertyCollectionsPanel = ({ type }) => {
                                 'bg-slate-100 text-slate-700'
                               }`}
                             >
-                              Refund {String(item.refund_status).replace(/_/g, ' ')}
+                              {t('dashboard.collections.refundBadge', {
+                                status: getRefundStatusLabel(item.refund_status),
+                              })}
                             </span>
                           ) : null}
                           {item.refund_reason_code ? (
@@ -226,16 +248,16 @@ const PropertyCollectionsPanel = ({ type }) => {
 
                   <div className="flex items-center gap-3 sm:flex-col sm:items-end">
                     <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
-                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Rent</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{t('dashboard.collections.rent')}</p>
                       <p className="mt-1 text-lg font-bold text-slate-900">
                         <RentDisplay pricing={item.pricing} prefix="৳" />
                       </p>
                     </div>
                     <Link
                       to={buildListDetailsHref(item.id)}
-                      className="inline-flex items-center justify-center rounded-2xl bg-[#1E73B8] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17639f]"
+                      className="inline-flex items-center justify-center rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
                     >
-                      View Property
+                      {t('dashboard.common.viewProperty')}
                     </Link>
                     {isUnlockedPanel && item.can_claim_refund ? (
                       <button
@@ -246,7 +268,7 @@ const PropertyCollectionsPanel = ({ type }) => {
                         }}
                         className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                       >
-                        Claim Refund
+                        {t('dashboard.collections.claimRefund')}
                       </button>
                     ) : null}
                   </div>
@@ -263,54 +285,65 @@ const PropertyCollectionsPanel = ({ type }) => {
           onClick={resetRefundModal}
         >
           <div
-            className="w-full max-w-lg rounded-3xl bg-white p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="refund-modal-title"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-xl font-bold text-slate-900">Claim Refund</h3>
+            <h3 id="refund-modal-title" className="text-xl font-bold text-slate-900">{t('dashboard.collections.refundModal.title')}</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Submit a review request for this unlock within the refund policy window.
+              {t('dashboard.collections.refundModal.description')}
             </p>
 
             <div className="mt-4 rounded-2xl bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">
-                {selectedRefundEntry.property_type || selectedRefundEntry.category}
+                {selectedRefundEntry.property_type
+                  ? tv('propertyTypes', selectedRefundEntry.property_type)
+                  : tv('categories', selectedRefundEntry.category)}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Unlocked: {formatPanelDate(selectedRefundEntry.unlocked_at)}
+                {t('dashboard.collections.refundModal.unlockedAt', {
+                  date: formatPanelDate(selectedRefundEntry.unlocked_at, true, language),
+                })}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Points spent: {Number(selectedRefundEntry.credits_spent || 0)}
+                {t('dashboard.collections.refundModal.pointsSpent', {
+                  count: Number(selectedRefundEntry.credits_spent || 0),
+                })}
               </p>
             </div>
 
-            <label className="mt-4 block text-sm font-medium text-slate-700">
-              Reason
+            <label htmlFor="refund-reason" className="mt-4 block text-sm font-medium text-slate-700">
+              {t('dashboard.collections.refundModal.reason')}
             </label>
             <select
+              id="refund-reason"
               value={refundReason}
               onChange={(event) => setRefundReason(event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             >
-              {REFUND_REASON_OPTIONS.map(([value, label]) => (
+              {REFUND_REASON_OPTIONS.map(([value, labelKey]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(labelKey)}
                 </option>
               ))}
             </select>
 
-            <label className="mt-4 block text-sm font-medium text-slate-700">
-              Details
+            <label htmlFor="refund-details" className="mt-4 block text-sm font-medium text-slate-700">
+              {t('dashboard.collections.refundModal.details')}
             </label>
             <textarea
+              id="refund-details"
               value={refundDetails}
               onChange={(event) => setRefundDetails(event.target.value)}
               rows={4}
-              placeholder="Optional details for review"
-              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+              placeholder={t('dashboard.collections.refundModal.detailsPlaceholder')}
+              className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             />
 
-            <Link to="/refund" className="mt-4 inline-flex text-sm font-semibold text-[#1E73B8] hover:underline">
-              Read Refund Policy
+            <Link to="/refund" className="mt-4 inline-flex text-sm font-semibold text-brand hover:underline">
+              {t('dashboard.collections.refundModal.readPolicy')}
             </Link>
 
             <div className="mt-6 flex flex-wrap justify-end gap-3">
@@ -319,15 +352,15 @@ const PropertyCollectionsPanel = ({ type }) => {
                 onClick={resetRefundModal}
                 className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleSubmitRefundRequest}
                 disabled={submittingRefund}
-                className="rounded-2xl bg-[#1E73B8] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17639f] disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {submittingRefund ? 'Submitting...' : 'Submit Claim'}
+                {submittingRefund ? t('dashboard.common.submitting') : t('dashboard.collections.refundModal.submit')}
               </button>
             </div>
           </div>

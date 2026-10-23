@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { requestPasswordReset } from '../../services/authService';
+import { useLanguage } from '../../i18n/useLanguage';
+import LanguageToggle from '../../components/LanguageToggle.jsx';
 import './Login.css';
 
 const ForgotPassword = () => {
+    const { t } = useLanguage();
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
@@ -31,7 +34,7 @@ const ForgotPassword = () => {
                 setErrorMessage(result.error);
             }
         } catch (error) {
-            setErrorMessage('Failed to send reset email. Please try again.');
+            setErrorMessage(t('auth.forgot.failed'));
             console.error('Password reset error:', error);
         } finally {
             setIsLoading(false);
@@ -61,43 +64,50 @@ const ForgotPassword = () => {
             </div>
 
             {/* Geometric Shapes */}
-            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-[#1E73B8] opacity-20 rotate-45 animate-spin-slow'></div>
-            <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
+            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-brand opacity-20 rotate-45 animate-spin-slow'></div>
+            <div className='absolute bottom-32 left-16 w-16 h-16 bg-brand opacity-10 rounded-full animate-pulse-slow'></div>
             <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
             <form onSubmit={handleSubmit(onSubmit)} className='auth-form-shell'>
                 <div className='auth-card login-card-border text-sm'>
-                    <p className='auth-title'>Forgot Password?</p>
-                <p className='auth-subtitle'>Enter your email address and we&apos;ll send you a secure reset link.</p>
+                    <div className='flex w-full justify-end'>
+                        <LanguageToggle size='sm' />
+                    </div>
+                    <h1 className='auth-title'>{t('auth.forgot.title')}</h1>
+                <p className='auth-subtitle'>{t('auth.forgot.subtitle')}</p>
 
                 {successMessage && (
-                    <div className='auth-message auth-message-success'>
+                    <div role='status' className='auth-message auth-message-success'>
                         {successMessage}
                     </div>
                 )}
 
                 {errorMessage && (
-                    <div className='auth-message auth-message-error'>
+                    <div role='alert' className='auth-message auth-message-error'>
                         {errorMessage}
                     </div>
                 )}
 
                 <div className='w-full'>
-                    <p className='auth-label'>Email</p>
+                    <label htmlFor='forgot-email' className='auth-label'>{t('auth.fields.email')}</label>
                     <input
+                        id='forgot-email'
                         type="email"
-                        placeholder='Enter your registered email'
+                        autoComplete='email'
+                        aria-invalid={errors.email ? 'true' : undefined}
+                        aria-describedby={errors.email ? 'forgot-email-error' : undefined}
+                        placeholder={t('auth.placeholders.registeredEmail')}
                         {...register("email", {
-                            required: "Email is required",
+                            required: t('auth.validation.emailRequired'),
                             pattern: {
                                 value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                message: "Invalid email address"
+                                message: t('auth.validation.emailInvalid')
                             }
                         })}
                         className='auth-input my-2'
                         disabled={isLoading}
                     />
-                    {errors.email && <p className='text-red-700 text-xs'>{errors.email.message}</p>}
+                    {errors.email && <p id='forgot-email-error' role='alert' className='text-red-700 text-xs'>{errors.email.message}</p>}
                 </div>
 
                 <button
@@ -105,15 +115,15 @@ const ForgotPassword = () => {
                     className='auth-submit disabled:cursor-not-allowed disabled:opacity-50'
                     disabled={isLoading}
                 >
-                    {isLoading ? "Sending..." : "Send Reset Link"}
+                    {isLoading ? t('auth.forgot.submitting') : t('auth.forgot.submit')}
                 </button>
 
                 <div className='w-full text-center space-y-2'>
                     <p>
-                        Remember your password? <Link to='/login' className='text-[#1E73B8] font-medium cursor-pointer hover:underline'>Login</Link>
+                        {t('auth.forgot.rememberPassword')} <Link to='/login' className='text-brand font-medium cursor-pointer hover:underline'>{t('auth.forgot.loginLink')}</Link>
                     </p>
                     <p>
-                        Don't have an account? <Link to='/registration' className='text-[#1E73B8] font-medium cursor-pointer hover:underline'>Register</Link>
+                        {t('auth.forgot.noAccount')} <Link to='/registration' className='text-brand font-medium cursor-pointer hover:underline'>{t('auth.forgot.registerLink')}</Link>
                     </p>
                 </div>
             </div>

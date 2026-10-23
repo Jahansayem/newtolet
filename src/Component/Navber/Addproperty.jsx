@@ -4,10 +4,17 @@ import { AddPropertyProvider, useAddProperty } from '../../contexts/AddPropertyC
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
 import { submitPropertyListing } from '../../services/propertyService'
-import { validateScreen1, validateScreen2, validateScreen3, validateScreen4 } from '../../utils/formValidation'
+import {
+  validateScreen1Codes,
+  validateScreen2Codes,
+  validateScreen3Codes,
+  validateScreen4Codes,
+  localizeValidationErrors,
+} from '../../utils/formValidation'
 import { getStoredUser } from '../../services/authService'
 import RentDisplay from '../../components/RentDisplay'
 import locationData from '../../thetolet_locations_bundle.json'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const categories = [
   { id: 'family', label: 'Family', icon: '👨‍👩‍👧‍👦' },
@@ -50,6 +57,35 @@ const occupancies = [
 
 const rentPeriods = ['Daily', 'Weekly', 'Monthly']
 
+// Human-readable names for the validation summary (keys live in the dictionary).
+const FIELD_LABEL_KEYS = {
+  category: 'addProperty.fields.selectCategory',
+  property_type: 'addProperty.fields.propertyType',
+  total_bathrooms: 'addProperty.fields.bathrooms',
+  balcony: 'addProperty.fields.balcony',
+  kitchen: 'addProperty.fields.kitchen',
+  floor_level: 'addProperty.fields.floorLevel',
+  occupancy: 'addProperty.fields.occupancy',
+  rent_amount_bdt: 'addProperty.fields.rentAmount',
+  rent_period: 'addProperty.fields.rentalPeriod',
+  state_district: 'addProperty.fields.stateDistrict',
+  area: 'addProperty.fields.area',
+  contact_number: 'addProperty.fields.contactNumber',
+  short_description: 'addProperty.fields.shortDescription',
+  available_from: 'addProperty.fields.availableFrom',
+  deadline: 'addProperty.fields.deadline',
+  images: 'addProperty.sections.propertyPhotos',
+}
+
+const FIELD_INPUT_IDS = {
+  property_type: 'add-propertyType',
+  rent_amount_bdt: 'add-rentAmount',
+  floor_level: 'add-floorLevel',
+  contact_number: 'add-contactNumber',
+  short_description: 'add-shortDescription',
+  available_from: 'add-availableFrom',
+}
+
 const propertyTypes = [
   'Unit',
   'Apartment',
@@ -75,7 +111,8 @@ const amenitiesList = [
   'With Furniture',
 ]
 
-const CounterInput = ({ label, value, onChange, error, optional = false }) => {
+const CounterInput = ({ label, value, onChange, error, optional = false, ariaKey = '' }) => {
+  const { t } = useLanguage()
   const handleDecrement = () => {
     onChange(Math.max(0, value - 1))
   }
@@ -91,13 +128,14 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
 
   return (
     <div>
-      <label className='block text-xs md:text-sm font-semibold text-black mb-1'>
+      <label className='ui-label'>
         {label} {!optional && '*'}
       </label>
-      <div className='flex items-center border border-gray-300 rounded-lg overflow-hidden'>
+      <div className='flex items-center overflow-hidden rounded-[var(--radius-input)] border border-[#cbd5e1] bg-white'>
         <button
           type='button'
           onClick={handleDecrement}
+          aria-label={ariaKey ? t(`addProperty.aria.decrease${ariaKey}`) : undefined}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-black bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
@@ -106,6 +144,7 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
         <button
           type='button'
           onClick={handleIncrement}
+          aria-label={ariaKey ? t(`addProperty.aria.increase${ariaKey}`) : undefined}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-black bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
@@ -117,7 +156,8 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
           pattern='[0-9]*'
           value={value}
           onChange={handleChange}
-          className='flex-1 min-w-0 text-center py-2 text-sm md:text-base focus:outline-none bg-white text-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          aria-label={label}
+          className='flex-1 min-w-0 text-center py-2 text-sm md:text-base bg-white text-ink focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
         />
       </div>
       {error && <p className='text-red-500 text-xs mt-1'>{error}</p>}
@@ -125,9 +165,12 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
   )
 }
 
-const CheckboxInput = ({ label, checked, onChange, error, optional = false }) => (
+const CheckboxInput = ({ label, checked, onChange, error, optional = false }) => {
+  const { t } = useLanguage()
+
+  return (
   <div>
-    <span className='block text-xs md:text-sm font-semibold text-black mb-1'>
+    <span className='ui-label'>
       {label} {!optional && '*'}
     </span>
     <label className='flex min-h-[42px] items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white cursor-pointer hover:bg-gray-50 transition-colors'>
@@ -135,17 +178,19 @@ const CheckboxInput = ({ label, checked, onChange, error, optional = false }) =>
         type='checkbox'
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className='h-4 w-4 rounded border-gray-300 text-[#1E73B8] focus:ring-[#1E73B8]'
+        className='h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand'
       />
       <span className='text-sm md:text-base text-black'>
-        {checked ? 'Yes' : 'No'}
+        {checked ? t('common.yes') : t('common.no')}
       </span>
     </label>
     {error && <p className='text-red-500 text-xs mt-1'>{error}</p>}
   </div>
-)
+  )
+}
 
 const SizeInput = ({ label, value, onChange }) => {
+  const { t } = useLanguage()
   const handleDecrement = () => {
     const currentValue = parseInt(value) || 0
     onChange(Math.max(0, currentValue - 50).toString())
@@ -163,13 +208,14 @@ const SizeInput = ({ label, value, onChange }) => {
 
   return (
     <div>
-      <label className='block text-xs md:text-sm font-semibold text-black mb-1'>
+      <label className='ui-label'>
         {label}
       </label>
-      <div className='flex items-center border border-gray-300 rounded-lg overflow-hidden'>
+      <div className='flex items-center overflow-hidden rounded-[var(--radius-input)] border border-[#cbd5e1] bg-white'>
         <button
           type='button'
           onClick={handleDecrement}
+          aria-label={t('addProperty.aria.decreaseRoomSize')}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-black bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
@@ -178,6 +224,7 @@ const SizeInput = ({ label, value, onChange }) => {
         <button
           type='button'
           onClick={handleIncrement}
+          aria-label={t('addProperty.aria.increaseRoomSize')}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-black bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
@@ -189,8 +236,9 @@ const SizeInput = ({ label, value, onChange }) => {
           pattern='[0-9]*'
           value={value}
           onChange={handleChange}
-          className='flex-1 min-w-0 text-center py-2 text-sm md:text-base focus:outline-none bg-white text-black [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
-          placeholder='Optional'
+          aria-label={label}
+          className='flex-1 min-w-0 text-center py-2 text-sm md:text-base bg-white text-ink focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
+          placeholder={t('common.optional')}
         />
       </div>
     </div>
@@ -198,6 +246,7 @@ const SizeInput = ({ label, value, onChange }) => {
 }
 
 const AddPropertyContent = () => {
+  const { t, tv } = useLanguage()
   const navigate = useNavigate()
   const {
     formData,
@@ -314,25 +363,34 @@ const AddPropertyContent = () => {
 
     try {
       // Validate all screens
-      const errors1 = validateScreen1(formData)
-      const errors2 = validateScreen2(formData)
-      const errors3 = validateScreen3(formData)
-      const errors4 = validateScreen4(formData)
+      const errors1 = localizeValidationErrors(validateScreen1Codes(formData), t)
+      const errors2 = localizeValidationErrors(validateScreen2Codes(formData), t)
+      const errors3 = localizeValidationErrors(validateScreen3Codes(formData), t)
+      const errors4 = localizeValidationErrors(validateScreen4Codes(formData), t)
 
       const allErrors = { ...errors1, ...errors2, ...errors3, ...errors4 }
 
       if (Object.keys(allErrors).length > 0) {
         setFormErrors(allErrors)
         const errorList = Object.entries(allErrors)
-          .map(([field, message]) => `${field}: ${message}`)
+          .map(([field, message]) => `${FIELD_LABEL_KEYS[field] ? t(FIELD_LABEL_KEYS[field]) : field}: ${message}`)
           .join('\n')
-        setSubmitError(`Please fix all errors before submitting:\n${errorList}`)
+        setSubmitError(`${t('addProperty.alerts.fixErrorsHeading')}\n${errorList}`)
         setIsSubmitting(false)
-        // Scroll to first error
-        const firstErrorField = document.querySelector('[class*="border-red-500"]')
-        if (firstErrorField) {
-          firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
+        // Move focus to the first invalid control; fall back to the first red-bordered element.
+        const firstInvalidField = Object.keys(allErrors).find((field) => FIELD_INPUT_IDS[field])
+        requestAnimationFrame(() => {
+          const target =
+            (firstInvalidField && document.getElementById(FIELD_INPUT_IDS[firstInvalidField])) ||
+            document.querySelector('[aria-invalid="true"]') ||
+            document.querySelector('[class*="border-red-500"]')
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            if (typeof target.focus === 'function') {
+              target.focus({ preventScroll: true })
+            }
+          }
+        })
         return
       }
 
@@ -342,7 +400,7 @@ const AddPropertyContent = () => {
 
       if (!userId) {
         if (isMountedRef.current) {
-          setSubmitError('Please login to add a property')
+          setSubmitError(t('addProperty.alerts.loginRequired'))
           setIsSubmitting(false)
         }
         redirectTimerRef.current = setTimeout(() => {
@@ -361,10 +419,20 @@ const AddPropertyContent = () => {
       )
 
       if (result.success) {
+        // The service message is always set; append the public Property ID so the
+        // user can quote it (it is what cards and search use, not the internal uuid).
+        const successMessage = [
+          result.message ||
+            t('addProperty.success.created', { id: result.propertyIdNumber || result.propertyId }),
+          result.propertyIdNumber
+            ? t('addProperty.success.propertyId', { id: result.propertyIdNumber })
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+
         if (isMountedRef.current) {
-          setSubmitSuccessMessage(
-            result.message || `Property listing #${result.propertyId} created successfully!`
-          )
+          setSubmitSuccessMessage(successMessage)
           setSubmitSuccess(true)
           resetForm()
         }
@@ -372,25 +440,27 @@ const AddPropertyContent = () => {
           if (isMountedRef.current) {
             navigate('/my-properties', {
               state: {
-                message: result.message || `Property listing #${result.propertyId} created successfully!`,
+                message: successMessage,
               },
             })
           }
         }, 2000)
       } else {
         if (isMountedRef.current) {
-          setSubmitError(result.error || 'Failed to submit property listing')
+          setSubmitError(result.error || t('addProperty.alerts.submitFailed'))
           setIsSubmitting(false)
         }
       }
     } catch (error) {
       console.error('Submission error:', error)
       if (isMountedRef.current) {
-        setSubmitError(error.message || 'An unexpected error occurred')
+        setSubmitError(error.message || t('addProperty.alerts.unexpectedError'))
         setIsSubmitting(false)
       }
     }
   }
+
+  const fixErrorsHeading = t('addProperty.alerts.fixErrorsHeading')
 
   if (submitSuccess) {
     return (
@@ -409,11 +479,11 @@ const AddPropertyContent = () => {
               />
             </svg>
           </div>
-          <h2 className='text-2xl font-bold text-green-900 mb-2'>Success!</h2>
+          <h2 className='text-2xl font-bold text-green-900 mb-2'>{t('addProperty.success.title')}</h2>
           <p className='text-green-700 mb-4'>
-            {submitSuccessMessage || 'Your property listing has been submitted successfully!'}
+            {submitSuccessMessage || t('addProperty.success.submitted')}
           </p>
-          <p className='text-sm text-gray-600'>Redirecting to your properties...</p>
+          <p className='text-sm text-gray-600'>{t('addProperty.success.redirecting')}</p>
         </div>
       </div>
     )
@@ -426,7 +496,7 @@ const AddPropertyContent = () => {
         <div className='mb-4 md:mb-8'>
           <button
             onClick={() => navigate(-1)}
-            className='text-[#1E73B8] hover:text-[#1665a0] font-medium flex items-center gap-1 mb-3 md:mb-4 text-sm md:text-base'
+            className='text-brand hover:text-brand-hover font-medium flex items-center gap-1 mb-3 md:mb-4 text-sm md:text-base'
           >
             <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
               <path
@@ -435,14 +505,14 @@ const AddPropertyContent = () => {
                 clipRule='evenodd'
               />
             </svg>
-            Back
+            {t('common.back')}
           </button>
 
           <h1 className='text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2'>
-            Add Property
+            {t('addProperty.header.title')}
           </h1>
           <p className='text-sm md:text-base text-gray-600'>
-            Fill in all the details to list your property and start earning!
+            {t('addProperty.header.subtitle')}
           </p>
         </div>
 
@@ -451,92 +521,105 @@ const AddPropertyContent = () => {
           {/* Section 1: Property Details */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-black mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>1</span>
-              Property Details
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>1</span>
+              {t('addProperty.sections.propertyDetails')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Category Selection */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>
-                  Select Category *
-                </label>
-                <div className='grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3'>
+                <p id='add-category-label' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.selectCategory')}
+                </p>
+                <div
+                  role='group'
+                  aria-labelledby='add-category-label'
+                  aria-invalid={errors.category ? 'true' : undefined}
+                  aria-describedby={errors.category ? 'add-category-error' : undefined}
+                  className='grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3'
+                >
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
                       type='button'
+                      aria-pressed={formData.category === cat.label}
                       onClick={() => updateFormData({ category: cat.label })}
                       className={`p-3 md:p-4 rounded-lg border-2 transition-all text-center ${
                         formData.category === cat.label
-                          ? 'border-[#1E73B8] bg-[#1E73B8]/10 text-black shadow-md scale-105'
-                          : 'border-gray-300 bg-white text-black hover:border-[#1E73B8]/40'
+                          ? 'border-brand bg-brand/10 text-black shadow-md scale-105'
+                          : 'border-gray-300 bg-white text-black hover:border-brand/40'
                       }`}
                     >
                       <div className='text-2xl md:text-3xl mb-1 md:mb-2'>{cat.icon}</div>
-                      <p className='font-medium text-xs md:text-sm text-black'>{cat.label}</p>
+                      <p className='font-medium text-xs md:text-sm text-black'>{tv('categories', cat.label)}</p>
                     </button>
                   ))}
                 </div>
-                {errors.category && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.category}</p>}
+                {errors.category && <p id='add-category-error' role='alert' className='ui-error'>{errors.category}</p>}
               </div>
 
               {/* Property Type Selection */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>
-                  Property Type *
+                <label htmlFor='add-propertyType' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.propertyType')}
                 </label>
                 <select
+                  id='add-propertyType'
+                  aria-invalid={errors.property_type ? 'true' : undefined}
                   value={formData.property_type || ''}
                   onChange={(e) => updateFormData({ property_type: e.target.value })}
-                  className='w-full border border-gray-300 rounded-lg p-3 md:p-4 text-sm md:text-base text-black focus:outline-none focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/20 bg-white'
+                  className='ui-field'
                 >
-                  <option value=''>Select property type</option>
+                  <option value=''>{t('addProperty.placeholders.selectPropertyType')}</option>
                   {propertyTypes.map((type) => (
                     <option key={type} value={type} className='text-black'>
-                      {type}
+                      {tv('propertyTypes', type)}
                     </option>
                   ))}
                 </select>
-                {errors.property_type && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.property_type}</p>}
+                {errors.property_type && <p className='ui-error'>{errors.property_type}</p>}
               </div>
 
               {/* Specifications Grid */}
               <div className='grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4'>
                 <CounterInput
-                  label='Rooms'
+                  label={t('addProperty.fields.rooms')}
+                  ariaKey='Rooms'
                   value={formData.dining_rooms || 0}
                   onChange={(val) => updateFormData({ dining_rooms: val })}
                   error={errors.dining_rooms}
                   optional
                 />
                 <CheckboxInput
-                  label='Drawing Room'
+                  label={t('addProperty.fields.drawingRoom')}
                   checked={Number(formData.living_rooms || 0) > 0}
                   onChange={(checked) => updateFormData({ living_rooms: checked ? 1 : 0 })}
                   error={errors.living_rooms}
                   optional
                 />
                 <CounterInput
-                  label='Bathrooms'
+                  label={t('addProperty.fields.bathrooms')}
+                  ariaKey='Bathrooms'
                   value={formData.total_bathrooms}
                   onChange={(val) => updateFormData({ total_bathrooms: val })}
                   error={errors.total_bathrooms}
                 />
                 <CounterInput
-                  label='Balcony'
+                  label={t('addProperty.fields.balcony')}
+                  ariaKey='Balconies'
                   value={formData.balcony}
                   onChange={(val) => updateFormData({ balcony: val })}
                   error={errors.balcony}
                 />
                 <CounterInput
-                  label='Kitchen'
+                  label={t('addProperty.fields.kitchen')}
+                  ariaKey='Kitchen'
                   value={formData.kitchen || 0}
                   onChange={(val) => updateFormData({ kitchen: val })}
                   error={errors.kitchen}
                 />
                 <SizeInput
-                  label='Room Size (sqft)'
+                  label={t('addProperty.fields.roomSize')}
                   value={formData.room_size_sqft}
                   onChange={(val) => updateFormData({ room_size_sqft: val })}
                 />
@@ -544,39 +627,48 @@ const AddPropertyContent = () => {
 
               {/* Floor Level */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                  Floor Level *
+                <label htmlFor='add-floorLevel' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.floorLevel')}
                 </label>
                 <select
+                  id='add-floorLevel'
+                  aria-invalid={errors.floor_level ? 'true' : undefined}
+                  aria-describedby={errors.floor_level ? 'add-floorLevel-error' : undefined}
                   value={formData.floor_level}
                   onChange={(e) => updateFormData({ floor_level: e.target.value })}
-                  className={`w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base text-black border rounded-lg focus:outline-none focus:ring-2 bg-white ${
+                  className={`ui-field ${
                     errors.floor_level
                       ? 'border-red-500 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-[#1E73B8]'
+                      : 'border-gray-300 focus:ring-brand'
                   }`}
                 >
-                  <option value=''>Select floor level</option>
+                  <option value=''>{t('addProperty.placeholders.selectFloorLevel')}</option>
                   {floorLevels.map((level) => (
-                    <option key={level} value={level} className='text-black'>{level}</option>
+                    <option key={level} value={level} className='text-black'>{tv('floorLevels', level)}</option>
                   ))}
                 </select>
-                {errors.floor_level && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.floor_level}</p>}
+                {errors.floor_level && <p id='add-floorLevel-error' role='alert' className='ui-error'>{errors.floor_level}</p>}
               </div>
 
               {/* Occupancy Restrictions */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>
-                  Occupancy Restrictions *
-                </label>
-                <div className='space-y-2 md:space-y-3'>
+                <p id='add-occupancy-label' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.occupancy')}
+                </p>
+                <div
+                  role='radiogroup'
+                  aria-labelledby='add-occupancy-label'
+                  aria-invalid={errors.occupancy ? 'true' : undefined}
+                  aria-describedby={errors.occupancy ? 'add-occupancy-error' : undefined}
+                  className='space-y-2 md:space-y-3'
+                >
                   {occupancies.map((occ) => (
                     <label
                       key={occ}
                       className={`flex items-center p-2.5 md:p-3 border-2 rounded-lg cursor-pointer transition-all ${
                         formData.occupancy === occ
-                          ? 'border-[#1E73B8] bg-white'
-                          : 'border-gray-300 bg-white hover:border-[#1E73B8]/60'
+                          ? 'border-brand bg-white'
+                          : 'border-gray-300 bg-white hover:border-brand/60'
                       }`}
                     >
                       <input
@@ -585,15 +677,15 @@ const AddPropertyContent = () => {
                         value={occ}
                         checked={formData.occupancy === occ}
                         onChange={(e) => updateFormData({ occupancy: e.target.value })}
-                        className='w-4 h-4 text-[#1E73B8] bg-white'
+                        className='w-4 h-4 text-brand bg-white'
                       />
                       <span className={`ml-3 font-medium text-sm md:text-base ${
                         formData.occupancy === occ ? 'text-black' : 'text-gray-800'
-                      }`}>{occ}</span>
+                      }`}>{tv('occupancy', occ)}</span>
                     </label>
                   ))}
                 </div>
-                {errors.occupancy && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.occupancy}</p>}
+                {errors.occupancy && <p id='add-occupancy-error' role='alert' className='ui-error'>{errors.occupancy}</p>}
               </div>
             </div>
           </div>
@@ -601,34 +693,38 @@ const AddPropertyContent = () => {
           {/* Section 2: Pricing */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-black mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>2</span>
-              Pricing Details
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>2</span>
+              {t('addProperty.sections.pricingDetails')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Rent Amount */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                  Rent Amount (BDT) {formData.is_rent_negotiable ? '' : '*'}
+                <label htmlFor='add-rentAmount' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.rentAmount')} {formData.is_rent_negotiable ? '' : '*'}
                 </label>
                 <div className='relative'>
                   <span className='absolute left-3 md:left-4 top-2.5 md:top-3 text-lg md:text-xl font-semibold text-gray-600'>
                     ৳
                   </span>
                   <input
+                    id='add-rentAmount'
                     type='number'
+                    inputMode='numeric'
+                    aria-invalid={errors.rent_amount_bdt ? 'true' : undefined}
+                    aria-describedby={errors.rent_amount_bdt ? 'add-rentAmount-error' : undefined}
                     value={formData.rent_amount_bdt}
                     onChange={(e) => updateFormData({ rent_amount_bdt: parseInt(e.target.value) || '' })}
-                    className={`w-full pl-8 md:pl-10 pr-3 md:pr-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 rounded-lg focus:outline-none transition-all bg-white ${
+                    className={`ui-field pl-9 md:pl-10 ${
                       errors.rent_amount_bdt
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
-                    placeholder='Enter rent amount'
+                    placeholder={t('addProperty.placeholders.rentAmount')}
                     min='1'
                   />
                 </div>
-                {errors.rent_amount_bdt && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_amount_bdt}</p>}
+                {errors.rent_amount_bdt && <p id='add-rentAmount-error' role='alert' className='ui-error'>{errors.rent_amount_bdt}</p>}
               </div>
 
               <label className='flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer'>
@@ -636,29 +732,36 @@ const AddPropertyContent = () => {
                   type='checkbox'
                   checked={Boolean(formData.is_rent_negotiable)}
                   onChange={(e) => updateFormData({ is_rent_negotiable: e.target.checked })}
-                  className='mt-1 h-4 w-4 text-[#1E73B8] bg-white'
+                  className='mt-1 h-4 w-4 text-brand bg-white'
                 />
                 <span>
-                  <span className='block text-sm md:text-base font-semibold text-black'>Rent is negotiable</span>
-                  <span className='block text-xs md:text-sm text-gray-600'>Tenants will see this listing as negotiable. You can leave the amount empty.</span>
+                  <span className='block text-sm md:text-base font-semibold text-black'>{t('addProperty.fields.rentNegotiable')}</span>
+                  <span className='block text-xs md:text-sm text-gray-600'>{t('addProperty.fields.rentNegotiableHint')}</span>
                 </span>
               </label>
 
               {/* Rent Period */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>
-                  Rental Period *
-                </label>
-                <div className='grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3'>
+                <p id='add-rentPeriod-label' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.rentalPeriod')}
+                </p>
+                <div
+                  role='group'
+                  aria-labelledby='add-rentPeriod-label'
+                  aria-invalid={errors.rent_period ? 'true' : undefined}
+                  aria-describedby={errors.rent_period ? 'add-rentPeriod-error' : undefined}
+                  className='grid grid-cols-3 gap-2 md:gap-3'
+                >
                   {rentPeriods.map((period) => (
                     <button
                       key={period}
                       type='button'
+                      aria-pressed={formData.rent_period === period}
                       onClick={() => updateFormData({ rent_period: period })}
                       className={`p-3 md:p-4 rounded-lg border-2 transition-all font-semibold text-center ${
                         formData.rent_period === period
-                          ? 'border-[#1E73B8] bg-[#1E73B8]/10 text-black'
-                          : 'border-gray-300 bg-white text-black hover:border-[#1E73B8]/40'
+                          ? 'border-brand bg-brand/10 text-black'
+                          : 'border-gray-300 bg-white text-black hover:border-brand/40'
                       }`}
                     >
                       <span className='text-xl md:text-2xl'>
@@ -668,24 +771,24 @@ const AddPropertyContent = () => {
                         {period === 'Yearly' && '📈'}
                       </span>
                       <br />
-                      <span className='text-xs md:text-sm text-black'>{period}</span>
+                      <span className='text-xs md:text-sm text-black'>{tv('rentPeriods', period)}</span>
                     </button>
                   ))}
                 </div>
-                {errors.rent_period && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_period}</p>}
+                {errors.rent_period && <p id='add-rentPeriod-error' role='alert' className='ui-error'>{errors.rent_period}</p>}
               </div>
 
               {(formData.rent_amount_bdt || formData.is_rent_negotiable) && formData.rent_period && (
                 <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
                   <p className='text-sm md:text-base text-green-800'>
-                    <strong>Price:</strong>{' '}
+                    <strong>{t('addProperty.pricing.price')}</strong>{' '}
                     <RentDisplay
                       pricing={{
                         rent_amount_bdt: formData.rent_amount_bdt,
                         is_rent_negotiable: formData.is_rent_negotiable,
                       }}
                       prefix='৳ '
-                      suffix={!formData.is_rent_negotiable || formData.rent_amount_bdt ? `per ${formData.rent_period.toLowerCase()}` : ''}
+                      suffix={!formData.is_rent_negotiable || formData.rent_amount_bdt ? t('addProperty.pricing.perPeriod', { period: tv('rentPeriods', formData.rent_period).toLowerCase() }) : ''}
                     />
                   </p>
                 </div>
@@ -696,28 +799,27 @@ const AddPropertyContent = () => {
           {/* Section 3: Location */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-black mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>3</span>
-              Location Details
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>3</span>
+              {t('addProperty.sections.locationDetails')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Division Dropdown */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                  Division *
-                </label>
+                <label htmlFor='add-division' className='ui-label text-[15px]'>{t('addProperty.fields.division')}</label>
                 <select
+                  id='add-division'
                   value={selectedDivision}
                   onChange={(e) => handleDivisionChange(e.target.value)}
-                  className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 rounded-lg focus:outline-none transition-all bg-white ${
+                  className={`ui-field ${
                     errors.state_district && !selectedDivision
                       ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                      : 'border-gray-300 focus:ring-2 focus:ring-brand'
                   }`}
                 >
-                  <option value=''>Select Division</option>
+                  <option value=''>{t('addProperty.placeholders.selectDivision')}</option>
                   {locationData.divisions.map((division) => (
-                    <option key={division.id} value={division.name} className='text-black'>{division.name}</option>
+                    <option key={division.id} value={division.name} className='text-black'>{tv('divisions', division.name)}</option>
                   ))}
                 </select>
               </div>
@@ -725,19 +827,18 @@ const AddPropertyContent = () => {
               {/* District Dropdown */}
               {selectedDivision && (
                 <div className='animate-fade-in-up'>
-                  <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                    District *
-                  </label>
+                  <label htmlFor='add-district' className='ui-label text-[15px]'>{t('addProperty.fields.district')}</label>
                   <select
+                  id='add-district'
                     value={selectedDistrict}
                     onChange={(e) => handleDistrictChange(e.target.value)}
-                    className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 rounded-lg focus:outline-none transition-all bg-white ${
+                    className={`ui-field ${
                       errors.state_district && !selectedDistrict
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
                   >
-                    <option value=''>Select District</option>
+                    <option value=''>{t('addProperty.placeholders.selectDistrict')}</option>
                     {availableDistricts.map((district) => (
                       <option key={district} value={district} className='text-black'>{district}</option>
                     ))}
@@ -748,33 +849,32 @@ const AddPropertyContent = () => {
               {/* Upazilla Dropdown */}
               {selectedDistrict && (
                 <div className='animate-fade-in-up'>
-                  <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                    Upazilla *
-                  </label>
+                  <label htmlFor='add-upazilla' className='ui-label text-[15px]'>{t('addProperty.fields.upazilla')}</label>
                   <select
+                  id='add-upazilla'
                     value={selectedUpazilla}
                     onChange={(e) => handleUpazillaChange(e.target.value)}
-                    className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 rounded-lg focus:outline-none transition-all bg-white ${
+                    className={`ui-field ${
                       errors.area && !selectedUpazilla
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
                   >
-                    <option value=''>Select Upazilla</option>
+                    <option value=''>{t('addProperty.placeholders.selectUpazilla')}</option>
                     {availableUpazillas.map((upazilla) => (
                       <option key={upazilla} value={upazilla} className='text-black'>{upazilla}</option>
                     ))}
                   </select>
-                  {errors.area && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.area}</p>}
+                  {errors.area && <p className='ui-error'>{errors.area}</p>}
                 </div>
               )}
 
               {/* Selected Location Display */}
               {selectedUpazilla && (
-                <div className='bg-[#1E73B8]/5 border border-[#1E73B8]/30 rounded-lg p-3 md:p-4 animate-fade-in-up'>
+                <div className='bg-brand/5 border border-brand/30 rounded-lg p-3 md:p-4 animate-fade-in-up'>
                   <p className='text-sm md:text-base text-gray-700'>
-                    <strong>Selected Location:</strong>{' '}
-                    <span className='text-[#1E73B8]'>{selectedUpazilla}, {selectedDistrict}, {selectedDivision}</span>
+                    <strong>{t('addProperty.location.selectedLocation')}</strong>{' '}
+                    <span className='text-brand'>{selectedUpazilla}, {selectedDistrict}, {tv('divisions', selectedDivision)}</span>
                   </p>
                 </div>
               )}
@@ -782,15 +882,14 @@ const AddPropertyContent = () => {
               {/* Sub Area Dropdown - Shows if upazilla has sub-areas */}
               {selectedUpazilla && getSubAreas(selectedUpazilla).length > 0 && (
                 <div className='animate-fade-in-up'>
-                  <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                    Sub Area (Optional)
-                  </label>
+                  <label htmlFor='add-subArea' className='ui-label text-[15px]'>{t('addProperty.fields.subArea')}</label>
                   <select
+                  id='add-subArea'
                     value={selectedSubArea}
                     onChange={(e) => handleSubAreaChange(e.target.value)}
-                    className='w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E73B8] bg-white'
+                    className='ui-field'
                   >
-                    <option value=''>Select Sub Area</option>
+                    <option value=''>{t('addProperty.placeholders.selectSubArea')}</option>
                     {getSubAreas(selectedUpazilla).map((subArea) => (
                       <option key={subArea} value={subArea} className='text-black'>
                         {subArea}
@@ -799,7 +898,7 @@ const AddPropertyContent = () => {
                   </select>
                   {selectedSubArea && (
                     <p className='text-green-600 text-xs md:text-sm mt-2 font-medium'>
-                      ✓ Sub Area: {selectedSubArea}
+                      {t('addProperty.location.subAreaSelected', { subArea: selectedSubArea })}
                     </p>
                   )}
                 </div>
@@ -807,46 +906,54 @@ const AddPropertyContent = () => {
 
               {/* Contact Number */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                  Contact Number *
+                <label htmlFor='add-contactNumber' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.contactNumber')}
                 </label>
                 <div className='flex'>
                   <span className='flex items-center px-3 md:px-4 py-2.5 md:py-3 bg-gray-100 border-2 border-r-0 border-gray-300 rounded-l-lg font-semibold text-sm md:text-base text-gray-700'>
                     +88
                   </span>
                   <input
+                    id='add-contactNumber'
                     type='tel'
+                    inputMode='tel'
+                    autoComplete='tel-national'
+                    aria-invalid={errors.contact_number ? 'true' : undefined}
+                    aria-describedby={errors.contact_number ? 'add-contactNumber-error' : undefined}
                     value={formData.contact_number.replace('+88', '')}
                     onChange={(e) => updateFormData({ contact_number: '+88' + e.target.value })}
-                    className={`flex-1 px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 border-l-0 rounded-r-lg focus:outline-none transition-all bg-white ${
+                    className={`ui-field rounded-l-none border-l-0 ${
                       errors.contact_number
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
-                    placeholder='Enter Your Number'
+                    placeholder={t('addProperty.placeholders.enterYourNumber')}
                   />
                 </div>
-                {errors.contact_number && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.contact_number}</p>}
+                {errors.contact_number && <p id='add-contactNumber-error' role='alert' className='ui-error'>{errors.contact_number}</p>}
               </div>
 
               {/* Short Description */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-black mb-2'>
-                  Short Description *
+                <label htmlFor='add-shortDescription' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.shortDescription')}
                 </label>
                 <textarea
+                  id='add-shortDescription'
+                  aria-invalid={errors.short_description ? 'true' : undefined}
+                  aria-describedby={errors.short_description ? 'add-shortDescription-error' : undefined}
                   value={formData.short_description}
                   onChange={(e) => updateFormData({ short_description: e.target.value })}
-                  className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base text-black border-2 rounded-lg focus:outline-none transition-all resize-none bg-white ${
+                  className={`ui-field resize-none ${
                     errors.short_description
                       ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                      : 'border-gray-300 focus:ring-2 focus:ring-brand'
                   }`}
                   rows='4'
-                  placeholder='e.g., Fresh and clean house, newly renovated with modern amenities.'
+                  placeholder={t('addProperty.placeholders.shortDescriptionBrief')}
                 />
-                {errors.short_description && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.short_description}</p>}
-                <p className='text-gray-500 text-xs mt-1'>{formData.short_description.length} / 500 characters</p>
+                {errors.short_description && <p id='add-shortDescription-error' role='alert' className='ui-error'>{errors.short_description}</p>}
+                <p className='text-gray-500 text-xs mt-1'>{t('addProperty.fields.charCount', { count: formData.short_description.length, max: 500 })}</p>
               </div>
 
               {/* Set Location Button - REMOVED */}
@@ -858,31 +965,31 @@ const AddPropertyContent = () => {
           {/* Section 4: Facilities & Upload */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-black mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>4</span>
-              Facilities & Upload
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>4</span>
+              {t('addProperty.sections.facilitiesUpload')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Facilities */}
               <div>
-                <h3 className='text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>Facilities</h3>
+                <h3 className='text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>{t('addProperty.sections.facilities')}</h3>
                 <div className='grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3'>
                   {amenitiesList.map((amenity) => (
                     <label
                       key={amenity}
                       className={`flex items-center p-2.5 md:p-3 border-2 rounded-lg cursor-pointer transition-all ${
                         formData.amenities.includes(amenity)
-                          ? 'border-[#1E73B8] bg-white'
-                          : 'border-gray-300 bg-white hover:border-[#1E73B8]/60'
+                          ? 'border-brand bg-white'
+                          : 'border-gray-300 bg-white hover:border-brand/60'
                       }`}
                     >
                       <input
                         type='checkbox'
                         checked={formData.amenities.includes(amenity)}
                         onChange={() => handleAmenityToggle(amenity)}
-                        className='w-4 h-4 md:w-5 md:h-5 text-[#1E73B8] rounded cursor-pointer bg-white'
+                        className='w-4 h-4 md:w-5 md:h-5 text-brand rounded cursor-pointer bg-white'
                       />
-                      <span className='ml-2 font-medium text-xs md:text-sm text-black'>{amenity}</span>
+                      <span className='ml-2 font-medium text-xs md:text-sm text-black'>{tv('amenities', amenity)}</span>
                     </label>
                   ))}
                 </div>
@@ -890,22 +997,25 @@ const AddPropertyContent = () => {
 
               {/* Availability Dates */}
               <div>
-                <h3 className='text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>Availability</h3>
+                <h3 className='text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>{t('addProperty.sections.availability')}</h3>
                 <div className='space-y-4'>
                   <div>
-                    <label className='block text-xs md:text-sm font-semibold text-black mb-2'>Available From *</label>
+                    <label htmlFor='add-availableFrom' className='ui-label'>{t('addProperty.fields.availableFrom')}</label>
                     <input
+                      id='add-availableFrom'
                       type='date'
+                      aria-invalid={errors.available_from ? 'true' : undefined}
+                      aria-describedby={errors.available_from ? 'add-availableFrom-error' : undefined}
                       value={formData.available_from}
                       onChange={(e) => updateFormData({ available_from: e.target.value })}
-                      className={`w-full px-3 md:px-4 py-2.5 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
+                      className={`ui-field ${
                         errors.available_from
                           ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                          : 'border-gray-300 focus:ring-2 focus:ring-brand'
                       }`}
                       style={{ colorScheme: 'light', color: 'black', backgroundColor: 'white' }}
                     />
-                    {errors.available_from && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.available_from}</p>}
+                    {errors.available_from && <p id='add-availableFrom-error' role='alert' className='ui-error'>{errors.available_from}</p>}
                   </div>
                 </div>
               </div>
@@ -913,7 +1023,7 @@ const AddPropertyContent = () => {
               {/* Image Upload */}
               <div>
                 <h3 className='text-base md:text-lg font-semibold text-black mb-3 md:mb-4'>
-                  Property Photos *
+                  {t('addProperty.sections.propertyPhotosRequired')}
                 </h3>
                 <ImageUploader
                   images={formData.images}
@@ -926,10 +1036,10 @@ const AddPropertyContent = () => {
 
           {/* Error Message */}
           {submitError && (
-            <div className='p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg'>
-              <p className='text-red-800 font-medium text-sm md:text-base mb-2'>⚠️ Validation Errors</p>
+            <div role='alert' className='p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg'>
+              <p className='text-red-800 font-medium text-sm md:text-base mb-2'>{t('addProperty.alerts.validationErrors')}</p>
               <ul className='text-red-700 text-xs md:text-sm mt-2 space-y-1'>
-                {submitError.split('\n').map((error, idx) => (error ? <li key={idx}>• {error.replace(/^Please fix all errors before submitting:\n?/, '')}</li> : null))}
+                {submitError.split('\n').map((error, idx) => (error ? <li key={idx}>• {error.startsWith(fixErrorsHeading) ? error.slice(fixErrorsHeading.length) : error}</li> : null))}
               </ul>
             </div>
           )}
@@ -939,9 +1049,9 @@ const AddPropertyContent = () => {
             <button
               type='submit'
               disabled={isSubmitting}
-              className='w-full px-6 py-3 bg-[#1E73B8] text-white text-base md:text-lg font-semibold rounded-lg hover:bg-[#1665a0] transition-all disabled:bg-gray-400 disabled:cursor-not-allowed'
+              className='ui-btn ui-btn-primary ui-btn-lg w-full'
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Property Listing'}
+              {isSubmitting ? t('addProperty.navigation.submitting') : t('addProperty.navigation.submitListing')}
             </button>
           </div>
         </form>

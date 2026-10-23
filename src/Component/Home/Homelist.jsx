@@ -1,33 +1,47 @@
-import React, { useContext, useEffect, useMemo } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { listcontext } from '../Route/Listprovaider';
 import PropertyListingCard from '../../components/PropertyListingCard';
+import ListingCardSkeleton from '../../components/ListingCardSkeleton';
+import EmptyState from '../../components/ui/EmptyState';
+import { searchPropertiesWithStatus } from '../../services/propertyCatalogService';
+import { clearSupabaseConnectionFailureMark } from '../../services/supabaseClient';
 import {
     DEFAULT_SEARCH_FILTERS,
     applyPropertySearch,
     hasActiveSearchFilters,
 } from './propertySearch';
+import { useLanguage } from '../../i18n/useLanguage';
+
+const SEARCH_ERROR_FALLBACK_KEY = 'search.results.error';
 
 const Homelist = ({
     selectedLocation,
     searchQuery = '',
     maxItems = null,
     onResultsChange = null,
-    containerClassName = 'max-w-7xl',
-    gridClassName = 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5',
+    containerClassName = '',
+    gridClassName = 'grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
     categoryOverride = null,
     searchFilters = null,
 }) => {
+    const { t, tv } = useLanguage();
     const { isLoading, list, selectedCategory, selectedPriceRange } = useContext(listcontext);
     const effectiveCategory = categoryOverride || selectedCategory;
+    const usesSearchDataSource = Boolean(searchFilters);
+    const [searchedList, setSearchedList] = useState([]);
+    const [isSearching, setIsSearching] = useState(Boolean(searchFilters));
+    // { source: 'live' | 'cache-search' | 'cache-all' | 'none', errorCode: '' | 'unavailable' | 'failed' }
+    const [searchStatus, setSearchStatus] = useState({ source: 'live', errorCode: '' });
+    const [retryVersion, setRetryVersion] = useState(0);
 
-    const resolvedFilters = useMemo(() => {
-        if (searchFilters) {
-            return {
-                ...DEFAULT_SEARCH_FILTERS,
-                ...searchFilters,
-            };
-        }
+    // In search mode the filters come only from the URL-driven prop; context values must not
+    // feed in, otherwise a category click re-ran the search twice (prop change + context sync).
+    const searchModeFilters = useMemo(
+        () => (searchFilters ? { ...DEFAULT_SEARCH_FILTERS, ...searchFilters } : null),
+        [searchFilters]
+    );
 
+    const legacyFilters = useMemo(() => {
         const legacyFilters = {
             ...DEFAULT_SEARCH_FILTERS,
             search: searchQuery,
@@ -62,13 +76,71 @@ const Homelist = ({
         }
 
         return legacyFilters;
-    }, [effectiveCategory, searchFilters, searchQuery, selectedLocation, selectedPriceRange]);
+    }, [effectiveCategory, searchQuery, selectedLocation, selectedPriceRange]);
+
+    const resolvedFilters = searchModeFilters || legacyFilters;
 
     const hasActiveFilters = hasActiveSearchFilters(resolvedFilters);
+    const resolvedFilterSignature = useMemo(
+        () => JSON.stringify(resolvedFilters),
+        [resolvedFilters]
+    );
+
+    useEffect(() => {
+        if (!usesSearchDataSource) {
+            return undefined;
+        }
+
+        let isMounted = true;
+        const filtersForRequest = JSON.parse(resolvedFilterSignature);
+
+        const loadSearchResults = async () => {
+            setIsSearching(true);
+            setSearchStatus({ source: 'live', errorCode: '' });
+
+            try {
+                const result = await searchPropertiesWithStatus(filtersForRequest);
+
+                if (isMounted) {
+                    setSearchedList(Array.isArray(result?.properties) ? result.properties : []);
+                    setSearchStatus({
+                        source: result?.source || 'live',
+                        errorCode: result?.error?.code || '',
+                    });
+                }
+            } catch (error) {
+                if (isMounted) {
+                    setSearchedList([]);
+                    setSearchStatus({ source: 'none', errorCode: error?.message || 'failed' });
+                }
+            } finally {
+                if (isMounted) {
+                    setIsSearching(false);
+                }
+            }
+        };
+
+        void loadSearchResults();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [resolvedFilterSignature, usesSearchDataSource, retryVersion]);
+
+    const handleRetrySearch = () => {
+        clearSupabaseConnectionFailureMark();
+        setRetryVersion((current) => current + 1);
+    };
+
+    const searchFailed = usesSearchDataSource && Boolean(searchStatus.errorCode);
 
     const filteredList = useMemo(() => {
+        if (usesSearchDataSource) {
+            return searchedList;
+        }
+
         return applyPropertySearch(list, resolvedFilters);
-    }, [list, resolvedFilters]);
+    }, [list, resolvedFilters, searchedList, usesSearchDataSource]);
 
     const visibleList = useMemo(() => {
         if (!maxItems || maxItems < 1) {
@@ -79,32 +151,26 @@ const Homelist = ({
     }, [filteredList, maxItems]);
 
     useEffect(() => {
-        if (!isLoading && typeof onResultsChange === 'function') {
+        const loading = usesSearchDataSource ? isSearching : isLoading;
+
+        if (!loading && !searchFailed && typeof onResultsChange === 'function') {
             onResultsChange(filteredList.length);
         }
-    }, [filteredList.length, isLoading, onResultsChange]);
+    }, [filteredList.length, isLoading, isSearching, onResultsChange, searchFailed, usesSearchDataSource]);
 
-    if (isLoading) {
+    // Split the translated template around {count} so the number keeps its own styling.
+    const [foundLabelBefore, foundLabelAfter] = t('search.results.found').split('{count}');
+
+
+    if (usesSearchDataSource ? isSearching : isLoading) {
         return (
-            <div className={`${containerClassName} mx-auto bg-gray-50 pb-8`}>
-                <div className='text-center py-4'>
-                    <div className='mx-auto h-5 w-48 animate-pulse rounded-full bg-gray-200' />
+            <div className={`${containerClassName} mx-auto pb-8`} aria-busy='true'>
+                <div className='py-4 text-center'>
+                    <div className='mx-auto h-5 w-48 animate-pulse rounded-md bg-slate-200' />
                 </div>
                 <div className={`grid ${gridClassName} gap-4 gap-y-6 md:gap-5 md:gap-y-8`}>
-                    {Array.from({ length: maxItems || 10 }).map((_, index) => (
-                        <div
-                            key={index}
-                            className='h-[390px] animate-pulse rounded-[14px] bg-white shadow-sm'
-                        >
-                            <div className='h-[210px] rounded-t-[14px] bg-gray-200' />
-                            <div className='space-y-3 p-3'>
-                                <div className='h-4 w-20 rounded-full bg-gray-200' />
-                                <div className='h-4 w-28 rounded-full bg-gray-200' />
-                                <div className='h-5 w-32 rounded-full bg-gray-200' />
-                                <div className='h-4 w-full rounded-full bg-gray-200' />
-                                <div className='h-5 w-24 rounded-full bg-gray-200' />
-                            </div>
-                        </div>
+                    {Array.from({ length: maxItems || 8 }).map((_, index) => (
+                        <ListingCardSkeleton key={index} />
                     ))}
                 </div>
             </div>
@@ -112,28 +178,48 @@ const Homelist = ({
     }
 
     return (
-        <div className={`${containerClassName} mx-auto bg-gray-50 pb-8`}>
-            {(hasActiveFilters || maxItems) && (
-                <div className='text-center py-4'>
-                    <p className='text-gray-600 text-sm'>
-                        Found <span className='font-bold text-[#1E73B8]'>{filteredList.length}</span> properties
-                        {resolvedFilters.upazilla ? ` in ${resolvedFilters.upazilla}` : ''}
-                        {!resolvedFilters.upazilla && resolvedFilters.district ? ` in ${resolvedFilters.district}` : ''}
-                        {!resolvedFilters.upazilla && !resolvedFilters.district && resolvedFilters.division ? ` in ${resolvedFilters.division}` : ''}
-                        {resolvedFilters.category && resolvedFilters.category !== 'All' ? ` in ${resolvedFilters.category}` : ''}
-                        {resolvedFilters.search ? ` for "${resolvedFilters.search}"` : ''}
-                        {maxItems && filteredList.length > maxItems ? `, showing first ${maxItems}` : ''}
+        <div className={`${containerClassName} mx-auto pb-8`}>
+            {(hasActiveFilters || maxItems) && !(searchFailed && filteredList.length === 0) && (
+                <div className='py-3' role='status' aria-live='polite'>
+                    <p className='text-caption text-muted'>
+                        {foundLabelBefore}<span className='font-semibold text-ink'>{filteredList.length}</span>{foundLabelAfter}
+                        {resolvedFilters.upazilla ? t('search.results.inLocation', { location: resolvedFilters.upazilla }) : ''}
+                        {!resolvedFilters.upazilla && resolvedFilters.district ? t('search.results.inLocation', { location: resolvedFilters.district }) : ''}
+                        {!resolvedFilters.upazilla && !resolvedFilters.district && resolvedFilters.division ? t('search.results.inLocation', { location: tv('divisions', resolvedFilters.division) }) : ''}
+                        {resolvedFilters.category && resolvedFilters.category !== 'All' ? t('search.results.inCategory', { category: tv('categories', resolvedFilters.category) }) : ''}
+                        {resolvedFilters.search ? t('search.results.forKeyword', { query: resolvedFilters.search }) : ''}
+                        {maxItems && filteredList.length > maxItems ? t('search.results.showingFirst', { count: maxItems }) : ''}
                     </p>
                 </div>
             )}
 
-            {filteredList.length === 0 && hasActiveFilters && (
-                <div className='text-center py-12'>
-                    <p className='text-gray-500 text-lg'>No properties found</p>
-                    <p className='text-gray-400 text-sm mt-2'>
-                        Try a different search term, category, price range, or location
-                    </p>
+            {searchFailed && filteredList.length === 0 && (
+                <EmptyState
+                    role='alert'
+                    title={t(SEARCH_ERROR_FALLBACK_KEY)}
+                    description={t('search.results.errorHint')}
+                    action={(
+                        <button type='button' onClick={handleRetrySearch} className='ui-btn ui-btn-secondary ui-btn-sm'>
+                            {t('common.retry')}
+                        </button>
+                    )}
+                />
+            )}
+
+            {searchFailed && filteredList.length > 0 && (
+                <div role='status' className='ui-note mb-4 flex flex-wrap items-center justify-between gap-3'>
+                    <span>{t('search.results.cachedNotice')}</span>
+                    <button type='button' onClick={handleRetrySearch} className='ui-btn ui-btn-secondary ui-btn-sm'>
+                        {t('common.retry')}
+                    </button>
                 </div>
+            )}
+
+            {!searchFailed && filteredList.length === 0 && (
+                <EmptyState
+                    title={hasActiveFilters ? t('search.results.none') : t('search.results.noneUnfiltered')}
+                    description={hasActiveFilters ? t('search.results.noneHint') : t('search.results.noneUnfilteredHint')}
+                />
             )}
 
             <div className={`grid ${gridClassName} gap-4 gap-y-6 md:gap-5 md:gap-y-8`}>

@@ -229,3 +229,21 @@ export const removeSnapshot = (key) => {
 
   removeStorageValue(key)
 }
+
+export const removeSnapshotsByPrefix = (prefix) => {
+  if (!prefix || !canUseStorage()) {
+    return
+  }
+
+  const scopedPrefix = getStorageKey(prefix)
+  const keysToRemove = []
+
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const storageKey = localStorage.key(index)
+    if (storageKey?.startsWith(scopedPrefix)) {
+      keysToRemove.push(storageKey)
+    }
+  }
+
+  keysToRemove.forEach((storageKey) => localStorage.removeItem(storageKey))
+}

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { getProfileSettings, updatePanelProfile } from '../../services/userPanelService'
+import { useLanguage } from '../../i18n/useLanguage'
 import { PanelCard, PanelCardHeader } from './UserPanelPrimitives'
 
 const EMPTY_FORM = {
@@ -13,6 +14,7 @@ const EMPTY_FORM = {
 }
 
 const ProfilePanel = () => {
+  const { t } = useLanguage()
   const { user, isLoading, updateUserInContext } = useAuth()
   const [form, setForm] = useState(EMPTY_FORM)
   const [initialForm, setInitialForm] = useState(EMPTY_FORM)
@@ -51,7 +53,7 @@ const ProfilePanel = () => {
     setSaving(false)
 
     if (!result.success) {
-      setError(result.error || 'Unable to update profile.')
+      setError(result.error || t('dashboard.profile.updateError'))
       return
     }
 
@@ -70,15 +72,15 @@ const ProfilePanel = () => {
     setForm(nextInitial)
     setNotice(
       result.requiresEmailVerification
-        ? 'Profile updated. Confirm the email change from your inbox.'
-        : 'Profile updated successfully.'
+        ? t('dashboard.profile.updatedVerifyEmail')
+        : t('dashboard.profile.updated')
     )
   }
 
   if (isLoading || profileLoading) {
     return (
       <PanelCard className="p-8">
-        <p className="text-slate-500">Loading profile...</p>
+        <p className="text-slate-500">{t('dashboard.profile.loading')}</p>
       </PanelCard>
     )
   }
@@ -86,57 +88,63 @@ const ProfilePanel = () => {
   return (
     <PanelCard>
       <PanelCardHeader
-        title="Profile"
-        subtitle="Update the account details shown in your user panel."
-        status={isRefreshing ? 'Refreshing...' : null}
+        title={t('dashboard.profile.title')}
+        subtitle={t('dashboard.profile.subtitle')}
+        status={isRefreshing ? t('dashboard.common.refreshing') : null}
       />
       <form className="space-y-5 px-6 py-6" onSubmit={handleSubmit}>
         <div className="grid gap-5 lg:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Name*</label>
+            <label htmlFor="profile-name" className="mb-2 block text-sm font-semibold text-slate-700">{t('dashboard.profile.nameLabel')}</label>
             <input
+              id="profile-name"
               type="text"
+              autoComplete="name"
               value={form.name}
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#1E73B8]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand"
               required
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Email address*</label>
+            <label htmlFor="profile-email" className="mb-2 block text-sm font-semibold text-slate-700">{t('dashboard.profile.emailLabel')}</label>
             <input
+              id="profile-email"
               type="email"
+              autoComplete="email"
               value={form.email}
               onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#1E73B8]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand"
               required
             />
           </div>
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-semibold text-slate-700">New password</label>
+          <label htmlFor="profile-new-password" className="mb-2 block text-sm font-semibold text-slate-700">{t('dashboard.profile.newPasswordLabel')}</label>
           <input
+            id="profile-new-password"
             type="password"
+            autoComplete="new-password"
             value={form.newPassword}
             onChange={(event) =>
               setForm((current) => ({ ...current, newPassword: event.target.value }))
             }
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#1E73B8]"
-            placeholder="Leave blank to keep your current password"
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-brand"
+            placeholder={t('dashboard.profile.newPasswordPlaceholder')}
           />
         </div>
 
-        {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-        {notice ? <p className="text-sm font-medium text-emerald-600">{notice}</p> : null}
+        {error ? <p role="alert" className="text-sm font-medium text-red-600">{error}</p> : null}
+        {notice ? <p role="status" className="text-sm font-medium text-emerald-600">{notice}</p> : null}
 
         <div className="flex flex-wrap gap-3">
           <button
             type="submit"
             disabled={saving}
-            className="rounded-2xl bg-[#1E73B8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#17639f] disabled:cursor-not-allowed disabled:opacity-70"
+            className="rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {saving ? 'Saving...' : 'Save changes'}
+            {saving ? t('dashboard.common.saving') : t('dashboard.profile.saveChanges')}
           </button>
           <button
             type="button"
@@ -147,7 +155,7 @@ const ProfilePanel = () => {
             }}
             className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       </form>

@@ -1,17 +1,20 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { normalizeHrefKey, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { RxCross2 } from 'react-icons/rx'
 import { listcontext } from '../Route/Listprovaider'
 import CategoryFilterBar from '../Home/CategoryFilterBar'
-import Cover from '../Home/Cover'
 import Homelist from '../Home/Homelist'
 import PropertySearchForm from '../Home/PropertySearchForm'
 import { logCustomerSearch } from '../../services/searchHistoryService'
+import { findPublicPropertyIdByNumber } from '../../services/propertyCatalogService'
+import { buildListDetailsHref } from '../../lib/routePaths'
+import { extractExactPropertyIdNumber } from '../../utils/propertyDisplaySerial'
 import {
   DEFAULT_SEARCH_FILTERS,
   buildSearchHref,
   clearSearchFilter,
   getActiveSearchChips,
+  getSearchChipLabel,
   getSearchLocationPayload,
   getSearchRouteContext,
   getSearchPriceSummary,
@@ -19,6 +22,7 @@ import {
   parseSearchFilters,
   updateSearchFilters,
 } from '../Home/propertySearch'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const Propertylist2 = () => {
   const [resultCount, setResultCount] = useState(null)
@@ -28,6 +32,7 @@ const Propertylist2 = () => {
   const routeParams = useParams()
   const { isLoading, selectedCategory, setSelectedCategory } = useContext(listcontext)
   const lastLoggedSignatureRef = useRef('')
+  const { t, tv } = useLanguage()
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const divisionSlug = Array.isArray(routeParams?.divisionSlug)
     ? routeParams.divisionSlug[0] || ''
@@ -51,6 +56,12 @@ const Propertylist2 = () => {
   )
   const [searchFilters, setSearchFilters] = useState(urlSearchFilters)
 
+  // A new URL means a new search: forget the previous result count so the search log
+  // never records the old number against the new filters.
+  useEffect(() => {
+    setResultCount(null)
+  }, [urlSearchSignature])
+
   useEffect(() => {
     setSearchFilters((currentFilters) => {
       const currentSignature = JSON.stringify(currentFilters)
@@ -59,34 +70,67 @@ const Propertylist2 = () => {
     })
   }, [urlSearchFilters, urlSearchSignature])
 
+  const committedSearchFilters = urlSearchFilters
+
+  // An exact Property ID ("100001", "ID: 100001") opens the listing directly instead of
+  // rendering a one-card results page. 'checking' holds the list back so the keyword
+  // search does not fire and flicker before the redirect. A miss (pending, inactive,
+  // unknown, or service down) falls through to the normal search and its empty state.
+  const exactPropertyIdNumber = extractExactPropertyIdNumber(committedSearchFilters.search)
+  const [exactIdLookup, setExactIdLookup] = useState(exactPropertyIdNumber ? 'checking' : 'none')
+
+  useEffect(() => {
+    if (!exactPropertyIdNumber) {
+      setExactIdLookup('none')
+      return undefined
+    }
+
+    let isMounted = true
+    setExactIdLookup('checking')
+
+    findPublicPropertyIdByNumber(exactPropertyIdNumber).then((propertyId) => {
+      if (!isMounted) {
+        return
+      }
+
+      if (propertyId) {
+        // replace: Back returns to wherever the search started, not to this results URL.
+        navigate(buildListDetailsHref(propertyId), { replace: true })
+        return
+      }
+
+      setExactIdLookup('none')
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [exactPropertyIdNumber, navigate])
+
   const activeChips = useMemo(
-    () => getActiveSearchChips(searchFilters),
-    [searchFilters]
+    () => getActiveSearchChips(committedSearchFilters),
+    [committedSearchFilters]
   )
 
-  const hasActiveFilters = hasActiveSearchFilters(searchFilters)
+  const hasActiveFilters = hasActiveSearchFilters(committedSearchFilters)
 
   const searchSignature = useMemo(
     () =>
       JSON.stringify({
-        filters: searchFilters,
+        filters: committedSearchFilters,
         resultCount,
       }),
-    [resultCount, searchFilters]
-  )
-  const isCommittedSearch = useMemo(
-    () => JSON.stringify(searchFilters) === urlSearchSignature,
-    [searchFilters, urlSearchSignature]
+    [committedSearchFilters, resultCount]
   )
 
   useEffect(() => {
-    if (selectedCategory !== searchFilters.category) {
-      setSelectedCategory(searchFilters.category)
+    if (selectedCategory !== committedSearchFilters.category) {
+      setSelectedCategory(committedSearchFilters.category)
     }
-  }, [searchFilters.category, selectedCategory, setSelectedCategory])
+  }, [committedSearchFilters.category, selectedCategory, setSelectedCategory])
 
   useEffect(() => {
-    if (isLoading || resultCount === null || !hasActiveFilters || !isCommittedSearch) {
+    if (isLoading || resultCount === null || !hasActiveFilters) {
       return
     }
 
@@ -97,14 +141,14 @@ const Propertylist2 = () => {
     lastLoggedSignatureRef.current = searchSignature
 
     logCustomerSearch({
-      searchQuery: searchFilters.search,
-      selectedLocation: getSearchLocationPayload(searchFilters),
-      selectedCategory: searchFilters.category,
-      selectedPriceRange: getSearchPriceSummary(searchFilters),
-      filters: searchFilters,
+      searchQuery: committedSearchFilters.search,
+      selectedLocation: getSearchLocationPayload(committedSearchFilters),
+      selectedCategory: committedSearchFilters.category,
+      selectedPriceRange: getSearchPriceSummary(committedSearchFilters),
+      filters: committedSearchFilters,
       resultCount,
     })
-  }, [hasActiveFilters, isCommittedSearch, isLoading, resultCount, searchFilters, searchSignature])
+  }, [committedSearchFilters, hasActiveFilters, isLoading, resultCount, searchSignature])
 
   const applyNextFilters = useCallback((nextFilters, options = {}) => {
     setSearchFilters(nextFilters)
@@ -114,9 +158,16 @@ const Propertylist2 = () => {
     }
 
     const nextHref = buildSearchHref(nextFilters, routeContext)
+    const nextUrl = new URL(nextHref, 'http://localhost')
+    const currentUrl = new URL(location.href || '/', 'http://localhost')
 
-    if (nextHref !== location.href) {
-      navigate(nextHref, { replace: true })
+    // Compare canonical forms: location.href carries the trailing slash, nextHref does not.
+    if (
+      normalizeHrefKey(nextUrl.pathname, nextUrl.search) !==
+      normalizeHrefKey(currentUrl.pathname, currentUrl.search)
+    ) {
+      // Submits and category picks push so Back steps through searches; chip clears replace.
+      navigate(nextHref, { replace: Boolean(options.replace) })
     }
   }, [location.href, navigate, routeContext])
 
@@ -136,88 +187,98 @@ const Propertylist2 = () => {
 
   const handleClearAll = useCallback(() => {
     setSelectedCategory(DEFAULT_SEARCH_FILTERS.category)
-    applyNextFilters(DEFAULT_SEARCH_FILTERS, { syncUrl: true })
+    applyNextFilters(DEFAULT_SEARCH_FILTERS, { syncUrl: true, replace: true })
   }, [applyNextFilters, setSelectedCategory])
 
   const handleClearChip = useCallback((chipKey) => {
-    applyNextFilters(clearSearchFilter(searchFilters, chipKey), { syncUrl: true })
-  }, [applyNextFilters, searchFilters])
+    applyNextFilters(clearSearchFilter(committedSearchFilters, chipKey), { syncUrl: true, replace: true })
+  }, [applyNextFilters, committedSearchFilters])
 
   return (
-    <div className='site-shell-wide min-h-screen bg-gray-50 py-6 md:py-8'>
-      <div className='sticky top-[72px] z-40 -mx-4 mb-6 border-b border-gray-200/80 bg-gray-50/95 px-4 py-3 backdrop-blur sm:-mx-5 sm:px-5 md:top-[118px] lg:-mx-8 lg:px-8 xl:mx-0 xl:px-0'>
+    <div className='site-shell min-h-screen py-5 md:py-6'>
+      <div className='site-shell-bleed sticky top-[var(--nav-h)] z-40 mb-6 border-b border-line/80 bg-canvas/95 py-2.5 backdrop-blur'>
         <CategoryFilterBar
           selectedCategory={searchFilters.category}
           onCategorySelect={handleCategorySelect}
         />
       </div>
 
-      <div className='mb-8 md:mb-10'>
-        <Cover />
-      </div>
+      <div className='mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
+        <div className='max-w-3xl'>
+          <h1 className='text-2xl font-bold leading-tight text-ink md:text-3xl'>{t('nav.propertyList')}</h1>
+          <p className='mt-1 text-caption text-muted md:text-body'>
+            {t('listing.browse.subtitle')}
+          </p>
+        </div>
 
-      <div className='site-card-strong mb-8 p-4 sm:p-5 md:p-6 lg:p-7'>
-        <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
-          <div className='max-w-3xl'>
-            <p className='site-kicker'>
-              Search Rentals
-            </p>
-            <h1 className='mt-3 text-balance text-3xl font-bold text-gray-800 md:text-4xl lg:text-[2.65rem]'>Find properties the way tenants actually search</h1>
-            <p className='mt-3 text-sm leading-7 text-gray-600 md:text-base'>
-              Filter by area, budget, category, property type, and room count with shareable result URLs.
-            </p>
-          </div>
-
+        <div className='md:hidden'>
           <button
             type='button'
             onClick={() => setMobileFiltersOpen((current) => !current)}
-            className='site-button-secondary md:hidden'
+            className='ui-btn ui-btn-secondary w-full'
+            aria-expanded={mobileFiltersOpen}
+            aria-controls='property-search-filters'
           >
-            {mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}
+            {mobileFiltersOpen ? t('listing.browse.hideFilters') : t('listing.browse.showFilters')}
           </button>
         </div>
+      </div>
 
-        <div className={`mt-6 ${mobileFiltersOpen ? 'block' : 'hidden'} md:block`}>
+      {/* On phones the card only renders when it has something to show (open filters or active chips). */}
+      <div className={`ui-card mb-6 p-4 sm:p-5 ${mobileFiltersOpen || activeChips.length > 0 ? '' : 'hidden md:block'}`}>
+        <div id='property-search-filters' className={`${mobileFiltersOpen ? 'block' : 'hidden'} md:block`}>
           <PropertySearchForm
             filters={searchFilters}
             onFieldChange={handleFieldChange}
             onSubmit={handleSearchSubmit}
             onReset={handleClearAll}
             showSort
-            submitLabel='Search Properties'
-            resetLabel='Reset Search'
+            submitLabel={t('listing.browse.submit')}
+            resetLabel={t('listing.browse.reset')}
           />
         </div>
 
         {activeChips.length > 0 && (
-          <div className='mt-5 flex flex-wrap items-center gap-2.5'>
+          <div className='mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-4' aria-label={t('listing.browse.activeFilters')}>
             {activeChips.map((chip) => (
               <button
                 key={chip.key}
                 type='button'
                 onClick={() => handleClearChip(chip.key)}
-                className='inline-flex items-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800'
+                className='ui-chip ui-chip-selected min-h-9 py-1 pr-2 text-sm'
+                aria-label={t('listing.browse.removeFilter', { filter: getSearchChipLabel(chip, t, tv) })}
               >
-                <span>{chip.label}</span>
-                <RxCross2 className='text-base text-white/80' />
+                <span>{getSearchChipLabel(chip, t, tv)}</span>
+                <RxCross2 className='text-base opacity-80' aria-hidden='true' />
               </button>
             ))}
 
             <button
               type='button'
               onClick={handleClearAll}
-              className='site-button-secondary text-sm'
+              className='ui-btn ui-btn-ghost ui-btn-sm text-brand'
             >
-              Clear all
+              {t('listing.browse.clearAll')}
             </button>
           </div>
         )}
       </div>
 
-      <Homelist
-        searchFilters={searchFilters}
-        onResultsChange={setResultCount}
-      />
+      {exactIdLookup === 'checking' ? (
+        <div
+          className='ui-card flex items-center justify-center p-10 text-caption text-muted'
+          role='status'
+          aria-live='polite'
+          aria-busy='true'
+        >
+          {t('common.loading')}
+        </div>
+      ) : (
+        <Homelist
+          searchFilters={committedSearchFilters}
+          onResultsChange={setResultCount}
+        />
+      )}
     </div>
   )
 }

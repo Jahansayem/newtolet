@@ -1,0 +1,172 @@
+import { mergeDictionaries } from './merge.js'
+import home from './bn/home.js'
+import search from './bn/search.js'
+import listing from './bn/listing.js'
+import orders from './bn/orders.js'
+import auth from './bn/auth.js'
+import payments from './bn/payments.js'
+import dashboard from './bn/dashboard.js'
+import addProperty from './bn/addProperty.js'
+import policy from './bn/policy.js'
+import earn from './bn/earn.js'
+
+const core = {
+  common: {
+    language: 'ভাষা',
+    english: 'English',
+    bengali: 'বাংলা',
+    save: 'সংরক্ষণ করুন',
+    cancel: 'বাতিল',
+    close: 'বন্ধ করুন',
+    back: 'পেছনে',
+    next: 'পরবর্তী',
+    previous: 'পূর্ববর্তী',
+    submit: 'জমা দিন',
+    loading: 'লোড হচ্ছে...',
+    retry: 'আবার চেষ্টা করুন',
+    search: 'খুঁজুন',
+    viewAll: 'সব দেখুন',
+    seeMore: 'আরও দেখুন',
+    na: 'প্রযোজ্য নয়',
+    yes: 'হ্যাঁ',
+    no: 'না',
+    perMonth: 'মাস',
+    home: 'হোম',
+    edit: 'সম্পাদনা',
+    delete: 'মুছুন',
+    confirm: 'নিশ্চিত করুন',
+    optional: 'ঐচ্ছিক',
+    required: 'আবশ্যক',
+    all: 'সব',
+    none: 'কিছু নেই',
+    status: 'অবস্থা',
+    date: 'তারিখ',
+    amount: 'পরিমাণ',
+    actions: 'অ্যাকশন',
+    details: 'বিস্তারিত',
+    tk: 'টাকা',
+    skipToContent: 'মূল কন্টেন্টে যান',
+    linkCopied: 'লিংক কপি হয়েছে',
+  },
+
+  nav: {
+    home: 'হোম',
+    career: 'ক্যারিয়ার',
+    propertyList: 'প্রপার্টি লিস্ট',
+    properties: 'প্রপার্টি',
+    allProperty: 'সব প্রপার্টি',
+    divisionItem: '{division} বিভাগ',
+    profile: 'প্রোফাইল',
+    savedProperty: 'সংরক্ষিত প্রপার্টি',
+    earnMoney: 'আয় করুন',
+    article: 'আর্টিকেল',
+    addProperty: 'প্রপার্টি যোগ করুন',
+    orderHome: 'বাসা অর্ডার করুন',
+    search: 'খুঁজুন',
+    openSearch: 'সার্চ খুলুন',
+    openMenu: 'মেনু খুলুন',
+    closeMenu: 'মেনু বন্ধ করুন',
+    menuDialog: 'সাইট মেনু',
+    openAccountMenu: 'অ্যাকাউন্ট মেনু খুলুন',
+    mainNavigation: 'প্রধান নেভিগেশন',
+    logoAlt: 'NewTolet',
+    myProperties: 'আমার প্রপার্টি',
+    buyCredits: 'ক্রেডিট কিনুন',
+    adminPanel: 'অ্যাডমিন প্যানেল',
+    logout: 'লগ আউট',
+    login: 'লগইন',
+    language: 'ভাষা',
+  },
+
+  footer: {
+    logoAlt: 'কোম্পানির লোগো',
+    tagline:
+      'সঠিক ভাড়ার বাসা খুঁজে পেতে আপনার বিশ্বস্ত সহযোগী। সহজ ফিল্টারে খুঁজুন, যাচাইকৃত লিস্টিং দেখুন এবং প্রকৃত ভাড়াটিয়াদের জন্য তৈরি টুল দিয়ে দ্রুত সিদ্ধান্ত নিন।',
+    quickLinks: 'দ্রুত লিংক',
+    propertyTypes: 'প্রপার্টির ধরন',
+    getInTouch: 'যোগাযোগ করুন',
+    address: 'জুগিডর, মৌলভীবাজার, সিলেট',
+    links: {
+      home: 'হোম',
+      propertyList: 'প্রপার্টি লিস্ট',
+      addProperty: 'প্রপার্টি যোগ করুন',
+      aboutUs: 'আমাদের সম্পর্কে',
+      contact: 'যোগাযোগ',
+    },
+    types: {
+      apartments: 'অ্যাপার্টমেন্ট',
+      houses: 'বাড়ি',
+      villas: 'ভিলা',
+      commercial: 'বাণিজ্যিক',
+      land: 'জমি',
+    },
+    copyright: '© {year} NewTolet। সর্বস্বত্ব সংরক্ষিত।',
+    developedBy: 'ডেভেলপ করেছে',
+    scrollToTop: 'উপরে যান',
+  },
+
+  quickRail: {
+    openQuickActions: 'দ্রুত অ্যাকশন খুলুন',
+    quickAccess: 'দ্রুত অ্যাক্সেস',
+    addProperty: 'প্রপার্টি যোগ করুন',
+    orderHome: 'বাসা অর্ডার করুন',
+    propertyList: 'প্রপার্টি লিস্ট',
+    property: 'প্রপার্টি',
+    buyCredits: 'ক্রেডিট কিনুন',
+    contact: 'যোগাযোগ',
+    savedProperties: 'সংরক্ষিত প্রপার্টি',
+    call: 'কল করুন',
+    earnMoney: 'আয় করুন',
+    profile: 'প্রোফাইল',
+    openSearch: 'সার্চ খুলুন',
+    home: 'হোম',
+    search: 'খুঁজুন',
+    saved: 'সংরক্ষিত',
+    account: 'অ্যাকাউন্ট',
+    add: 'যোগ করুন',
+  },
+
+  notFound: {
+    title: 'পেজটি পাওয়া যায়নি',
+    description: 'আপনি যে পেজটি খুঁজছেন সেটি নেই অথবা সরিয়ে ফেলা হয়েছে।',
+    goHome: 'হোমপেজে যান',
+  },
+
+  values: {
+    divisions: {
+      Dhaka: 'ঢাকা',
+      Chattogram: 'চট্টগ্রাম',
+      Chittagong: 'চট্টগ্রাম',
+      Rajshahi: 'রাজশাহী',
+      Khulna: 'খুলনা',
+      Barishal: 'বরিশাল',
+      Barisal: 'বরিশাল',
+      Sylhet: 'সিলেট',
+      Rangpur: 'রংপুর',
+      Mymensingh: 'ময়মনসিংহ',
+    },
+    categories: {
+      Family: 'ফ্যামিলি',
+      Bachelor: 'ব্যাচেলর',
+      Office: 'অফিস',
+      Sublet: 'সাবলেট',
+      Hostel: 'হোস্টেল',
+      Shop: 'দোকান',
+    },
+  },
+}
+
+const bn = mergeDictionaries(core, [
+  home,
+  search,
+  listing,
+  orders,
+  auth,
+  payments,
+  dashboard,
+  addProperty,
+  policy,
+  earn,
+])
+
+export default bn

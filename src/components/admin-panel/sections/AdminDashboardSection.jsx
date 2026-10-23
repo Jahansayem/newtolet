@@ -145,7 +145,7 @@ const buildReportRangeLabel = (filter, startDate, endDate) => {
 }
 
 const MetricCard = ({ label, value, meta, icon: Icon, tone }) => (
-  <div className={`rounded-[28px] border p-6 shadow-sm ${tone}`}>
+  <div className={`rounded-[var(--radius-panel)] border p-6 shadow-sm ${tone}`}>
     <div className="flex items-start justify-between gap-4">
       <div>
         <p className="text-sm font-medium text-white/80">{label}</p>
@@ -338,7 +338,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
   return (
     <div className="space-y-6">
       {loading ? (
-        <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
+        <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
           Loading dashboard...
         </div>
       ) : null}
@@ -350,34 +350,34 @@ const AdminDashboardSection = ({ onQuickAction }) => {
             value={stats.totalUsers}
             meta={`${stats.activeUsers} active`}
             icon={BiUser}
-            tone="border-blue-200 bg-gradient-to-br from-[#465fff] to-[#6d7cff]"
+            tone="border-transparent bg-brand"
           />
           <MetricCard
             label="Total Properties"
             value={stats.totalProperties}
             meta={`${stats.pendingProperties} pending`}
             icon={GiHouse}
-            tone="border-emerald-200 bg-gradient-to-br from-emerald-500 to-emerald-600"
+            tone="border-transparent bg-success"
           />
           <MetricCard
             label="Total Orders"
             value={stats.totalOrders}
             meta="All time"
             icon={BiPackage}
-            tone="border-violet-200 bg-gradient-to-br from-violet-500 to-violet-600"
+            tone="border-transparent bg-ink"
           />
           <MetricCard
             label={reportRangeLabel}
             value={listingReport.totalNewListings}
             meta="New listings in range"
             icon={MdDashboard}
-            tone="border-cyan-200 bg-gradient-to-br from-cyan-500 to-sky-600"
+            tone="border-transparent bg-primary-700"
           />
         </div>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_1fr]">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-6 flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Report Filters</h2>
@@ -393,7 +393,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                       onClick={() => handleReportPresetChange(preset)}
                       className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                         reportFilter.preset === preset
-                          ? 'bg-[#465fff] text-white'
+                          ? 'bg-brand text-white'
                           : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100'
                       }`}
                     >
@@ -422,7 +422,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                           startDate: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#465fff]"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
                     />
                   </div>
                   <div className="flex-1">
@@ -438,7 +438,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                           endDate: event.target.value,
                         }))
                       }
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#465fff]"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
                     />
                   </div>
                   <button
@@ -477,7 +477,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                   <div key={day.date} className="grid grid-cols-[80px_1fr_40px] items-center gap-3">
                     <span className="text-sm font-medium text-slate-600">{day.label}</span>
                     <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-gradient-to-r from-[#465fff] to-cyan-500" style={{ width }} />
+                      <div className="h-full rounded-full bg-brand" style={{ width }} />
                     </div>
                     <span className="text-right text-sm font-semibold text-slate-900">{day.count}</span>
                   </div>
@@ -488,29 +488,29 @@ const AdminDashboardSection = ({ onQuickAction }) => {
 
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-slate-500">Today&apos;s Listings</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{todaysListingCount}</p>
                 <p className="mt-2 text-xs font-medium text-slate-400">Fresh property submissions today</p>
               </div>
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-slate-500">Cover Photos</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{coverPhotoCount}</p>
                 <p className="mt-2 text-xs font-medium text-slate-400">Homepage cover assets</p>
               </div>
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-slate-500">Pending Review</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{stats.pendingProperties}</p>
                 <p className="mt-2 text-xs font-medium text-slate-400">Properties awaiting moderation</p>
               </div>
-              <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-slate-500">Feedback</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{stats.totalFeedback}</p>
                 <p className="mt-2 text-xs font-medium text-slate-400">Customer reviews and comments</p>
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="text-lg font-semibold text-slate-900">Quick Actions</h3>
               <div className="mt-4 grid grid-cols-1 gap-3">
                 {[
@@ -526,9 +526,9 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                     key={key}
                     type="button"
                     onClick={() => onQuickAction(key)}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-[#465fff] hover:bg-[#eef2ff]"
+                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-brand hover:bg-[#eef2ff]"
                   >
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-[#465fff] shadow-sm">
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-brand shadow-sm">
                       <Icon />
                     </span>
                     <span>{label}</span>
@@ -539,7 +539,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h3 className="text-xl font-semibold text-slate-900">Daily User-Wise Listing</h3>
@@ -561,7 +561,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
             </div>
           ) : (
             <div className="mt-6 space-y-6">
-              <div className="rounded-[24px] border border-cyan-100 bg-cyan-50 p-4">
+              <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h4 className="text-base font-semibold text-slate-900">Today User-Wise Listing</h4>

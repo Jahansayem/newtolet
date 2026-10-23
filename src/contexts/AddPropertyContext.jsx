@@ -45,6 +45,25 @@ const INITIAL_STATE = {
 
 const STORAGE_KEY = 'addPropertyFormDraft'
 
+const isFileLike = (value) => typeof Blob !== 'undefined' && value instanceof Blob
+
+// Drafts are JSON: File objects cannot survive a round trip, so they are dropped on load.
+const sanitizeDraft = (draft) => {
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+    return INITIAL_STATE
+  }
+
+  return {
+    ...INITIAL_STATE,
+    ...draft,
+    images: Array.isArray(draft.images) ? draft.images.filter(isFileLike) : [],
+    id_front: isFileLike(draft.id_front) ? draft.id_front : null,
+    id_back: isFileLike(draft.id_back) ? draft.id_back : null,
+  }
+}
+
+const toPersistableDraft = (data) => ({ ...data, images: [], id_front: null, id_back: null })
+
 export const AddPropertyProvider = ({ children }) => {
   const [formData, setFormData] = useState(INITIAL_STATE)
   const [currentStep, setCurrentStep] = useState(1)
@@ -58,7 +77,7 @@ export const AddPropertyProvider = ({ children }) => {
       if (savedData) {
         const parsed = JSON.parse(savedData)
         console.log('📦 Loaded from localStorage:', parsed)
-        setFormData(parsed)
+        setFormData(sanitizeDraft(parsed))
       } else if (process.env.NEXT_PUBLIC_ENABLE_DUMMY_DATA === 'true') {
         // Load dummy data for testing if no saved draft exists
         console.log('🧪 Loading dummy data for testing')
@@ -72,7 +91,7 @@ export const AddPropertyProvider = ({ children }) => {
   // Auto-save to localStorage whenever formData changes
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersistableDraft(formData)))
     } catch (error) {
       console.error('Failed to save draft:', error)
     }

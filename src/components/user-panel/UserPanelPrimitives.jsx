@@ -1,6 +1,8 @@
 'use client'
 
 import React from 'react'
+import { formatDate } from '../../i18n/format'
+import { translate } from '../../i18n/translate'
 
 export const PanelCard = ({ className = '', children }) => (
   <div className={`rounded-3xl border border-slate-200 bg-white shadow-sm ${className}`}>
@@ -27,9 +29,9 @@ export const EmptyState = ({ title, description, action = null }) => (
   </div>
 )
 
-export const formatPanelDate = (value, withTime = true) => {
+export const formatPanelDate = (value, withTime = true, language = 'en') => {
   if (!value) {
-    return 'N/A'
+    return translate(language, 'common.na')
   }
 
   const options = withTime
@@ -46,7 +48,7 @@ export const formatPanelDate = (value, withTime = true) => {
         day: 'numeric',
       }
 
-  return new Date(value).toLocaleString('en-US', options)
+  return formatDate(value, language, options)
 }
 
 export const formatPanelCurrency = (value) =>

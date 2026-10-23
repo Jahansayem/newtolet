@@ -43,8 +43,19 @@ function runNextBuild() {
 }
 
 async function replaceOutput(sourceDir, targetDir) {
-  await mkdir(targetDir, { recursive: true })
-  await cp(sourceDir, targetDir, { recursive: true, force: true })
+  const resolvedTargetDir = path.resolve(targetDir)
+  const allowedOutputDirs = new Set([
+    path.resolve(outputDir),
+    path.resolve(fallbackOutputDir),
+  ])
+
+  if (!allowedOutputDirs.has(resolvedTargetDir)) {
+    throw new Error(`Refusing to replace unexpected output directory: ${resolvedTargetDir}`)
+  }
+
+  await rm(resolvedTargetDir, { recursive: true, force: true })
+  await mkdir(resolvedTargetDir, { recursive: true })
+  await cp(sourceDir, resolvedTargetDir, { recursive: true, force: true })
 }
 
 async function publishOutput(sourceDir) {

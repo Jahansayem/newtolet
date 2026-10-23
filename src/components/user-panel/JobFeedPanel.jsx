@@ -5,29 +5,31 @@ import { FiMapPin } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { createJobParticipation, getJobFeed } from '../../services/userPanelService'
+import { useLanguage } from '../../i18n/useLanguage'
 import { EmptyState, PanelCard, PanelCardHeader } from './UserPanelPrimitives'
 
-const getRelativeDeadline = (value) => {
+const getRelativeDeadline = (value, t, tc) => {
   if (!value) {
-    return 'No deadline'
+    return t('dashboard.jobs.noDeadline')
   }
 
   const diffMs = new Date(value).getTime() - Date.now()
   const diffMinutes = Math.round(diffMs / 60000)
 
   if (diffMinutes <= 0) {
-    return 'Deadline passed'
+    return t('dashboard.jobs.deadlinePassed')
   }
 
   if (diffMinutes < 60) {
-    return `${diffMinutes} minutes from now`
+    return t('dashboard.jobs.minutesFromNow', { count: diffMinutes })
   }
 
   const diffHours = Math.round(diffMinutes / 60)
-  return `${diffHours} hour${diffHours === 1 ? '' : 's'} from now`
+  return tc('dashboard.jobs.hoursFromNow', diffHours)
 }
 
 const JobFeedPanel = () => {
+  const { t, tv, tc } = useLanguage()
   const { user, isLoading } = useAuth()
   const [selectedJob, setSelectedJob] = useState(null)
   const [form, setForm] = useState({ specificAddress: '', contactDetails: '' })
@@ -65,18 +67,18 @@ const JobFeedPanel = () => {
     setSubmitting(false)
 
     if (result.error) {
-      setError(result.error.message || 'Unable to submit for this job.')
+      setError(result.error.message || t('dashboard.jobs.submitError'))
       return
     }
 
-    setNotice('Job participation submitted successfully.')
+    setNotice(t('dashboard.jobs.submitted'))
     setForm({ specificAddress: '', contactDetails: '' })
   }
 
   if (isLoading || jobsLoading) {
     return (
       <PanelCard className="p-8">
-        <p className="text-slate-500">Loading job feed...</p>
+        <p className="text-slate-500">{t('dashboard.jobs.loading')}</p>
       </PanelCard>
     )
   }
@@ -85,16 +87,16 @@ const JobFeedPanel = () => {
     <>
       <PanelCard>
         <PanelCardHeader
-          title="Job"
-          subtitle="Confirmed posted orders are available here for you to review and respond to."
-          status={isRefreshing ? 'Refreshing...' : null}
+          title={t('dashboard.jobs.title')}
+          subtitle={t('dashboard.jobs.subtitle')}
+          status={isRefreshing ? t('dashboard.common.refreshing') : null}
         />
 
         <div className="px-6 py-6">
           {jobs.length === 0 ? (
             <EmptyState
-              title="No jobs available right now"
-              description="Once confirmed posted orders are available, they will appear here."
+              title={t('dashboard.jobs.emptyTitle')}
+              description={t('dashboard.jobs.emptyDescription')}
             />
           ) : (
             <div className="space-y-4">
@@ -106,14 +108,25 @@ const JobFeedPanel = () => {
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        ID : {job.id?.slice?.(0, 8) || job.id}
+                        {t('dashboard.jobs.idLabel', { id: job.id?.slice?.(0, 8) || job.id })}
                       </p>
                       <p className="mt-2 text-lg font-semibold text-slate-900">
-                        {job.rooms || 1} Room For {job.category}
+                        {t('dashboard.jobs.roomsFor', {
+                          rooms: job.rooms || 1,
+                          category: tv('categories', job.category),
+                        })}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-500">
-                        <span>From : {job.property_need_from || 'Open'}</span>
-                        <span>Deadline : {getRelativeDeadline(job.deadline)}</span>
+                        <span>
+                          {t('dashboard.jobs.from', {
+                            value: job.property_need_from || t('dashboard.jobs.open'),
+                          })}
+                        </span>
+                        <span>
+                          {t('dashboard.jobs.deadline', {
+                            value: getRelativeDeadline(job.deadline, t, tc),
+                          })}
+                        </span>
                         <span className="inline-flex items-center gap-2">
                           <FiMapPin className="shrink-0" />
                           <span>
@@ -130,9 +143,9 @@ const JobFeedPanel = () => {
                         setNotice('')
                         setError('')
                       }}
-                      className="inline-flex items-center justify-center rounded-2xl bg-[#1E73B8] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17639f]"
+                      className="inline-flex items-center justify-center rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
                     >
-                      View Details
+                      {t('dashboard.jobs.viewDetails')}
                     </button>
                   </div>
                 </div>
@@ -152,16 +165,19 @@ const JobFeedPanel = () => {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="border-b border-slate-100 px-6 py-5">
-              <h3 className="text-xl font-bold text-slate-900">Job Details</h3>
+              <h3 className="text-xl font-bold text-slate-900">{t('dashboard.jobs.detailsTitle')}</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Submit your details for this job to track it in Job History.
+                {t('dashboard.jobs.detailsSubtitle')}
               </p>
             </div>
 
             <div className="space-y-6 px-6 py-6">
               <div className="rounded-3xl bg-slate-50 p-5">
                 <p className="text-lg font-semibold text-slate-900">
-                  {selectedJob.rooms || 1} Room For {selectedJob.category}
+                  {t('dashboard.jobs.roomsFor', {
+                    rooms: selectedJob.rooms || 1,
+                    category: tv('categories', selectedJob.category),
+                  })}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">{formattedLocation}</p>
                 {selectedJob.additional_preferences ? (
@@ -172,7 +188,7 @@ const JobFeedPanel = () => {
               <form className="space-y-4" onSubmit={submitParticipation}>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Specific address
+                    {t('dashboard.jobs.specificAddress')}
                   </label>
                   <input
                     type="text"
@@ -180,22 +196,22 @@ const JobFeedPanel = () => {
                     onChange={(event) =>
                       setForm((current) => ({ ...current, specificAddress: event.target.value }))
                     }
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
-                    placeholder="e.g. House 12, Road 5"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
+                    placeholder={t('dashboard.jobs.specificAddressPlaceholder')}
                   />
                 </div>
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Contact details
+                    {t('dashboard.jobs.contactDetails')}
                   </label>
                   <textarea
                     value={form.contactDetails}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, contactDetails: event.target.value }))
                     }
-                    className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
-                    placeholder="Explain how the property can be reached or contacted"
+                    className="min-h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
+                    placeholder={t('dashboard.jobs.contactDetailsPlaceholder')}
                   />
                 </div>
 
@@ -206,16 +222,16 @@ const JobFeedPanel = () => {
                   <button
                     type="submit"
                     disabled={submitting || !user?.id}
-                    className="rounded-2xl bg-[#1E73B8] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#17639f] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submitting ? 'Submitting...' : 'Submit Job'}
+                    {submitting ? t('dashboard.common.submitting') : t('dashboard.jobs.submit')}
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedJob(null)}
                     className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
-                    Close
+                    {t('common.close')}
                   </button>
                 </div>
               </form>

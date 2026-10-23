@@ -18,6 +18,8 @@ import {
 } from './referralService'
 import { getTransactionHistory, getUserCredits } from './creditService'
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
+import { invalidatePropertyCatalogSnapshots } from './propertyCatalogService'
+import { isPropertyActivelyPinned } from '../utils/propertyPinning'
 
 const SAVED_PROPERTIES_STORAGE_KEY = 'savedProperties'
 const SAVED_PROPERTIES_EVENT = 'saved-properties-updated'
@@ -37,6 +39,18 @@ const getPropertyAnalyticsCacheKey = (propertyId) =>
   getUserScopedCacheKey('global', `property-analytics:${propertyId}`)
 
 const CONTACT_UNLOCK_REFUND_WINDOW_MS = 72 * 60 * 60 * 1000
+
+const EMPTY_PROPERTY_ANALYTICS = {
+  contactUnlocks: 0,
+  totalCreditsSpent: 0,
+  recentViewCount: 0,
+}
+
+const normalizePinnedFields = (property = {}) => ({
+  pinned_at: property.pinned_at || null,
+  pinned_until: property.pinned_until || null,
+  is_pinned: isPropertyActivelyPinned(property),
+})
 
 const fetchWithUserPanelCache = async ({
   userId,
@@ -65,6 +79,50 @@ const isEmptyPlainObjectError = (error) =>
   error &&
   Object.keys(error).length === 0 &&
   error.constructor === Object
+
+const createServiceError = (message, sourceError) => {
+  const normalizedError = new Error(message || sourceError?.message || 'Request failed.')
+
+  if (sourceError) {
+    normalizedError.code = sourceError.code
+    normalizedError.details = sourceError.details
+    normalizedError.hint = sourceError.hint
+    normalizedError.status = sourceError.status
+    normalizedError.cause = sourceError
+  }
+
+  return normalizedError
+}
+
+const getPinPropertyErrorMessage = (error) => {
+  const message = String(error?.message || '').trim()
+  const details = String(error?.details || '').trim()
+  const hint = String(error?.hint || '').trim()
+  const code = String(error?.code || '').trim()
+  const combined = `${message} ${details} ${hint}`.toLowerCase()
+
+  if (isEmptyPlainObjectError(error)) {
+    return 'Unable to pin property. Please check your connection and try again.'
+  }
+
+  if (isMissingResourceError(error) || code === '42883' || combined.includes('pin_property_for_24h')) {
+    return 'Property pinning is not set up yet. Please apply the latest Supabase migration and try again.'
+  }
+
+  if (combined.includes('authentication required') || combined.includes('jwt') || code === '401') {
+    return 'Please sign in again before pinning this property.'
+  }
+
+  if (message) {
+    return message
+  }
+
+  if (details) {
+    return details
+  }
+
+  return 'Unable to pin property. Please try again.'
+}
 
 const isSupabaseQuotaError = (error) => {
   const message = String(error?.message || error?.details || error?.hint || error || '').toLowerCase()
@@ -172,7 +230,7 @@ const normalizePropertyRow = (property, imageMap = new Map()) => ({
   created_at: property.created_at || null,
   status: property.status || 'pending',
   is_active: property.is_active !== false,
-  is_pinned: Boolean(property.is_pinned),
+  ...normalizePinnedFields(property),
 })
 
 const buildImageMap = (rows = []) => {
@@ -885,13 +943,64 @@ export const updatePropertyPanelState = async (propertyId, updates) => {
   }
 }
 
+export const pinPropertyFor24h = async (propertyId, userId) => {
+  if (!propertyId) {
+    return { data: null, message: '', error: new Error('Property is required.') }
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('pin_property_for_24h', {
+      p_property_id: propertyId,
+    })
+
+    if (error) {
+      throw error
+    }
+
+    const result = Array.isArray(data) ? data[0] : data
+
+    if (!result?.success) {
+      throw createServiceError('Unable to pin property. Please try again.')
+    }
+
+    if (userId) {
+      invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'my-properties'))
+      invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'dashboard'))
+      invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'credit-balance'))
+      invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'credit-history'))
+      invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'wallet-panel'))
+    }
+
+    invalidatePropertyCatalogSnapshots()
+
+    return {
+      data: {
+        success: Boolean(result?.success),
+        propertyId: result?.property_id || null,
+        pinnedAt: result?.pinned_at || null,
+        pinnedUntil: result?.pinned_until || null,
+        creditsSpent: Number(result?.credits_spent || 0),
+        remainingCredits: Number(result?.remaining_credits || 0),
+      },
+      message: 'Property pinned for 24 hours.',
+      error: null,
+    }
+  } catch (error) {
+    const normalizedError = createServiceError(getPinPropertyErrorMessage(error), error)
+    console.warn('Unable to pin property:', {
+      message: normalizedError.message,
+      code: normalizedError.code,
+      details: normalizedError.details,
+      hint: normalizedError.hint,
+      status: normalizedError.status,
+    })
+    return { data: null, message: '', error: normalizedError }
+  }
+}
+
 export const getPropertyAnalytics = async (propertyId) => {
   if (!propertyId) {
-    return {
-      contactUnlocks: 0,
-      totalCreditsSpent: 0,
-      recentViewCount: 0,
-    }
+    return EMPTY_PROPERTY_ANALYTICS
   }
 
   try {
@@ -918,12 +1027,22 @@ export const getPropertyAnalytics = async (propertyId) => {
       },
     })
   } catch (error) {
-    console.error('Error loading property analytics:', error)
-    return {
-      contactUnlocks: 0,
-      totalCreditsSpent: 0,
-      recentViewCount: 0,
-    }
+    const normalizedError = createServiceError(
+      isEmptyPlainObjectError(error)
+        ? 'Unable to load property analytics. Using empty analytics.'
+        : error?.message || 'Unable to load property analytics. Using empty analytics.',
+      error
+    )
+
+    console.warn('Unable to load property analytics:', {
+      message: normalizedError.message,
+      code: normalizedError.code,
+      details: normalizedError.details,
+      hint: normalizedError.hint,
+      status: normalizedError.status,
+    })
+
+    return EMPTY_PROPERTY_ANALYTICS
   }
 }
 

@@ -99,7 +99,7 @@
 
 .auth-shell {
   position: relative;
-  min-height: max(80vh, 720px);
+  min-height: max(100dvh, 720px);
   display: flex;
   align-items: center;
   overflow: hidden;
@@ -188,6 +188,80 @@
   box-shadow: 0 16px 28px rgba(30, 115, 184, 0.24);
 }
 
+.auth-divider {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.auth-divider span {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.42);
+}
+
+.auth-google-button {
+  width: 100%;
+  min-height: 3.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  color: #0f172a;
+  font-weight: 700;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.auth-google-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(30, 115, 184, 0.42);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.12);
+}
+
+.auth-google-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.auth-google-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  display: inline-flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #475569;
+  font-size: 1.1rem;
+  transform: translateY(-50%);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.auth-password-toggle:hover:not(:disabled) {
+  background: rgba(30, 115, 184, 0.08);
+  color: #0f172a;
+}
+
+.auth-password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .auth-message {
   width: 100%;
   border-radius: 16px;
@@ -233,9 +307,22 @@
   }
 }
 
-/* Smooth transitions for all animations */
-* {
+/* Smooth transitions for the decorative auth-page animations only.
+   Scoped to .auth-shell: this stylesheet is global in the App Router, and an unscoped
+   `*` rule was changing text rendering on every page of the site. */
+.auth-shell * {
   -webkit-backface-visibility: hidden;
   -moz-backface-visibility: hidden;
   backface-visibility: hidden;
+}
+
+/* Reduced motion: the wave, dot-grid, spin, pulse and bounce loops are purely decorative. */
+@media (prefers-reduced-motion: reduce) {
+  .wave-path,
+  .dots-pattern,
+  .animate-spin-slow,
+  .animate-pulse-slow,
+  .animate-bounce-slow {
+    animation: none;
+  }
 }

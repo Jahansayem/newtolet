@@ -18,6 +18,8 @@ import { readSnapshot, removeSnapshot, writeSnapshot } from '../../services/cach
 import { buildEditPropertyHref, buildPageHref } from '../../lib/routePaths'
 import { PropertyThumbnailImage } from '../../components/PropertyCardMedia'
 import RentDisplay from '../../components/RentDisplay'
+import { getPropertyDisplayLabel } from '../../utils/propertyDisplaySerial'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 const PAGE_SIZE = 20
 const PROPERTY_FILTERS = ['all', 'pending', 'approved', 'rejected', 'duplicate_pending']
@@ -544,6 +546,35 @@ const PropertyManagement = () => {
     })
   }
 
+  // Destructive / irreversible actions go through a confirmation dialog first.
+  const [pendingAction, setPendingAction] = useState(null)
+  const [actionBusy, setActionBusy] = useState(false)
+
+  const requestAction = (type, propertyId) => setPendingAction({ type, propertyId })
+
+  const confirmPendingAction = async () => {
+    if (!pendingAction) {
+      return
+    }
+    setActionBusy(true)
+    try {
+      if (pendingAction.type === 'delete') {
+        await handleDeleteProperty(pendingAction.propertyId)
+      } else {
+        await handleStatusChange(pendingAction.propertyId, pendingAction.type === 'approve' ? 'approved' : 'rejected')
+      }
+    } finally {
+      setActionBusy(false)
+      setPendingAction(null)
+    }
+  }
+
+  const PENDING_ACTION_COPY = {
+    delete: { title: 'Delete this property?', description: 'The listing and its photos are removed permanently. This cannot be undone.', confirm: 'Delete', tone: 'danger' },
+    approve: { title: 'Approve this property?', description: 'It becomes publicly visible immediately.', confirm: 'Approve', tone: 'primary' },
+    reject: { title: 'Reject this property?', description: 'The owner will see it as rejected and it stays hidden from the public site.', confirm: 'Reject', tone: 'danger' },
+  }
+
   const handleStatusChange = async (propertyId, newStatus) => {
     const result = await updatePropertyStatus(propertyId, newStatus)
 
@@ -552,6 +583,8 @@ const PropertyManagement = () => {
       setSuccessMessage(`Property ${newStatus === 'approved' ? 'approved' : 'rejected'} successfully`)
       await refreshCurrentFilter({ clearCache: true })
       setTimeout(() => setSuccessMessage(''), 3000)
+    } else {
+      setWarningMessage(result.error?.message || 'Could not update the property status. Please try again.')
     }
   }
 
@@ -612,6 +645,8 @@ const PropertyManagement = () => {
       setSuccessMessage('Property deleted successfully')
       await refreshCurrentFilter({ clearCache: true })
       setTimeout(() => setSuccessMessage(''), 3000)
+    } else {
+      setWarningMessage(result.error?.message || 'Could not delete the property. Please try again.')
     }
   }
 
@@ -680,10 +715,11 @@ const PropertyManagement = () => {
           <span>{successMessage}</span>
           <button
             onClick={() => setSuccessMessage('')}
-            className="text-green-600 hover:text-green-800"
+            className="ui-btn ui-btn-ghost ui-btn-icon text-green-700"
             type="button"
+            aria-label="Dismiss message"
           >
-            x
+            <FiX aria-hidden="true" />
           </button>
         </div>
       )}
@@ -691,27 +727,29 @@ const PropertyManagement = () => {
       {warningMessage && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-lg">
           <p className="font-medium">{warningMessage}</p>
-          <p className="mt-1 text-sm text-amber-800">
-            Run CREATE_SITE_SETTINGS_TABLE.sql in Supabase SQL editor or through Supabase MCP, then refresh this page.
-          </p>
+          {process.env.NODE_ENV !== 'production' ? (
+            <p className="mt-1 text-sm text-amber-800">
+              Run CREATE_SITE_SETTINGS_TABLE.sql in Supabase SQL editor or through Supabase MCP, then refresh this page.
+            </p>
+          ) : null}
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 rounded-2xl shadow-2xl p-6 text-white border-2 border-purple-400">
+      <div className="rounded-2xl bg-ink p-6 text-white shadow-raised">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="bg-white/20 p-3 rounded-xl">
               <FiCheck className="text-white text-3xl" />
             </div>
             <div>
-              <p className="text-purple-100 text-sm font-bold uppercase tracking-wider">Auto-Approve Properties</p>
+              <p className="text-primary-100 text-sm font-bold uppercase tracking-wider">Auto-Approve Properties</p>
               <p className="text-2xl font-black leading-tight mt-1">
                 {autoApproveEnabled ? 'ENABLED' : 'DISABLED'}
               </p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <p className="text-purple-100 text-sm max-w-xs">
+            <p className="text-primary-100 text-sm max-w-xs">
               {autoApproveEnabled
                 ? 'Properties are automatically approved upon submission'
                 : 'Admin must manually approve each property'}
@@ -720,6 +758,9 @@ const PropertyManagement = () => {
               onClick={handleToggleAutoApprove}
               className="flex items-center gap-3 bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all border-2 border-white/30"
               type="button"
+              role="switch"
+              aria-checked={autoApproveEnabled}
+              aria-label="Auto-approve properties"
             >
               <span className="text-lg font-black">
                 {autoApproveEnabled ? 'ON' : 'OFF'}
@@ -747,7 +788,7 @@ const PropertyManagement = () => {
               <FiUsers className="text-white text-xl" />
             </div>
             <div>
-              <p className="text-gray-900 text-xs font-medium uppercase tracking-wide">Total Users</p>
+              <p className="text-blue-100 text-xs font-medium uppercase tracking-wide">Total Users</p>
               <p className="text-2xl font-bold leading-tight">{totalUsers}</p>
             </div>
           </div>
@@ -996,11 +1037,9 @@ const PropertyManagement = () => {
 
                 <div className="p-4 space-y-3">
                   <div>
-                    {property.property_id_number && (
-                      <p className="text-xs font-bold text-[#1E73B8] mb-1">
-                        #{property.property_id_number}
-                      </p>
-                    )}
+                    <p className="text-xs font-bold text-brand mb-1">
+                      {getPropertyDisplayLabel(property)}
+                    </p>
                     {property.isDuplicatePhone && (
                       <p className="mb-1 inline-flex items-center rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
                         Duplicate Phone x{property.duplicateCount || 0}
@@ -1053,28 +1092,22 @@ const PropertyManagement = () => {
                         </button>
                       </>
                     )}
-                    <button
-                      onClick={() => setSelectedProperty(property)}
-                      className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
-                      type="button"
-                      title="View property"
-                    >
-                      <FiEye size={16} />
-                    </button>
                     <a
                       href={getAdminEditPropertyHref(property.id)}
-                      className="px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition"
+                      className="px-3 py-2 bg-brand-soft text-brand-pressed rounded-lg hover:bg-primary-100 transition"
                       title="Edit property"
+                      aria-label="Edit property"
                     >
-                      <FiEdit2 size={16} />
+                      <FiEdit2 size={16} aria-hidden="true" />
                     </a>
                     <button
-                      onClick={() => handleDeleteProperty(property.id)}
-                      className="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+                      onClick={() => requestAction('delete', property.id)}
+                      className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
                       type="button"
                       title="Delete property"
+                      aria-label="Delete property"
                     >
-                      <FiTrash2 size={16} />
+                      <FiTrash2 size={16} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -1104,11 +1137,11 @@ const PropertyManagement = () => {
           property={selectedProperty}
           onClose={() => setSelectedProperty(null)}
           onApprove={() => {
-            handleStatusChange(selectedProperty.id, 'approved')
+            requestAction('approve', selectedProperty.id)
             setSelectedProperty(null)
           }}
           onReject={() => {
-            handleStatusChange(selectedProperty.id, 'rejected')
+            requestAction('reject', selectedProperty.id)
             setSelectedProperty(null)
           }}
           onToggleFeatured={() => {
@@ -1119,11 +1152,23 @@ const PropertyManagement = () => {
             window.location.href = getAdminEditPropertyHref(selectedProperty.id)
           }}
           onDelete={() => {
-            handleDeleteProperty(selectedProperty.id)
+            requestAction('delete', selectedProperty.id)
             setSelectedProperty(null)
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(pendingAction)}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={confirmPendingAction}
+        title={pendingAction ? PENDING_ACTION_COPY[pendingAction.type].title : ''}
+        description={pendingAction ? PENDING_ACTION_COPY[pendingAction.type].description : ''}
+        confirmLabel={pendingAction ? PENDING_ACTION_COPY[pendingAction.type].confirm : 'Confirm'}
+        tone={pendingAction ? PENDING_ACTION_COPY[pendingAction.type].tone : 'danger'}
+        busy={actionBusy}
+        busyLabel="Working…"
+      />
     </div>
   )
 }
@@ -1185,23 +1230,40 @@ const DuplicatePhoneGroupCard = ({ group, onOpen }) => {
 }
 
 const PropertyDetailModal = ({ property, onClose, onApprove, onReject, onToggleFeatured, onEdit, onDelete }) => {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-property-dialog-title"
+        className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="p-6">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">{property.short_description || 'Property'}</h2>
+              <h2 id="admin-property-dialog-title" className="text-2xl font-bold text-gray-900">{property.short_description || 'Property'}</h2>
               <p className="text-gray-600">
                 {property.category} in {property.area}, {property.state_district}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+              className="ui-btn ui-btn-ghost ui-btn-icon text-gray-500"
               type="button"
+              aria-label="Close"
             >
-              x
+              <FiX className="text-xl" aria-hidden="true" />
             </button>
           </div>
 

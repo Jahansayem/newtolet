@@ -1,11 +1,12 @@
 import { getRentDisplayParts } from '../utils/rentDisplay'
+import { useLanguage } from '../i18n/useLanguage'
 
 const joinClasses = (...classes) => classes.filter(Boolean).join(' ')
 
 export default function RentDisplay({
   pricing = {},
   prefix = 'BDT ',
-  fallback = 'N/A',
+  fallback,
   suffix = '',
   className = '',
   amountClassName = '',
@@ -13,18 +14,23 @@ export default function RentDisplay({
   fallbackClassName = '',
   suffixClassName = '',
 }) {
+  const { t } = useLanguage()
   const {
     amountText,
     fallback: fallbackText,
     hasValidAmount,
     isNegotiable,
     negotiableLabel,
-  } = getRentDisplayParts(pricing, { prefix, fallback })
+  } = getRentDisplayParts(pricing, {
+    prefix,
+    fallback: fallback ?? t('common.na'),
+    negotiableLabel: t('listing.negotiable'),
+  })
 
   if (isNegotiable && !hasValidAmount) {
     return (
       <span className={className}>
-        <span className={joinClasses('text-[0.875em] font-semibold opacity-75', negotiableClassName)}>
+        <span className={joinClasses('text-[0.875em] font-semibold text-muted', negotiableClassName)}>
           {negotiableLabel}
         </span>
       </span>
@@ -41,9 +47,9 @@ export default function RentDisplay({
 
   return (
     <span className={className}>
-      <span className={amountClassName}>{amountText}</span>
+      <span className={joinClasses('tabular-nums', amountClassName)}>{amountText}</span>
       {isNegotiable ? (
-        <span className={joinClasses('ml-1 align-baseline text-[0.68em] font-semibold opacity-70', negotiableClassName)}>
+        <span className={joinClasses('ml-1 align-baseline text-[0.68em] font-semibold text-muted', negotiableClassName)}>
           ({negotiableLabel})
         </span>
       ) : null}

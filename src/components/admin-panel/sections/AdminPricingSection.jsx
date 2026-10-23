@@ -234,7 +234,7 @@ const AdminPricingSection = () => {
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div className="rounded-[28px] bg-gradient-to-br from-[#465fff] to-[#6577ff] p-6 text-white shadow-lg shadow-blue-500/15 lg:col-span-2">
+        <div className="rounded-[28px] bg-gradient-to-br from-brand to-brand p-6 text-white shadow-lg shadow-blue-500/15 lg:col-span-2">
           <h2 className="text-2xl font-bold">Credit Pricing Overview</h2>
           <div className="mt-6 grid grid-cols-2 gap-4">
             <div className="rounded-2xl bg-white/10 p-4">
@@ -260,7 +260,7 @@ const AdminPricingSection = () => {
 
         <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
           <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <MdSettings className="text-[#465fff]" />
+            <MdSettings className="text-brand" />
             Unlock Cost Settings
           </h3>
           <div className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
@@ -269,7 +269,7 @@ const AdminPricingSection = () => {
               value={creditCosts.contact_view || 20}
               onChange={(event) => handleUnlockCostChange(event.target.value)}
               min="0"
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#465fff]"
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
             />
             <div className="rounded-2xl border border-dashed border-[#c8d1ff] bg-[#eef2ff] px-4 py-3 text-sm text-slate-700">
               Shared with contact unlock, photo unlock, and legacy listing cost fields.
@@ -288,7 +288,7 @@ const AdminPricingSection = () => {
             <select
               value={siteTheme}
               onChange={(event) => setSiteTheme(event.target.value)}
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#465fff]"
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
             >
               <option value="light">Light</option>
               <option value="dark">Dark</option>
@@ -297,7 +297,7 @@ const AdminPricingSection = () => {
               type="button"
               onClick={handleSaveSiteTheme}
               disabled={savingSiteTheme}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#465fff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6] disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:opacity-60"
             >
               <FaSave />
               {savingSiteTheme ? 'Saving...' : 'Save Theme'}
@@ -310,7 +310,7 @@ const AdminPricingSection = () => {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
-              <BiCreditCard className="text-[#465fff]" />
+              <BiCreditCard className="text-brand" />
               Credit Packages
             </h3>
             <p className="mt-1 text-sm text-slate-500">Manage packages available on the buy credits page.</p>
@@ -318,7 +318,7 @@ const AdminPricingSection = () => {
           <button
             type="button"
             onClick={() => setShowAddPackageModal(true)}
-            className="inline-flex items-center gap-2 rounded-2xl bg-[#465fff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6]"
+            className="inline-flex items-center gap-2 rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
           >
             <MdAdd />
             Add Package
@@ -341,12 +341,12 @@ const AdminPricingSection = () => {
                 }`}
               >
                 {pkg.popular ? (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#465fff] px-3 py-1 text-xs font-bold text-white">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand px-3 py-1 text-xs font-bold text-white">
                     Popular
                   </span>
                 ) : null}
                 <p className="text-lg font-semibold text-slate-900">{pkg.name}</p>
-                <p className="mt-3 text-3xl font-bold text-[#465fff]">{pkg.credits}</p>
+                <p className="mt-3 text-3xl font-bold text-brand">{pkg.credits}</p>
                 <p className="text-sm text-slate-500">credits</p>
                 <div className="mt-4 space-y-2 text-sm">
                   <p className="font-semibold text-slate-900">BDT {calculateFinalPrice(pkg)}</p>
@@ -399,7 +399,7 @@ const AdminPricingSection = () => {
             <div key={user.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">{user.name || 'Unknown user'}</p>
               <p className="mt-1 text-xs text-slate-500">{user.email}</p>
-              <p className="mt-3 text-2xl font-bold text-[#465fff]">{user.credits || 0}</p>
+              <p className="mt-3 text-2xl font-bold text-brand">{user.credits || 0}</p>
               <p className="text-xs text-slate-500">current credits</p>
               <button
                 type="button"
@@ -424,7 +424,7 @@ const AdminPricingSection = () => {
               value={newPackage.name}
               onChange={(event) => setNewPackage({ ...newPackage, name: event.target.value })}
               placeholder="Package name"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             />
             <div className="grid grid-cols-2 gap-4">
               <input
@@ -433,7 +433,7 @@ const AdminPricingSection = () => {
                 onChange={(event) => setNewPackage({ ...newPackage, credits: Number.parseInt(event.target.value, 10) || 0 })}
                 min="1"
                 placeholder="Credits"
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
               <input
                 type="number"
@@ -441,7 +441,7 @@ const AdminPricingSection = () => {
                 onChange={(event) => setNewPackage({ ...newPackage, price: Number.parseInt(event.target.value, 10) || 0 })}
                 min="1"
                 placeholder="Price"
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
             </div>
             <input
@@ -451,7 +451,7 @@ const AdminPricingSection = () => {
               min="0"
               max="100"
               placeholder="Discount"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             />
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
               <input
@@ -464,7 +464,7 @@ const AdminPricingSection = () => {
             <button
               type="button"
               onClick={handleAddPackage}
-              className="w-full rounded-2xl bg-[#465fff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6]"
+              className="w-full rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
             >
               Add Package
             </button>
@@ -485,7 +485,7 @@ const AdminPricingSection = () => {
               type="text"
               value={editingPackage.name}
               onChange={(event) => setEditingPackage({ ...editingPackage, name: event.target.value })}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             />
             <div className="grid grid-cols-2 gap-4">
               <input
@@ -493,14 +493,14 @@ const AdminPricingSection = () => {
                 value={editingPackage.credits}
                 onChange={(event) => setEditingPackage({ ...editingPackage, credits: Number.parseInt(event.target.value, 10) || 0 })}
                 min="1"
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
               <input
                 type="number"
                 value={editingPackage.price}
                 onChange={(event) => setEditingPackage({ ...editingPackage, price: Number.parseInt(event.target.value, 10) || 0 })}
                 min="1"
-                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
             </div>
             <input
@@ -509,7 +509,7 @@ const AdminPricingSection = () => {
               onChange={(event) => setEditingPackage({ ...editingPackage, discount: Number.parseInt(event.target.value, 10) || 0 })}
               min="0"
               max="100"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             />
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
               <input
@@ -522,7 +522,7 @@ const AdminPricingSection = () => {
             <button
               type="button"
               onClick={handleUpdatePackage}
-              className="w-full rounded-2xl bg-[#465fff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6]"
+              className="w-full rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
             >
               Save Changes
             </button>
@@ -548,13 +548,13 @@ const AdminPricingSection = () => {
               </p>
               <p className="mt-1">
                 Current Credits:{' '}
-                <span className="font-bold text-[#465fff]">{selectedUserForCredit.credits || 0}</span>
+                <span className="font-bold text-brand">{selectedUserForCredit.credits || 0}</span>
               </p>
             </div>
             <select
               value={creditAction}
               onChange={(event) => setCreditAction(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             >
               <option value="add">Add Credits</option>
               <option value="subtract">Subtract Credits</option>
@@ -565,12 +565,12 @@ const AdminPricingSection = () => {
               value={creditAmount}
               onChange={(event) => setCreditAmount(Number.parseInt(event.target.value, 10) || 0)}
               min="0"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
             />
             <button
               type="button"
               onClick={handleUpdateUserCredits}
-              className="w-full rounded-2xl bg-[#465fff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6]"
+              className="w-full rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
             >
               Apply Changes
             </button>

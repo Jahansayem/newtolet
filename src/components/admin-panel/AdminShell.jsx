@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   FiArrowRight,
@@ -39,7 +39,7 @@ const SidebarLink = ({ item, activeKey, onClick }) => {
       onClick={onClick}
       className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
         isActive
-          ? 'bg-[#465fff] text-white shadow-lg shadow-blue-500/20'
+          ? 'bg-brand text-white shadow-lg shadow-blue-500/20'
           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
       }`}
     >
@@ -63,7 +63,7 @@ const SidebarContent = ({ activeKey, items, onNavigate }) => {
     <div className="flex h-full flex-col">
       <div className="border-b border-slate-200 px-6 py-6">
         <Link to="/" onClick={onNavigate} className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#465fff] text-lg font-bold text-white shadow-lg shadow-blue-500/25">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand text-lg font-bold text-white shadow-lg shadow-blue-500/25">
             NT
           </div>
           <div>
@@ -137,6 +137,19 @@ const AdminShell = ({
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  useEffect(() => {
+    if (!sidebarOpen) {
+      return undefined
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false)
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [sidebarOpen])
+
   return (
     <div className="min-h-screen bg-[#f6f8fc] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1720px]">
@@ -156,6 +169,9 @@ const AdminShell = ({
             onClick={() => setSidebarOpen(false)}
           />
           <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Admin navigation"
             className={`absolute left-0 top-0 h-full w-[308px] max-w-[88vw] bg-white shadow-2xl transition-transform duration-300 ${
               sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             }`}
@@ -165,8 +181,9 @@ const AdminShell = ({
                 type="button"
                 onClick={() => setSidebarOpen(false)}
                 className="rounded-full border border-slate-200 p-2 text-slate-600"
+                aria-label="Close navigation"
               >
-                <FiX />
+                <FiX aria-hidden="true" />
               </button>
             </div>
             <SidebarContent
@@ -185,8 +202,10 @@ const AdminShell = ({
                   type="button"
                   onClick={() => setSidebarOpen(true)}
                   className="mt-1 inline-flex rounded-2xl border border-slate-200 p-2.5 text-slate-700 xl:hidden"
+                  aria-label="Open navigation"
+                  aria-expanded={sidebarOpen}
                 >
-                  <FiMenu />
+                  <FiMenu aria-hidden="true" />
                 </button>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
@@ -207,13 +226,13 @@ const AdminShell = ({
                       value={searchQuery}
                       onChange={(event) => onSearchChange(event.target.value)}
                       placeholder={`Search ${title.toLowerCase()}...`}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-[#465fff] focus:bg-white"
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm text-slate-700 outline-none transition focus:border-brand focus:bg-white"
                     />
                   </label>
                 ) : null}
 
                 <div className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex">
-                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-sm font-semibold text-[#465fff]">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eef2ff] text-sm font-semibold text-brand">
                     {String(currentUserName || 'A').slice(0, 1).toUpperCase()}
                   </div>
                   <div>
@@ -226,7 +245,7 @@ const AdminShell = ({
           </header>
 
           <div className="px-4 py-6 sm:px-6 lg:px-8">
-            <div className="mb-6 rounded-[28px] bg-gradient-to-r from-[#465fff] via-[#6577ff] to-[#7a8aff] px-6 py-6 text-white shadow-lg shadow-blue-500/15">
+            <div className="mb-6 rounded-[28px] bg-gradient-to-r from-brand via-brand to-brand px-6 py-6 text-white shadow-lg shadow-blue-500/15">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-100/80">

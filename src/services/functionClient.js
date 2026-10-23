@@ -1,7 +1,5 @@
-const getEnv = (name, fallbackNames = [], fallbackValue = null) => {
-  const value = [name, ...fallbackNames]
-    .map((key) => process.env[key])
-    .find((entry) => typeof entry === 'string' && entry.trim().length > 0)
+const getEnv = (name, values = [], fallbackValue = null) => {
+  const value = values.find((entry) => typeof entry === 'string' && entry.trim().length > 0)
 
   if (typeof value === 'string' && value.trim().length > 0) {
     return value.trim()
@@ -17,10 +15,18 @@ const getEnv = (name, fallbackNames = [], fallbackValue = null) => {
 const trimTrailingSlash = (value) => value.replace(/\/+$/, '')
 
 const getSupabaseProjectUrl = () =>
-  trimTrailingSlash(getEnv('NEXT_PUBLIC_SUPABASE_URL', ['VITE_SUPABASE_URL']))
+  trimTrailingSlash(
+    getEnv('NEXT_PUBLIC_SUPABASE_URL', [
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.VITE_SUPABASE_URL,
+    ])
+  )
 
 const getSupabaseAnonKey = () =>
-  getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', ['VITE_SUPABASE_ANON_KEY'])
+  getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', [
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    process.env.VITE_SUPABASE_ANON_KEY,
+  ])
 
 const parseFunctionResponse = async (response) => {
   let payload = null
@@ -44,15 +50,14 @@ const parseFunctionResponse = async (response) => {
 }
 
 export const invokeSupabaseFunction = async ({ functionName, body, token = null }) => {
+  const anonKey = getSupabaseAnonKey()
   const headers = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
-    apikey: getSupabaseAnonKey(),
+    apikey: anonKey,
   }
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  }
+  headers.Authorization = `Bearer ${token || anonKey}`
 
   const response = await fetch(`${getSupabaseProjectUrl()}/functions/v1/${functionName}`, {
     method: 'POST',

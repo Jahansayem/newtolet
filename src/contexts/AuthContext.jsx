@@ -1,6 +1,12 @@
 import React, { createContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { getCurrentUser, getSession, logoutUser, getStoredUser } from '../services/authService';
+import {
+    getCurrentUser,
+    getSession,
+    logoutUser,
+    getStoredUser,
+    persistAuthenticatedUser
+} from '../services/authService';
 
 /**
  * Authentication Context
@@ -54,6 +60,10 @@ export const AuthProvider = ({ children }) => {
 
                 const currentUser = await getCurrentUser();
                 const resolvedUser = currentUser || null;
+
+                if (resolvedUser) {
+                    persistAuthenticatedUser(resolvedUser, nextSession);
+                }
 
                 applyAuthState(resolvedUser, nextSession);
                 return resolvedUser;

@@ -12,8 +12,10 @@ import { getPublicJobFeedOrders } from '../../services/jobFeedService';
 import { HOME_CATEGORIES } from './categoryConfig';
 import { matchesKeywordSearch } from './propertySearchCore';
 import PropertyListingCard from '../../components/PropertyListingCard';
+import ListingCardSkeleton from '../../components/ListingCardSkeleton';
+import HomeHero from './HomeHero';
 import { matchesPropertyCategory } from '../../lib/propertyCategories';
-import { HOME_CHROME_SCROLL_EVENT } from '../../lib/homeScrollChrome';
+import { HOME_CHROME_SCROLL_EVENT, getNavHeight } from '../../lib/homeScrollChrome';
 import About from './About';
 import ArticlePreview from './ArticlePreview';
 import { getStoredUser } from '../../services/authService';
@@ -26,6 +28,7 @@ import {
     getComparedPropertyIds,
 } from '../../services/propertyCompareService';
 import AdsterraBanner from './Ads';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const Cover = dynamic(
     () => import('./Cover').then((mod) => mod.default),
@@ -40,20 +43,25 @@ const JobFeedSection = dynamic(
     }
 );
 const Feedback = dynamic(
-    () => import('./Feadback').then((mod) => mod.default)
+    () => import('./Feadback').then((mod) => mod.default),
+    {
+        // Own fallback so a cold chunk never suspends up to the page-level skeleton.
+        loading: () => <ContentSectionFallback height='280px' />,
+    }
 );
 
 const CategorySectionsFallback = () => (
-    <div className='bg-gray-50 min-h-[720px] py-12 animate-pulse'>
+    <div className='min-h-[720px] py-2' aria-hidden='true'>
         {HOME_CATEGORIES.map((category) => (
-            <div key={category} className='mb-12 space-y-4'>
-                <div className='flex items-center justify-between gap-4'>
-                    <div className='h-8 w-40 rounded-full bg-gray-200' />
-                    <div className='h-5 w-36 rounded-full bg-gray-200' />
+            <div key={category} className='mb-12 space-y-5'>
+                <div className='animate-pulse border-b border-line pb-4'>
+                    <div className='h-7 w-40 rounded-md bg-slate-200' />
+                    <div className='mt-2 h-4 w-48 rounded-md bg-slate-200' />
                 </div>
-                <div className='grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6'>
-                    {Array.from({ length: 8 }).map((_, index) => (
-                        <div key={`${category}-${index}`} className='h-[380px] rounded-[14px] bg-gray-200' />
+                {/* Same grid and card proportions as the real section so content does not shift in. */}
+                <div className='grid grid-cols-1 gap-4 gap-y-6 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'>
+                    {Array.from({ length: 4 }).map((_, index) => (
+                        <ListingCardSkeleton key={`${category}-${index}`} />
                     ))}
                 </div>
             </div>
@@ -62,14 +70,15 @@ const CategorySectionsFallback = () => (
 );
 
 const ContentSectionFallback = ({ height = '320px' }) => (
-    <div className='py-12 animate-pulse'>
-        <div className='h-10 w-64 mx-auto rounded-full bg-gray-200 mb-4' />
-        <div className='h-5 w-80 max-w-full mx-auto rounded-full bg-gray-200 mb-10' />
-        <div className='rounded-3xl bg-gray-200' style={{ minHeight: height }} />
+    <div className='py-12 animate-pulse' aria-hidden='true'>
+        <div className='h-8 w-64 mx-auto rounded-md bg-slate-200 mb-4' />
+        <div className='h-4 w-80 max-w-full mx-auto rounded-md bg-slate-200 mb-10' />
+        <div className='rounded-[var(--radius-panel)] bg-slate-200' style={{ minHeight: height }} />
     </div>
 );
 
 const Home = () => {
+    const { t, tv } = useLanguage();
     const [jobFeedOrders, setJobFeedOrders] = useState([]);
     const [jobFeedLoading, setJobFeedLoading] = useState(true);
     const [searchParams, setSearchParams] = useSearchParams();
@@ -235,7 +244,7 @@ const Home = () => {
             return undefined;
         }
 
-        const getNavbarOffset = () => (window.innerWidth >= 768 ? 118 : 72);
+        const getNavbarOffset = () => getNavHeight();
 
         // Use refs to track current state and avoid unnecessary setState calls
         let rafId = null;
@@ -333,7 +342,7 @@ const Home = () => {
         const stickyBarHeight = stickyBarRef.current?.getBoundingClientRect().height || 0;
         const navbarOffset = isCategoryPinned && !isHomeNavVisible
             ? 0
-            : (window.innerWidth >= 768 ? 118 : 72);
+            : getNavHeight();
         const topOffset = navbarOffset + stickyBarHeight + 24;
         const targetTop = targetSection.getBoundingClientRect().top + window.scrollY - topOffset;
         window.scrollTo({ top: targetTop, behavior: 'smooth' });
@@ -358,29 +367,26 @@ const Home = () => {
     }, []);
 
     return (
-        <div className='site-shell-wide min-h-screen bg-gray-50 py-6 md:py-8'>
+        <div className='site-shell min-h-screen py-5 md:py-6'>
             <div ref={stickySentinelRef} className='h-0 w-full' aria-hidden='true' />
             <div
                 ref={stickyBarRef}
-                className={`sticky z-40 -mx-4 mb-6 border-b border-gray-200/80 bg-gray-50/95 px-4 py-3 backdrop-blur transition-[top] duration-300 sm:-mx-5 sm:px-5 lg:-mx-8 lg:px-8 ${
+                className={`site-shell-bleed sticky z-40 mb-6 border-b border-line/80 bg-canvas/95 py-2.5 backdrop-blur transition-[top] duration-300 ${
                     isCategoryPinned && !isHomeNavVisible
                         ? 'top-0'
-                        : 'top-[72px] md:top-[118px]'
-                } xl:mx-0 xl:px-0`}
+                        : 'top-[var(--nav-h)]'
+                }`}
             >
                 <CategoryFilterBar
                     selectedCategory={activeCategorySection}
                     onCategorySelect={handleCategoryJump}
+                    mode='jump'
                 />
             </div>
 
-            <div className='mb-10 md:mb-12'>
+            <div className='mb-12 space-y-6 md:mb-16'>
+                <HomeHero />
                 <Cover />
-                <div className='px-2 pt-6 text-center'>
-                    <p className='text-xs font-bold uppercase tracking-[0.32em] text-gray-900 sm:text-sm md:text-base'>
-                        NEW TOLET - Find Homes Smartly
-                    </p>
-                </div>
             </div>
 
             <DeferredSection
@@ -398,12 +404,13 @@ const Home = () => {
                             Browse the newest approved property listings curated across the latest categories.
                         </p> */}
                         {searchQuery && (
-                            <div className='mt-5 inline-flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full bg-gray-900 px-4 py-2 text-white'>
-                                <span className='text-sm'>Search: {searchQuery}</span>
+                            <div className='mb-6 inline-flex max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-ink py-1 pl-4 pr-1 text-white'>
+                                <span className='text-sm'>{t('home.searchBadge', { query: searchQuery })}</span>
                                 <button
+                                    type='button'
                                     onClick={clearSearch}
-                                    className='font-bold text-white/80 hover:text-white'
-                                    aria-label='Clear search'
+                                    className='flex h-9 w-9 items-center justify-center rounded-full text-white/80 hover:bg-white/15 hover:text-white'
+                                    aria-label={t('home.clearSearch')}
                                 >
                                     &times;
                                 </button>
@@ -411,35 +418,37 @@ const Home = () => {
                         )}
                     </div>
 
-                    {categorySections.length === 0 ? (
-                        <div className='rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center'>
-                            <p className='text-lg font-semibold text-gray-700'>No category listings found</p>
-                            <p className='mt-2 text-sm text-gray-500'>Try a different search term to browse more properties.</p>
+                    {categorySections.length === 0 && isLoading ? (
+                        <CategorySectionsFallback />
+                    ) : categorySections.length === 0 ? (
+                        <div role='status' className='rounded-[var(--radius-panel)] border border-dashed border-line bg-canvas px-6 py-14 text-center'>
+                            <p className='text-lg font-semibold text-ink'>{t('home.noCategoryListings')}</p>
+                            <p className='mt-2 text-caption text-muted'>{t('home.noCategoryListingsHint')}</p>
                         </div>
                     ) : (
-                        <div className='space-y-12 md:space-y-14'>
+                        <div className='space-y-12 md:space-y-16'>
                             {categorySections.map(({ category, items }) => (
                                 <section
                                     key={category}
                                     ref={(element) => {
                                         sectionRefs.current[category] = element;
                                     }}
-                                    className='scroll-mt-[220px] space-y-5'
+                                    className='scroll-mt-[calc(var(--nav-h)+5.5rem)] space-y-5'
                                 >
-                                    <div className='flex flex-col gap-4 border-b border-gray-200 pb-4 sm:flex-row sm:items-center sm:justify-between'>
+                                    <div className='flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4'>
                                         <div>
-                                            <h2 className='text-xl font-bold text-gray-800 md:text-[1.8rem]'>{category}</h2>
-                                            <p className='text-sm leading-6 text-gray-500'>Top {items.length} featured {category.toLowerCase()} listings.</p>
+                                            <h2 className='text-2xl font-bold leading-8 text-ink md:text-[26px]'>{tv('categories', category)}</h2>
+                                            <p className='mt-0.5 text-caption text-muted'>{t('home.categorySummary', { count: items.length, category: tv('categories', category).toLowerCase() })}</p>
                                         </div>
                                         <Link
                                             to={`/propertylist2?category=${encodeURIComponent(category)}`}
-                                            className='site-button-secondary text-sm'
+                                            className='ui-btn ui-btn-ghost ui-btn-sm -mr-2 hidden text-brand sm:inline-flex'
                                         >
-                                            See more {category.toLowerCase()} property
+                                            {t('home.seeMoreCategory', { category: tv('categories', category).toLowerCase() })}
                                         </Link>
                                     </div>
 
-                                    <div className='grid grid-cols-2 gap-4 gap-y-6 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4'>
+                                    <div className='grid grid-cols-1 gap-4 gap-y-6 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'>
                                         {items.map((item, index) => (
                                             <PropertyListingCard
                                                 key={item.id || `${category}-${index}`}
@@ -451,6 +460,15 @@ const Home = () => {
                                                 onComparedPropertiesChange={handleComparedPropertiesChange}
                                             />
                                         ))}
+                                    </div>
+
+                                    <div className='flex justify-center pt-1 sm:hidden'>
+                                        <Link
+                                            to={`/propertylist2?category=${encodeURIComponent(category)}`}
+                                            className='ui-btn ui-btn-secondary ui-btn-sm'
+                                        >
+                                            {t('home.seeMoreCategory', { category: tv('categories', category).toLowerCase() })}
+                                        </Link>
                                     </div>
                                 </section>
                             ))}

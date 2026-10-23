@@ -3,10 +3,20 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
 import { updatePropertyWithImages } from '../../services/propertyService'
-import { validateScreen1, validateScreen2, validateScreen3 } from '../../utils/formValidation'
+import {
+  validateScreen1Codes,
+  validateScreen2Codes,
+  validateScreen3Codes,
+  localizeValidationErrors,
+} from '../../utils/formValidation'
 import { divisions, districts, areas, subAreas } from '../../utils/bangladeshLocations'
 import { supabase } from '../../services/supabaseClient'
 import RentDisplay from '../../components/RentDisplay'
+import { useLanguage } from '../../i18n/useLanguage'
+
+// Errors thrown while loading carry an i18n key so the message can be
+// re-rendered in the active language without re-fetching the property.
+const keyedError = (key, vars) => Object.assign(new Error(key), { i18n: { key, vars } })
 
 const categories = [
   { id: 'family', label: 'Family', icon: '👨‍👩‍👧‍👦' },
@@ -16,6 +26,25 @@ const categories = [
   { id: 'hostel', label: 'Hostel', icon: '🏨' },
   { id: 'shop', label: 'Shop', icon: '🛍️' },
 ]
+
+const EDIT_FIELD_LABEL_KEYS = {
+  category: 'addProperty.fields.selectCategory',
+  property_type: 'addProperty.fields.propertyType',
+  total_bathrooms: 'addProperty.fields.bathrooms',
+  balcony: 'addProperty.fields.balcony',
+  kitchen: 'addProperty.fields.kitchen',
+  floor_level: 'addProperty.fields.floorLevel',
+  occupancy: 'addProperty.fields.occupancy',
+  rent_amount_bdt: 'addProperty.fields.rentAmount',
+  rent_period: 'addProperty.fields.rentalPeriod',
+  state_district: 'addProperty.fields.stateDistrict',
+  area: 'addProperty.fields.area',
+  contact_number: 'addProperty.fields.contactNumber',
+  short_description: 'addProperty.fields.shortDescription',
+  available_from: 'addProperty.fields.availableFrom',
+  deadline: 'addProperty.fields.deadline',
+  images: 'addProperty.sections.propertyPhotos',
+}
 
 const floorLevels = [
   '1st Floor',
@@ -90,10 +119,10 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
 
   return (
     <div>
-      <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-1'>
+      <label className='ui-label'>
         {label} {!optional && '*'}
       </label>
-      <div className='flex items-center border border-gray-300 rounded-lg overflow-hidden'>
+      <div className='flex items-center overflow-hidden rounded-[var(--radius-input)] border border-[#cbd5e1] bg-white'>
         <button
           type='button'
           onClick={handleDecrement}
@@ -124,9 +153,12 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
   )
 }
 
-const CheckboxInput = ({ label, checked, onChange, error, optional = false }) => (
+const CheckboxInput = ({ label, checked, onChange, error, optional = false }) => {
+  const { t } = useLanguage()
+
+  return (
   <div>
-    <span className='block text-xs md:text-sm font-semibold text-gray-700 mb-1'>
+    <span className='ui-label'>
       {label} {!optional && '*'}
     </span>
     <label className='flex min-h-[42px] items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white cursor-pointer hover:bg-gray-50 transition-colors'>
@@ -134,17 +166,19 @@ const CheckboxInput = ({ label, checked, onChange, error, optional = false }) =>
         type='checkbox'
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className='h-4 w-4 rounded border-gray-300 text-[#1E73B8] focus:ring-[#1E73B8]'
+        className='h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand'
       />
       <span className='text-sm md:text-base text-gray-700'>
-        {checked ? 'Yes' : 'No'}
+        {checked ? t('common.yes') : t('common.no')}
       </span>
     </label>
     {error && <p className='text-red-500 text-xs mt-1'>{error}</p>}
   </div>
-)
+  )
+}
 
 const SizeInput = ({ label, value, onChange }) => {
+  const { t } = useLanguage()
   const handleDecrement = () => {
     const currentValue = parseInt(value) || 0
     onChange(Math.max(0, currentValue - 50).toString())
@@ -162,10 +196,10 @@ const SizeInput = ({ label, value, onChange }) => {
 
   return (
     <div>
-      <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-1'>
+      <label className='ui-label'>
         {label}
       </label>
-      <div className='flex items-center border border-gray-300 rounded-lg overflow-hidden'>
+      <div className='flex items-center overflow-hidden rounded-[var(--radius-input)] border border-[#cbd5e1] bg-white'>
         <button
           type='button'
           onClick={handleDecrement}
@@ -189,7 +223,7 @@ const SizeInput = ({ label, value, onChange }) => {
           value={value}
           onChange={handleChange}
           className='flex-1 min-w-0 text-center py-2 text-sm md:text-base focus:outline-none bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
-          placeholder='Optional'
+          placeholder={t('common.optional')}
         />
       </div>
     </div>
@@ -197,6 +231,7 @@ const SizeInput = ({ label, value, onChange }) => {
 }
 
 const EditProperty = () => {
+  const { t, tv } = useLanguage()
   const [searchParams] = useSearchParams()
   const propertyId = searchParams.get('propertyId') || ''
   const isAdminEditRequest = searchParams.get('admin') === '1'
@@ -283,7 +318,7 @@ const EditProperty = () => {
         console.log('Loading property with ID:', propertyId)
 
         if (!propertyId) {
-          throw new Error('Property ID is missing from URL')
+          throw keyedError('addProperty.edit.errors.missingId')
         }
 
         // Get user from localStorage
@@ -291,7 +326,7 @@ const EditProperty = () => {
         const isAuthenticatedUser = storedUser ? JSON.parse(storedUser) : null
 
         if (!isAuthenticatedUser) {
-          throw new Error('Please login to edit this property')
+          throw keyedError('addProperty.edit.errors.loginRequired')
         }
 
         console.log('Fetching property from database...')
@@ -307,18 +342,18 @@ const EditProperty = () => {
 
         if (propertyError) {
           console.error('Supabase error:', propertyError)
-          throw new Error(`Property not found: ${propertyError.message}`)
+          throw keyedError('addProperty.edit.errors.notFoundWithReason', { reason: propertyError.message })
         }
 
         if (!property) {
-          throw new Error('Property not found')
+          throw keyedError('addProperty.edit.errors.notFound')
         }
 
         const canAdminEdit = isAdminEditRequest && isAuthenticatedUser.is_admin === true
 
         // Verify ownership
         if (property.user_id !== isAuthenticatedUser.id && !canAdminEdit) {
-          throw new Error('You do not have permission to edit this property')
+          throw keyedError('addProperty.edit.errors.noPermission')
         }
 
         // Fetch images
@@ -434,7 +469,7 @@ const EditProperty = () => {
 
       } catch (error) {
         console.error('Error loading property:', error)
-        setLoadError(error.message || 'Failed to load property')
+        setLoadError(error.i18n || { message: error.message })
       } finally {
         setLoading(false)
       }
@@ -514,31 +549,31 @@ const EditProperty = () => {
       const totalImageCount = existingImageUrls.length + formData.images.length
 
       // Validate all screens
-      const errors1 = validateScreen1(formData)
-      const errors2 = validateScreen2(formData)
-      const errors3 = validateScreen3(formData)
+      const errors1 = localizeValidationErrors(validateScreen1Codes(formData), t)
+      const errors2 = localizeValidationErrors(validateScreen2Codes(formData), t)
+      const errors3 = localizeValidationErrors(validateScreen3Codes(formData), t)
 
       // For screen 4, validate dates but NOT images (we do custom validation)
       const errors4 = {}
       if (!formData.available_from) {
-        errors4.available_from = 'Please select available from date'
+        errors4.available_from = t('addProperty.validation.availableFromRequired')
       }
       if (!formData.deadline) {
-        errors4.deadline = 'Please select deadline date'
+        errors4.deadline = t('addProperty.validation.deadlineRequired')
       }
       if (formData.available_from && formData.deadline) {
         const availableDate = new Date(formData.available_from)
         const deadlineDate = new Date(formData.deadline)
         if (availableDate > deadlineDate) {
-          errors4.deadline = 'Deadline must be after available from date'
+          errors4.deadline = t('addProperty.validation.deadlineBeforeAvailable')
         }
       }
 
       // Custom image validation - count both existing and new
       if (totalImageCount < 2) {
-        errors4.images = 'Please upload at least 2 images (you can keep existing ones or add new ones)'
+        errors4.images = t('addProperty.edit.imagesMinExisting')
       } else if (totalImageCount > 10) {
-        errors4.images = 'Maximum 10 images allowed'
+        errors4.images = t('addProperty.validation.imagesMax', { max: 10 })
       }
 
       const allErrors = { ...errors1, ...errors2, ...errors3, ...errors4 }
@@ -546,14 +581,19 @@ const EditProperty = () => {
       if (Object.keys(allErrors).length > 0) {
         setFormErrors(allErrors)
         const errorList = Object.entries(allErrors)
-          .map(([field, message]) => `${field}: ${message}`)
+          .map(([field, message]) => `${EDIT_FIELD_LABEL_KEYS[field] ? t(EDIT_FIELD_LABEL_KEYS[field]) : field}: ${message}`)
           .join('\n')
-        setSubmitError(`Please fix all errors before submitting:\n${errorList}`)
+        setSubmitError(`${t('addProperty.alerts.fixErrorsHeading')}\n${errorList}`)
         setIsSubmitting(false)
-        const firstErrorField = document.querySelector('[class*="border-red-500"]')
-        if (firstErrorField) {
-          firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
+        requestAnimationFrame(() => {
+          const target = document.querySelector('[aria-invalid="true"]') || document.querySelector('[class*="border-red-500"]')
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            if (typeof target.focus === 'function') {
+              target.focus({ preventScroll: true })
+            }
+          }
+        })
         return
       }
 
@@ -577,20 +617,22 @@ const EditProperty = () => {
         setTimeout(() => {
           navigate(returnTo, {
             state: {
-              message: 'Property updated successfully!',
+              message: t('addProperty.edit.updatedMessage'),
             },
           })
         }, 2000)
       } else {
-        setSubmitError(result.error || 'Failed to update property')
+        setSubmitError(result.error || t('addProperty.edit.updateFailed'))
         setIsSubmitting(false)
       }
     } catch (error) {
       console.error('Submission error:', error)
-      setSubmitError(error.message || 'An unexpected error occurred')
+      setSubmitError(error.message || t('addProperty.alerts.unexpectedError'))
       setIsSubmitting(false)
     }
   }
+
+  const fixErrorsHeading = t('addProperty.alerts.fixErrorsHeading')
 
   if (loading) {
     return (
@@ -609,13 +651,15 @@ const EditProperty = () => {
               <path fillRule='evenodd' d='M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z' clipRule='evenodd' />
             </svg>
           </div>
-          <h2 className='text-xl font-bold text-gray-900 mb-2'>Error</h2>
-          <p className='text-gray-600 mb-6'>{loadError}</p>
+          <h2 className='text-xl font-bold text-gray-900 mb-2'>{t('addProperty.edit.errorTitle')}</h2>
+          <p className='text-gray-600 mb-6'>
+            {loadError.key ? t(loadError.key, loadError.vars) : (loadError.message || t('addProperty.edit.errors.loadFailed'))}
+          </p>
           <button
             onClick={() => navigate(returnTo)}
             className='px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700'
           >
-            {isAdminEditRequest ? 'Back to Admin Properties' : 'Back to My Properties'}
+            {isAdminEditRequest ? t('addProperty.edit.backToAdminProperties') : t('addProperty.edit.backToMyProperties')}
           </button>
         </div>
       </div>
@@ -639,12 +683,12 @@ const EditProperty = () => {
               />
             </svg>
           </div>
-          <h2 className='text-2xl font-bold text-green-900 mb-2'>Success!</h2>
+          <h2 className='text-2xl font-bold text-green-900 mb-2'>{t('addProperty.success.title')}</h2>
           <p className='text-green-700 mb-4'>
-            Your property listing has been updated successfully!
+            {t('addProperty.edit.updated')}
           </p>
           <p className='text-sm text-gray-600'>
-            {isAdminEditRequest ? 'Redirecting to admin properties...' : 'Redirecting to your properties...'}
+            {isAdminEditRequest ? t('addProperty.edit.redirectingAdmin') : t('addProperty.success.redirecting')}
           </p>
         </div>
       </div>
@@ -660,7 +704,7 @@ const EditProperty = () => {
         <div className='mb-4 md:mb-8'>
           <button
             onClick={() => navigate(-1)}
-            className='text-[#1E73B8] hover:text-[#1665a0] font-medium flex items-center gap-1 mb-3 md:mb-4 text-sm md:text-base'
+            className='text-brand hover:text-brand-hover font-medium flex items-center gap-1 mb-3 md:mb-4 text-sm md:text-base'
           >
             <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
               <path
@@ -669,14 +713,14 @@ const EditProperty = () => {
                 clipRule='evenodd'
               />
             </svg>
-            Back
+            {t('common.back')}
           </button>
 
           <h1 className='text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2'>
-            Edit Property
+            {t('addProperty.edit.title')}
           </h1>
           <p className='text-sm md:text-base text-gray-600'>
-            Update your property details and save changes
+            {t('addProperty.edit.subtitle')}
           </p>
         </div>
 
@@ -685,15 +729,15 @@ const EditProperty = () => {
           {/* Section 1: Property Details */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>1</span>
-              Property Details
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>1</span>
+              {t('addProperty.sections.propertyDetails')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Category Selection */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-                  Select Category *
+                <label className='ui-label text-[15px]'>
+                  {t('addProperty.fields.selectCategory')}
                 </label>
                 <div className='grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3'>
                   {categories.map((cat) => (
@@ -703,73 +747,73 @@ const EditProperty = () => {
                       onClick={() => updateFormData({ category: cat.label })}
                       className={`p-3 md:p-4 rounded-lg border-2 transition-all text-center ${
                         formData.category === cat.label
-                          ? 'border-[#1E73B8] bg-[#1E73B8]/5'
-                          : 'border-gray-300 bg-white hover:border-[#1E73B8]/40'
+                          ? 'border-brand bg-brand/5'
+                          : 'border-gray-300 bg-white hover:border-brand/40'
                       }`}
                     >
                       <div className='text-2xl md:text-3xl mb-1 md:mb-2'>{cat.icon}</div>
-                      <p className='font-medium text-xs md:text-sm'>{cat.label}</p>
+                      <p className='font-medium text-xs md:text-sm'>{tv('categories', cat.label)}</p>
                     </button>
                   ))}
                 </div>
-                {errors.category && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.category}</p>}
+                {errors.category && <p className='ui-error'>{errors.category}</p>}
               </div>
 
               {/* Property Type Selection */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-                  Property Type *
+                <label className='ui-label text-[15px]'>
+                  {t('addProperty.fields.propertyType')}
                 </label>
                 <select
                   value={formData.property_type || ''}
                   onChange={(e) => updateFormData({ property_type: e.target.value })}
-                  className='w-full border border-gray-300 rounded-lg p-3 md:p-4 text-sm md:text-base focus:outline-none focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/20'
+                  className='ui-field'
                 >
-                  <option value=''>Select property type</option>
+                  <option value=''>{t('addProperty.placeholders.selectPropertyType')}</option>
                   {propertyTypes.map((type) => (
                     <option key={type} value={type}>
-                      {type}
+                      {tv('propertyTypes', type)}
                     </option>
                   ))}
                 </select>
-                {errors.property_type && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.property_type}</p>}
+                {errors.property_type && <p className='ui-error'>{errors.property_type}</p>}
               </div>
 
               {/* Specifications Grid */}
               <div className='grid grid-cols-2 lg:grid-cols-6 gap-3 md:gap-4'>
                 <CounterInput
-                  label='Dining Rooms'
+                  label={t('addProperty.fields.diningRooms')}
                   value={formData.dining_rooms || 0}
                   onChange={(val) => updateFormData({ dining_rooms: val })}
                   error={errors.dining_rooms}
                 />
                 <CheckboxInput
-                  label='Drawing Room'
+                  label={t('addProperty.fields.drawingRoom')}
                   checked={Number(formData.living_rooms || 0) > 0}
                   onChange={(checked) => updateFormData({ living_rooms: checked ? 1 : 0 })}
                   error={errors.living_rooms}
                   optional
                 />
                 <CounterInput
-                  label='Bathrooms'
+                  label={t('addProperty.fields.bathrooms')}
                   value={formData.total_bathrooms}
                   onChange={(val) => updateFormData({ total_bathrooms: val })}
                   error={errors.total_bathrooms}
                 />
                 <CounterInput
-                  label='Balcony'
+                  label={t('addProperty.fields.balcony')}
                   value={formData.balcony}
                   onChange={(val) => updateFormData({ balcony: val })}
                   error={errors.balcony}
                 />
                 <CounterInput
-                  label='Kitchen'
+                  label={t('addProperty.fields.kitchen')}
                   value={formData.kitchen || 0}
                   onChange={(val) => updateFormData({ kitchen: val })}
                   error={errors.kitchen}
                 />
                 <SizeInput
-                  label='Room Size (sqft)'
+                  label={t('addProperty.fields.roomSize')}
                   value={formData.room_size_sqft}
                   onChange={(val) => updateFormData({ room_size_sqft: val })}
                 />
@@ -777,30 +821,30 @@ const EditProperty = () => {
 
               {/* Floor Level */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                  Floor Level *
+                <label htmlFor='edit-floorLevel' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.floorLevel')}
                 </label>
-                <select
+                <select id='edit-floorLevel'
                   value={formData.floor_level}
                   onChange={(e) => updateFormData({ floor_level: e.target.value })}
                   className={`w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.floor_level
                       ? 'border-red-500 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-[#1E73B8]'
+                      : 'border-gray-300 focus:ring-brand'
                   }`}
                 >
-                  <option value=''>Select floor level</option>
+                  <option value=''>{t('addProperty.placeholders.selectFloorLevel')}</option>
                   {floorLevels.map((level) => (
-                    <option key={level} value={level}>{level}</option>
+                    <option key={level} value={level}>{tv('floorLevels', level)}</option>
                   ))}
                 </select>
-                {errors.floor_level && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.floor_level}</p>}
+                {errors.floor_level && <p className='ui-error'>{errors.floor_level}</p>}
               </div>
 
               {/* Occupancy Restrictions */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-                  Occupancy Restrictions *
+                <label className='ui-label text-[15px]'>
+                  {t('addProperty.fields.occupancy')}
                 </label>
                 <div className='space-y-2 md:space-y-3'>
                   {occupancies.map((occ) => (
@@ -814,13 +858,13 @@ const EditProperty = () => {
                         value={occ}
                         checked={formData.occupancy === occ}
                         onChange={(e) => updateFormData({ occupancy: e.target.value })}
-                        className='w-4 h-4 text-[#1E73B8]'
+                        className='w-4 h-4 text-brand'
                       />
-                      <span className='ml-3 font-medium text-sm md:text-base text-gray-800'>{occ}</span>
+                      <span className='ml-3 font-medium text-sm md:text-base text-gray-800'>{tv('occupancy', occ)}</span>
                     </label>
                   ))}
                 </div>
-                {errors.occupancy && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.occupancy}</p>}
+                {errors.occupancy && <p className='ui-error'>{errors.occupancy}</p>}
               </div>
             </div>
           </div>
@@ -828,34 +872,34 @@ const EditProperty = () => {
           {/* Section 2: Pricing */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>2</span>
-              Pricing Details
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>2</span>
+              {t('addProperty.sections.pricingDetails')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Rent Amount */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                  Rent Amount (BDT) {formData.is_rent_negotiable ? '' : '*'}
+                <label htmlFor='edit-rentAmount' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.rentAmount')} {formData.is_rent_negotiable ? '' : '*'}
                 </label>
                 <div className='relative'>
                   <span className='absolute left-3 md:left-4 top-2.5 md:top-3 text-lg md:text-xl font-semibold text-gray-600'>
                     ৳
                   </span>
-                  <input
+                  <input id='edit-rentAmount'
                     type='number'
                     value={formData.rent_amount_bdt}
                     onChange={(e) => updateFormData({ rent_amount_bdt: parseInt(e.target.value) || '' })}
                     className={`w-full pl-8 md:pl-10 pr-3 md:pr-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
                       errors.rent_amount_bdt
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
-                    placeholder='Enter rent amount'
+                    placeholder={t('addProperty.placeholders.rentAmount')}
                     min='1'
                   />
                 </div>
-                {errors.rent_amount_bdt && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_amount_bdt}</p>}
+                {errors.rent_amount_bdt && <p className='ui-error'>{errors.rent_amount_bdt}</p>}
               </div>
 
               <label className='flex items-start gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer'>
@@ -863,18 +907,18 @@ const EditProperty = () => {
                   type='checkbox'
                   checked={Boolean(formData.is_rent_negotiable)}
                   onChange={(e) => updateFormData({ is_rent_negotiable: e.target.checked })}
-                  className='mt-1 h-4 w-4 text-[#1E73B8] bg-white'
+                  className='mt-1 h-4 w-4 text-brand bg-white'
                 />
                 <span>
-                  <span className='block text-sm md:text-base font-semibold text-gray-800'>Rent is negotiable</span>
-                  <span className='block text-xs md:text-sm text-gray-600'>Tenants will see this listing as negotiable. You can leave the amount empty.</span>
+                  <span className='block text-sm md:text-base font-semibold text-gray-800'>{t('addProperty.fields.rentNegotiable')}</span>
+                  <span className='block text-xs md:text-sm text-gray-600'>{t('addProperty.fields.rentNegotiableHint')}</span>
                 </span>
               </label>
 
               {/* Rent Period */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-                  Rental Period *
+                <label className='ui-label text-[15px]'>
+                  {t('addProperty.fields.rentalPeriod')}
                 </label>
                 <div className='grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3'>
                   {rentPeriods.map((period) => (
@@ -884,8 +928,8 @@ const EditProperty = () => {
                       onClick={() => updateFormData({ rent_period: period })}
                       className={`p-3 md:p-4 rounded-lg border-2 transition-all font-semibold text-center ${
                         formData.rent_period === period
-                          ? 'border-[#1E73B8] bg-[#1E73B8]/5 text-[#1665a0]'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-[#1E73B8]/40'
+                          ? 'border-brand bg-brand/5 text-brand-pressed'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-brand/40'
                       }`}
                     >
                       <span className='text-xl md:text-2xl'>
@@ -895,17 +939,17 @@ const EditProperty = () => {
                         {period === 'Yearly' && '📈'}
                       </span>
                       <br />
-                      <span className='text-xs md:text-sm'>{period}</span>
+                      <span className='text-xs md:text-sm'>{tv('rentPeriods', period)}</span>
                     </button>
                   ))}
                 </div>
-                {errors.rent_period && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.rent_period}</p>}
+                {errors.rent_period && <p className='ui-error'>{errors.rent_period}</p>}
               </div>
 
               {formData.is_rent_negotiable && !formData.rent_amount_bdt && formData.rent_period && (
                 <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
                   <p className='text-sm md:text-base text-green-800'>
-                    <strong>Price:</strong>{' '}
+                    <strong>{t('addProperty.pricing.price')}</strong>{' '}
                     <RentDisplay
                       pricing={{
                         rent_amount_bdt: formData.rent_amount_bdt,
@@ -920,14 +964,14 @@ const EditProperty = () => {
               {formData.rent_amount_bdt && formData.rent_period && (
                 <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
                   <p className='text-sm md:text-base text-green-800'>
-                    <strong>Price:</strong>{' '}
+                    <strong>{t('addProperty.pricing.price')}</strong>{' '}
                     <RentDisplay
                       pricing={{
                         rent_amount_bdt: formData.rent_amount_bdt,
                         is_rent_negotiable: formData.is_rent_negotiable,
                       }}
                       prefix='৳ '
-                      suffix={`per ${formData.rent_period.toLowerCase()}`}
+                      suffix={t('addProperty.pricing.perPeriod', { period: tv('rentPeriods', formData.rent_period).toLowerCase() })}
                     />
                   </p>
                 </div>
@@ -938,15 +982,15 @@ const EditProperty = () => {
           {/* Section 3: Location */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>3</span>
-              Location Details
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>3</span>
+              {t('addProperty.sections.locationDetails')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Division Dropdown */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                  Division *
+                <label className='ui-label text-[15px]'>
+                  {t('addProperty.fields.division')}
                 </label>
                 <select
                   value={selectedDivision}
@@ -954,12 +998,12 @@ const EditProperty = () => {
                   className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all bg-white ${
                     errors.state_district && !selectedDivision
                       ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                      : 'border-gray-300 focus:ring-2 focus:ring-brand'
                   }`}
                 >
-                  <option value=''>Select Division</option>
+                  <option value=''>{t('addProperty.placeholders.selectDivision')}</option>
                   {divisions.map((division) => (
-                    <option key={division} value={division}>{division}</option>
+                    <option key={division} value={division}>{tv('divisions', division)}</option>
                   ))}
                 </select>
               </div>
@@ -967,19 +1011,19 @@ const EditProperty = () => {
               {/* District Dropdown */}
               {selectedDivision && (
                 <div className='animate-fade-in-up'>
-                  <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                    District *
+                  <label htmlFor='edit-district' className='ui-label text-[15px]'>
+                    {t('addProperty.fields.district')}
                   </label>
-                  <select
+                  <select id='edit-district'
                     value={selectedDistrict}
                     onChange={(e) => handleDistrictChange(e.target.value)}
                     className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all bg-white ${
                       errors.state_district && !selectedDistrict
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
                   >
-                    <option value=''>Select District</option>
+                    <option value=''>{t('addProperty.placeholders.selectDistrict')}</option>
                     {availableDistricts.map((district) => (
                       <option key={district} value={district}>{district}</option>
                     ))}
@@ -990,33 +1034,33 @@ const EditProperty = () => {
               {/* Upazilla Dropdown */}
               {selectedDistrict && (
                 <div className='animate-fade-in-up'>
-                  <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                    Upazilla *
+                  <label htmlFor='edit-upazilla' className='ui-label text-[15px]'>
+                    {t('addProperty.fields.upazilla')}
                   </label>
-                  <select
+                  <select id='edit-upazilla'
                     value={selectedUpazilla}
                     onChange={(e) => handleUpazillaChange(e.target.value)}
                     className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all bg-white ${
                       errors.area && !selectedUpazilla
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
                   >
-                    <option value=''>Select Upazilla</option>
+                    <option value=''>{t('addProperty.placeholders.selectUpazilla')}</option>
                     {availableUpazillas.map((upazilla) => (
                       <option key={upazilla} value={upazilla}>{upazilla}</option>
                     ))}
                   </select>
-                  {errors.area && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.area}</p>}
+                  {errors.area && <p className='ui-error'>{errors.area}</p>}
                 </div>
               )}
 
               {/* Selected Location Display */}
               {selectedUpazilla && (
-                <div className='bg-[#1E73B8]/5 border border-[#1E73B8]/30 rounded-lg p-3 md:p-4 animate-fade-in-up'>
+                <div className='bg-brand/5 border border-brand/30 rounded-lg p-3 md:p-4 animate-fade-in-up'>
                   <p className='text-sm md:text-base text-gray-700'>
-                    <strong>Selected Location:</strong>{' '}
-                    <span className='text-[#1E73B8]'>{selectedUpazilla}, {selectedDistrict}, {selectedDivision}</span>
+                    <strong>{t('addProperty.location.selectedLocation')}</strong>{' '}
+                    <span className='text-brand'>{selectedUpazilla}, {selectedDistrict}, {tv('divisions', selectedDivision)}</span>
                   </p>
                 </div>
               )}
@@ -1024,15 +1068,15 @@ const EditProperty = () => {
               {/* Sub Area Dropdown - Shows if upazilla has sub-areas */}
               {selectedUpazilla && subAreas[selectedUpazilla] && subAreas[selectedUpazilla].length > 0 && (
                 <div className='animate-fade-in-up'>
-                  <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                    Sub Area (Optional)
+                  <label htmlFor='edit-subArea' className='ui-label text-[15px]'>
+                    {t('addProperty.fields.subArea')}
                   </label>
-                  <select
+                  <select id='edit-subArea'
                     value={selectedSubArea}
                     onChange={(e) => handleSubAreaChange(e.target.value)}
-                    className='w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E73B8] bg-white'
+                    className='ui-field'
                   >
-                    <option value=''>Select Sub Area</option>
+                    <option value=''>{t('addProperty.placeholders.selectSubArea')}</option>
                     {subAreas[selectedUpazilla]?.map((subArea) => (
                       <option key={subArea} value={subArea}>
                         {subArea}
@@ -1041,7 +1085,7 @@ const EditProperty = () => {
                   </select>
                   {selectedSubArea && (
                     <p className='text-green-600 text-xs md:text-sm mt-2 font-medium'>
-                      ✓ Sub Area: {selectedSubArea}
+                      {t('addProperty.location.subAreaSelected', { subArea: selectedSubArea })}
                     </p>
                   )}
                 </div>
@@ -1049,46 +1093,46 @@ const EditProperty = () => {
 
               {/* Contact Number */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                  Contact Number *
+                <label htmlFor='edit-contactNumber' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.contactNumber')}
                 </label>
                 <div className='flex'>
                   <span className='flex items-center px-3 md:px-4 py-2.5 md:py-3 bg-gray-100 border-2 border-r-0 border-gray-300 rounded-l-lg font-semibold text-sm md:text-base text-gray-700'>
                     +88
                   </span>
-                  <input
+                  <input id='edit-contactNumber'
                     type='tel'
                     value={formData.contact_number.replace('+88', '')}
                     onChange={(e) => updateFormData({ contact_number: '+88' + e.target.value })}
                     className={`flex-1 px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 border-l-0 rounded-r-lg focus:outline-none transition-all ${
                       errors.contact_number
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                        : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                        : 'border-gray-300 focus:ring-2 focus:ring-brand'
                     }`}
-                    placeholder='Enter Your Number'
+                    placeholder={t('addProperty.placeholders.enterYourNumber')}
                   />
                 </div>
-                {errors.contact_number && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.contact_number}</p>}
+                {errors.contact_number && <p className='ui-error'>{errors.contact_number}</p>}
               </div>
 
               {/* Short Description */}
               <div>
-                <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-                  Short Description *
+                <label htmlFor='edit-shortDescription' className='ui-label text-[15px]'>
+                  {t('addProperty.fields.shortDescription')}
                 </label>
-                <textarea
+                <textarea id='edit-shortDescription'
                   value={formData.short_description}
                   onChange={(e) => updateFormData({ short_description: e.target.value })}
                   className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all resize-none ${
                     errors.short_description
                       ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                      : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                      : 'border-gray-300 focus:ring-2 focus:ring-brand'
                   }`}
                   rows='4'
-                  placeholder='e.g., Fresh and clean house, newly renovated with modern amenities.'
+                  placeholder={t('addProperty.placeholders.shortDescriptionBrief')}
                 />
-                {errors.short_description && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.short_description}</p>}
-                <p className='text-gray-500 text-xs mt-1'>{formData.short_description.length} / 500 characters</p>
+                {errors.short_description && <p className='ui-error'>{errors.short_description}</p>}
+                <p className='text-gray-500 text-xs mt-1'>{t('addProperty.fields.charCount', { count: formData.short_description.length, max: 500 })}</p>
               </div>
 
               {/* Set Location Button */}
@@ -1096,16 +1140,16 @@ const EditProperty = () => {
                 <button
                   type='button'
                   onClick={() => setShowLocationPicker(true)}
-                  className='w-full px-4 md:px-6 py-2.5 md:py-3 bg-[#1E73B8] text-white text-sm md:text-base font-semibold rounded-lg hover:bg-[#1665a0] transition-all flex items-center justify-center gap-2'
+                  className='w-full px-4 md:px-6 py-2.5 md:py-3 bg-brand text-white text-sm md:text-base font-semibold rounded-lg hover:bg-brand-hover transition-all flex items-center justify-center gap-2'
                 >
                   <svg className='w-4 h-4 md:w-5 md:h-5' fill='currentColor' viewBox='0 0 20 20'>
                     <path fillRule='evenodd' d='M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z' clipRule='evenodd' />
                   </svg>
-                  SET LOCATION ON MAP
+                  {t('addProperty.location.setOnMap')}
                 </button>
                 {formData.lat && formData.lng && (
                   <p className='text-green-600 text-xs md:text-sm mt-2 font-medium'>
-                    ✓ Location set: ({formData.lat.toFixed(4)}, {formData.lng.toFixed(4)})
+                    {t('addProperty.location.locationSet', { lat: formData.lat.toFixed(4), lng: formData.lng.toFixed(4) })}
                   </p>
                 )}
               </div>
@@ -1115,45 +1159,45 @@ const EditProperty = () => {
                 <button
                   type='button'
                   onClick={() => setShowOptionalLocation(!showOptionalLocation)}
-                  className='flex items-center gap-2 text-[#1E73B8] font-semibold hover:text-[#1665a0]'
+                  className='flex items-center gap-2 text-brand font-semibold hover:text-brand-hover'
                 >
                   <svg className={`w-5 h-5 transition-transform ${showOptionalLocation ? 'rotate-90' : ''}`} fill='currentColor' viewBox='0 0 20 20'>
                     <path fillRule='evenodd' d='M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z' clipRule='evenodd' />
                   </svg>
-                  Optional Details
+                  {t('addProperty.fields.optionalDetails')}
                 </button>
 
                 {showOptionalLocation && (
                   <div className='mt-4 space-y-4 p-4 bg-gray-50 rounded-lg'>
                     <div>
-                      <label className='block text-sm font-semibold text-gray-700 mb-1'>Sector</label>
-                      <input
+                      <label htmlFor='edit-sector' className='ui-label'>{t('addProperty.fields.sector')}</label>
+                      <input id='edit-sector'
                         type='number'
                         value={formData.sector}
                         onChange={(e) => updateFormData({ sector: e.target.value })}
-                        className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E73B8]'
-                        placeholder='e.g., 1, 2, 3'
+                        className='ui-field'
+                        placeholder={t('addProperty.placeholders.sector')}
                         min='1'
                       />
                     </div>
                     <div>
-                      <label className='block text-sm font-semibold text-gray-700 mb-1'>Road</label>
-                      <input
+                      <label htmlFor='edit-road' className='ui-label'>{t('addProperty.fields.road')}</label>
+                      <input id='edit-road'
                         type='text'
                         value={formData.road}
                         onChange={(e) => updateFormData({ road: e.target.value })}
-                        className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E73B8]'
-                        placeholder='e.g., Road 5'
+                        className='ui-field'
+                        placeholder={t('addProperty.placeholders.road')}
                       />
                     </div>
                     <div>
-                      <label className='block text-sm font-semibold text-gray-700 mb-1'>House / Plot Number</label>
-                      <input
+                      <label htmlFor='edit-housePlot' className='ui-label'>{t('addProperty.fields.housePlot')}</label>
+                      <input id='edit-housePlot'
                         type='text'
                         value={formData.house_plot}
                         onChange={(e) => updateFormData({ house_plot: e.target.value })}
-                        className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1E73B8]'
-                        placeholder='e.g., House 28/9/A'
+                        className='ui-field'
+                        placeholder={t('addProperty.placeholders.housePlot')}
                       />
                     </div>
                   </div>
@@ -1165,27 +1209,27 @@ const EditProperty = () => {
           {/* Section 4: Amenities & Upload */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
-              <span className='w-8 h-8 bg-[#1E73B8] text-white rounded-full flex items-center justify-center text-sm font-bold'>4</span>
-              Amenities & Upload
+              <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>4</span>
+              {t('addProperty.sections.amenitiesUpload')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
               {/* Amenities */}
               <div>
-                <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>Amenities</h3>
+                <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>{t('addProperty.sections.amenities')}</h3>
                 <div className='grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3'>
                   {amenitiesList.map((amenity) => (
                     <label
                       key={amenity}
-                      className='flex items-center p-2.5 md:p-3 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-[#1E73B8]/60 hover:bg-[#1E73B8]/5 transition-all'
+                      className='flex items-center p-2.5 md:p-3 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-brand/60 hover:bg-brand/5 transition-all'
                     >
                       <input
                         type='checkbox'
                         checked={formData.amenities.includes(amenity)}
                         onChange={() => handleAmenityToggle(amenity)}
-                        className='w-4 h-4 md:w-5 md:h-5 text-[#1E73B8] rounded cursor-pointer'
+                        className='w-4 h-4 md:w-5 md:h-5 text-brand rounded cursor-pointer'
                       />
-                      <span className='ml-2 font-medium text-xs md:text-sm text-gray-800'>{amenity}</span>
+                      <span className='ml-2 font-medium text-xs md:text-sm text-gray-800'>{tv('amenities', amenity)}</span>
                     </label>
                   ))}
                 </div>
@@ -1193,35 +1237,35 @@ const EditProperty = () => {
 
               {/* Availability Dates */}
               <div>
-                <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>Availability</h3>
+                <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>{t('addProperty.sections.availability')}</h3>
                 <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4'>
                   <div>
-                    <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-2'>Available From *</label>
-                    <input
+                    <label htmlFor='edit-availableFrom' className='ui-label'>{t('addProperty.fields.availableFrom')}</label>
+                    <input id='edit-availableFrom'
                       type='date'
                       value={formData.available_from}
                       onChange={(e) => updateFormData({ available_from: e.target.value })}
                       className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
                         errors.available_from
                           ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                          : 'border-gray-300 focus:ring-2 focus:ring-brand'
                       }`}
                     />
-                    {errors.available_from && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.available_from}</p>}
+                    {errors.available_from && <p className='ui-error'>{errors.available_from}</p>}
                   </div>
                   <div>
-                    <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-2'>Deadline *</label>
-                    <input
+                    <label htmlFor='edit-deadline' className='ui-label'>{t('addProperty.fields.deadline')}</label>
+                    <input id='edit-deadline'
                       type='date'
                       value={formData.deadline}
                       onChange={(e) => updateFormData({ deadline: e.target.value })}
                       className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
                         errors.deadline
                           ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-                          : 'border-gray-300 focus:ring-2 focus:ring-[#1E73B8]'
+                          : 'border-gray-300 focus:ring-2 focus:ring-brand'
                       }`}
                     />
-                    {errors.deadline && <p className='text-red-500 text-xs md:text-sm mt-1'>{errors.deadline}</p>}
+                    {errors.deadline && <p className='ui-error'>{errors.deadline}</p>}
                   </div>
                 </div>
               </div>
@@ -1229,7 +1273,7 @@ const EditProperty = () => {
               {/* Image Upload */}
               <div>
                 <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-                  Property Photos *
+                  {t('addProperty.sections.propertyPhotosRequired')}
                 </h3>
                 <ImageUploader
                   images={formData.images}
@@ -1237,16 +1281,16 @@ const EditProperty = () => {
                   error={errors.images}
                   existingImages={existingImageUrls}
                 />
-                {errors.images && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.images}</p>}
+                {errors.images && <p className='ui-error'>{errors.images}</p>}
               </div>
 
               {/* Summary */}
-              <div className='bg-gradient-to-r from-[#1E73B8]/5 to-[#1E73B8]/10 border border-[#1E73B8]/30 rounded-lg p-4 md:p-6'>
-                <h4 className='font-bold text-gray-800 text-base md:text-lg mb-3'>📋 Update Summary</h4>
+              <div className='bg-gradient-to-r from-brand/5 to-brand/10 border border-brand/30 rounded-lg p-4 md:p-6'>
+                <h4 className='font-bold text-gray-800 text-base md:text-lg mb-3'>{t('addProperty.edit.summaryTitle')}</h4>
                 <div className='space-y-1.5 md:space-y-2 text-xs md:text-sm text-gray-700'>
-                  <p><strong>Category:</strong> {formData.category || '-'}</p>
+                  <p><strong>{t('addProperty.summary.category')}</strong> {formData.category ? tv('categories', formData.category) : '-'}</p>
                   <p>
-                    <strong>Price:</strong>{' '}
+                    <strong>{t('addProperty.summary.price')}</strong>{' '}
                     {formData.rent_amount_bdt || formData.is_rent_negotiable ? (
                       <RentDisplay
                         pricing={{
@@ -1254,14 +1298,14 @@ const EditProperty = () => {
                           is_rent_negotiable: formData.is_rent_negotiable,
                         }}
                         prefix='৳ '
-                        suffix={formData.rent_amount_bdt ? `per ${formData.rent_period}` : ''}
+                        suffix={formData.rent_amount_bdt ? t('addProperty.pricing.perPeriod', { period: tv('rentPeriods', formData.rent_period) }) : ''}
                       />
                     ) : '-'}
                   </p>
-                  <p><strong>Negotiable:</strong> {formData.is_rent_negotiable ? 'Yes' : 'No'}</p>
-                  <p><strong>Location:</strong> {formData.area ? `${formData.area}, ${formData.state_district}` : '-'}</p>
-                  <p><strong>Images:</strong> {allImagesForDisplay.length} total</p>
-                  <p><strong>Amenities:</strong> {formData.amenities.length > 0 ? formData.amenities.join(', ') : 'None selected'}</p>
+                  <p><strong>{t('addProperty.summary.negotiable')}</strong> {formData.is_rent_negotiable ? t('common.yes') : t('common.no')}</p>
+                  <p><strong>{t('addProperty.summary.location')}</strong> {formData.area ? `${formData.area}, ${tv('divisions', formData.state_district)}` : '-'}</p>
+                  <p><strong>{t('addProperty.summary.images')}</strong> {t('addProperty.edit.imagesTotal', { count: allImagesForDisplay.length })}</p>
+                  <p><strong>{t('addProperty.summary.amenities')}</strong> {formData.amenities.length > 0 ? formData.amenities.map((amenity) => tv('amenities', amenity)).join(', ') : t('addProperty.amenities.noneSelected')}</p>
                 </div>
               </div>
             </div>
@@ -1270,9 +1314,9 @@ const EditProperty = () => {
           {/* Error Message */}
           {submitError && (
             <div className='p-3 md:p-4 bg-red-50 border border-red-200 rounded-lg'>
-              <p className='text-red-800 font-medium text-sm md:text-base mb-2'>⚠️ Validation Errors</p>
+              <p className='text-red-800 font-medium text-sm md:text-base mb-2'>{t('addProperty.alerts.validationErrors')}</p>
               <ul className='text-red-700 text-xs md:text-sm mt-2 space-y-1'>
-                {submitError.split('\n').map((error, idx) => (error ? <li key={idx}>• {error.replace(/^Please fix all errors before submitting:\n?/, '')}</li> : null))}
+                {submitError.split('\n').map((error, idx) => (error ? <li key={idx}>• {error.startsWith(fixErrorsHeading) ? error.slice(fixErrorsHeading.length) : error}</li> : null))}
               </ul>
             </div>
           )}
@@ -1282,9 +1326,9 @@ const EditProperty = () => {
             <button
               type='submit'
               disabled={isSubmitting}
-              className='w-full px-6 py-3 bg-[#1E73B8] text-white text-base md:text-lg font-semibold rounded-lg hover:bg-[#1665a0] transition-all disabled:bg-gray-400 disabled:cursor-not-allowed'
+              className='ui-btn ui-btn-primary ui-btn-lg w-full'
             >
-              {isSubmitting ? 'Updating...' : 'Update Property Listing'}
+              {isSubmitting ? t('addProperty.edit.updating') : t('addProperty.edit.updateListing')}
             </button>
           </div>
         </form>

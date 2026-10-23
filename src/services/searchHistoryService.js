@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { isRecoverableSupabaseError, supabase } from './supabaseClient'
 import { getStoredUser } from './authService'
 
 const TABLE_NAME = 'customer_search_history'
@@ -98,7 +98,9 @@ export const logCustomerSearch = async (payload) => {
 
     return { data, error: null }
   } catch (error) {
-    console.error('Error logging customer search:', error)
+    if (!isRecoverableSupabaseError(error)) {
+      console.error('Error logging customer search:', error)
+    }
     return { data: null, error }
   }
 }

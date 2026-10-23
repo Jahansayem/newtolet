@@ -2,6 +2,7 @@ import React, { useContext } from 'react';
 import { FiBriefcase, FiHome, FiKey, FiShoppingBag, FiUser, FiUsers } from 'react-icons/fi';
 import { listcontext } from '../Route/Listprovaider';
 import { HOME_CATEGORIES } from './categoryConfig';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const CATEGORY_ICONS = {
     Family: FiUsers,
@@ -12,8 +13,13 @@ const CATEGORY_ICONS = {
     Shop: FiShoppingBag,
 };
 
-const CategoryFilterBar = ({ selectedCategory: selectedCategoryProp, onCategorySelect }) => {
+/**
+ * Category chips. `mode="filter"` (default) toggles a filter and announces aria-pressed;
+ * `mode="jump"` (homepage) scrolls to a section and announces aria-current instead.
+ */
+const CategoryFilterBar = ({ selectedCategory: selectedCategoryProp, onCategorySelect, mode = 'filter' }) => {
     const { selectedCategory: selectedCategoryFromContext, setSelectedCategory } = useContext(listcontext);
+    const { tv } = useLanguage();
     const selectedCategory = selectedCategoryProp ?? selectedCategoryFromContext;
 
     const handleCategoryClick = (category) => {
@@ -26,28 +32,27 @@ const CategoryFilterBar = ({ selectedCategory: selectedCategoryProp, onCategoryS
     };
 
     return (
-        <div className='w-full animate-fade-in-up'>
-            <div className='flex w-full gap-3 overflow-x-auto px-1 py-1 scrollbar-hide md:flex-wrap md:justify-center md:overflow-visible'>
-                {HOME_CATEGORIES.map((label) => {
-                    const Icon = CATEGORY_ICONS[label];
-                    const isSelected = selectedCategory === label;
+        <div className='ui-scroll-fade -mx-1 flex w-[calc(100%+0.5rem)] gap-2 overflow-x-auto px-1 py-1 scrollbar-hide lg:mx-0 lg:w-full lg:justify-center lg:overflow-visible lg:[mask-image:none]'>
+            {HOME_CATEGORIES.map((label) => {
+                const Icon = CATEGORY_ICONS[label];
+                const isSelected = selectedCategory === label;
+                const stateProps = mode === 'jump'
+                    ? { 'aria-current': isSelected ? 'true' : undefined }
+                    : { 'aria-pressed': isSelected };
 
-                    return (
-                        <button
-                            key={label}
-                            onClick={() => handleCategoryClick(label)}
-                            className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 md:gap-2 md:px-6 md:py-3 md:text-base ${
-                                isSelected
-                                    ? 'border-[#1E73B8] bg-[#1E73B8] text-white shadow-md'
-                                    : 'border-gray-200 bg-white text-gray-700 shadow-sm hover:border-[#1E73B8] hover:text-[#1E73B8]'
-                            }`}
-                        >
-                            <Icon className='text-base md:text-lg' />
-                            <span>{label}</span>
-                        </button>
-                    );
-                })}
-            </div>
+                return (
+                    <button
+                        key={label}
+                        type='button'
+                        onClick={() => handleCategoryClick(label)}
+                        className='ui-chip shrink-0 md:min-h-11 md:px-5'
+                        {...stateProps}
+                    >
+                        <Icon className='text-base' aria-hidden='true' />
+                        <span>{tv('categories', label)}</span>
+                    </button>
+                );
+            })}
         </div>
     );
 };

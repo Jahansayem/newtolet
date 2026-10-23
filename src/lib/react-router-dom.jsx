@@ -12,6 +12,20 @@ import { canonicalizeInternalHref } from './routePaths.js'
 
 const NAVIGATION_STATE_PREFIX = '__next_navigation_state__:'
 
+/**
+ * Canonical "pathname?query" key for comparing or storing per-URL data.
+ * Next's usePathname() returns the trailing-slash form (trailingSlash: true) while
+ * hrefs built by the app have none, so both sides must be normalised the same way.
+ */
+export const normalizeHrefKey = (pathname = '/', search = '') => {
+  let path = pathname || '/'
+  if (path.length > 1 && path.endsWith('/')) {
+    path = path.slice(0, -1)
+  }
+  const query = new URLSearchParams(search || '').toString()
+  return query ? `${path}?${query}` : path
+}
+
 const normalizeToHref = (to) => {
   if (typeof to === 'string') {
     return canonicalizeInternalHref(to)
@@ -33,7 +47,22 @@ const getNavigationStateKey = (href) => {
   }
 
   const url = new URL(href, window.location.origin)
-  return `${NAVIGATION_STATE_PREFIX}${url.pathname}${url.search}`
+  return `${NAVIGATION_STATE_PREFIX}${normalizeHrefKey(url.pathname, url.search)}`
+}
+
+// A plain navigation (no state) must not deliver state left over from an earlier one.
+const clearNavigationState = (href) => {
+  const key = getNavigationStateKey(href)
+
+  if (!key) {
+    return
+  }
+
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    /* ignore */
+  }
 }
 
 const storeNavigationState = (href, state) => {
@@ -54,12 +83,14 @@ const storeNavigationState = (href, state) => {
   }
 }
 
-const readAndClearNavigationState = (pathname, search) => {
+// Several components (Navber in the layout, the page itself) call useLocation for the same
+// URL, so reading must not consume the entry; it is cleared by the next state-less navigation.
+const readNavigationState = (pathname, search) => {
   if (typeof window === 'undefined') {
     return null
   }
 
-  const key = `${NAVIGATION_STATE_PREFIX}${pathname}${search}`
+  const key = `${NAVIGATION_STATE_PREFIX}${normalizeHrefKey(pathname, search)}`
 
   try {
     const raw = sessionStorage.getItem(key)
@@ -68,7 +99,6 @@ const readAndClearNavigationState = (pathname, search) => {
       return null
     }
 
-    sessionStorage.removeItem(key)
     return JSON.parse(raw)
   } catch (error) {
     console.error('Failed to read navigation state:', error)
@@ -81,8 +111,12 @@ export function Link({ to, href, replace, state, onClick, children, prefetch = f
 
   const handleClick = useCallback(
     (event) => {
-      if (!event.defaultPrevented && typeof state !== 'undefined') {
-        storeNavigationState(targetHref, state)
+      if (!event.defaultPrevented) {
+        if (typeof state !== 'undefined') {
+          storeNavigationState(targetHref, state)
+        } else {
+          clearNavigationState(targetHref)
+        }
       }
 
       if (onClick) {
@@ -99,21 +133,16 @@ export function Link({ to, href, replace, state, onClick, children, prefetch = f
   )
 }
 
-const getCurrentHref = () => {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-
-  return `${window.location.pathname}${window.location.search}${window.location.hash}`
-}
-
 const hrefMatchesCurrentLocation = (href) => {
   if (typeof window === 'undefined') {
     return false
   }
 
   const targetUrl = new URL(href, window.location.origin)
-  return `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}` === getCurrentHref()
+  return (
+    `${normalizeHrefKey(targetUrl.pathname, targetUrl.search)}${targetUrl.hash}` ===
+    `${normalizeHrefKey(window.location.pathname, window.location.search)}${window.location.hash}`
+  )
 }
 
 const cancelScheduledTask = (taskId) => {
@@ -182,6 +211,8 @@ export function useNavigate() {
 
       if (typeof options.state !== 'undefined') {
         storeNavigationState(href, options.state)
+      } else {
+        clearNavigationState(href)
       }
 
       const runNavigation = () => {
@@ -353,7 +384,6 @@ export function useLocation() {
   const isMountedRef = useRef(true)
   const pathnameRef = useRef(pathname)
   const searchRef = useRef('')
-  const pendingStateIdRef = useRef(null)
   const lastReadKeyRef = useRef('')
 
   const search = useMemo(() => {
@@ -370,28 +400,14 @@ export function useLocation() {
     // Create a unique key for this pathname+search combination
     const readKey = `${pathname}|${search}`
 
-    // Only read navigation state if it's a new location (not just search params changing)
+    // Read synchronously: a deferred read was cancelled by Strict Mode's effect cleanup
+    // and then skipped on the re-run because the key had already been recorded.
     if (lastReadKeyRef.current !== readKey) {
       lastReadKeyRef.current = readKey
-
-      // Use requestIdleCallback to defer state read
-      const readState = () => {
-        if (isMountedRef.current) {
-          setState(readAndClearNavigationState(pathnameRef.current, searchRef.current))
-        }
-      }
-
-      if (typeof requestIdleCallback !== 'undefined') {
-        pendingStateIdRef.current = requestIdleCallback(readState)
-      } else {
-        pendingStateIdRef.current = setTimeout(readState, 0)
-      }
+      setState(readNavigationState(pathname, search))
     }
 
-    return () => {
-      cancelScheduledTask(pendingStateIdRef.current)
-      pendingStateIdRef.current = null
-    }
+    return undefined
   }, [pathname, search])
 
   useEffect(() => {

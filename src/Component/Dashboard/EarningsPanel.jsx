@@ -3,6 +3,7 @@ import { FiDollarSign, FiShoppingCart, FiZap } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { getEarningsPanelData } from '../../services/userPanelService'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const formatCurrency = (value) =>
   new Intl.NumberFormat('en-BD', {
@@ -10,18 +11,6 @@ const formatCurrency = (value) =>
     currency: 'BDT',
     maximumFractionDigits: 2,
   }).format(Number(value || 0))
-
-const formatDate = (value) => {
-  if (!value) {
-    return 'N/A'
-  }
-
-  return new Date(value).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 const StatCard = ({ title, value, hint, icon: Icon }) => (
   <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -39,7 +28,11 @@ const StatCard = ({ title, value, hint, icon: Icon }) => (
 )
 
 const EarningsPanel = () => {
+  const { t, tv, fd } = useLanguage()
   const { user, isLoading } = useAuth()
+
+  const formatDate = (value) =>
+    fd(value, { year: 'numeric', month: 'short', day: 'numeric' }) || t('common.na')
   const {
     data: panelData,
     isLoading: panelLoading,
@@ -66,7 +59,7 @@ const EarningsPanel = () => {
   if (isLoading || panelLoading) {
     return (
       <div className="rounded-xl bg-white p-8 shadow">
-        <p className="text-gray-500">Loading earnings...</p>
+        <p className="text-gray-500">{t('dashboard.earnings.loading')}</p>
       </div>
     )
   }
@@ -74,32 +67,30 @@ const EarningsPanel = () => {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-2xl font-bold text-gray-900">Referral Earnings</h2>
-        {isRefreshing ? <p className="mt-2 text-xs font-medium text-gray-400">Refreshing...</p> : null}
+        <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.earnings.title')}</h2>
+        {isRefreshing ? <p className="mt-2 text-xs font-medium text-gray-400">{t('dashboard.common.refreshing')}</p> : null}
         <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Every successful referred credit purchase adds a commission to your wallet. The referred
-          user also receives {settings?.referral_bonus_percent || 0}% extra credits on each paid
-          purchase.
+          {t('dashboard.earnings.description', { percent: settings?.referral_bonus_percent || 0 })}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
-          title="Total Commission"
+          title={t('dashboard.earnings.totalCommission')}
           value={formatCurrency(totalCommission)}
-          hint="All completed referral earnings"
+          hint={t('dashboard.earnings.totalCommissionHint')}
           icon={FiDollarSign}
         />
         <StatCard
-          title="Withdrawable Balance"
+          title={t('dashboard.earnings.withdrawableBalance')}
           value={formatCurrency(withdrawableBalance)}
-          hint="Available after subtracting withdrawal requests"
+          hint={t('dashboard.earnings.withdrawableBalanceHint')}
           icon={FiShoppingCart}
         />
         <StatCard
-          title="Bonus Credits Triggered"
+          title={t('dashboard.earnings.bonusCredits')}
           value={totalBonusCredits}
-          hint="Extra credits granted to referred buyers"
+          hint={t('dashboard.earnings.bonusCreditsHint')}
           icon={FiZap}
         />
       </div>
@@ -107,18 +98,18 @@ const EarningsPanel = () => {
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Commission History</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{t('dashboard.earnings.historyTitle')}</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Each row represents one referred paid credit purchase.
+              {t('dashboard.earnings.historySubtitle')}
             </p>
           </div>
         </div>
 
         {earnings.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-            <p className="text-lg font-semibold text-gray-900">No referral earnings yet</p>
+            <p className="text-lg font-semibold text-gray-900">{t('dashboard.earnings.emptyTitle')}</p>
             <p className="mt-2 text-sm text-gray-600">
-              Once referred users buy credits, the commission and bonus details will appear here.
+              {t('dashboard.earnings.emptyDescription')}
             </p>
           </div>
         ) : (
@@ -126,12 +117,12 @@ const EarningsPanel = () => {
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-500">
-                  <th className="pb-3 font-medium">Date</th>
-                  <th className="pb-3 font-medium">Buyer</th>
-                  <th className="pb-3 font-medium">Purchase</th>
-                  <th className="pb-3 font-medium">Commission</th>
-                  <th className="pb-3 font-medium">Bonus Credits</th>
-                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium">{t('common.date')}</th>
+                  <th className="pb-3 font-medium">{t('dashboard.earnings.columns.buyer')}</th>
+                  <th className="pb-3 font-medium">{t('dashboard.earnings.columns.purchase')}</th>
+                  <th className="pb-3 font-medium">{t('dashboard.earnings.columns.commission')}</th>
+                  <th className="pb-3 font-medium">{t('dashboard.earnings.columns.bonusCredits')}</th>
+                  <th className="pb-3 font-medium">{t('common.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -140,10 +131,10 @@ const EarningsPanel = () => {
                     <td className="py-4 text-gray-600">{formatDate(earning.created_at)}</td>
                     <td className="py-4">
                       <p className="font-medium text-gray-900">
-                        {earning.referred_user?.name || 'Unknown User'}
+                        {earning.referred_user?.name || t('dashboard.common.unknownUser')}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {earning.referred_user?.phone || earning.referred_user?.email || 'N/A'}
+                        {earning.referred_user?.phone || earning.referred_user?.email || t('common.na')}
                       </p>
                     </td>
                     <td className="py-4 text-gray-600">
@@ -163,7 +154,7 @@ const EarningsPanel = () => {
                               : 'bg-gray-100 text-gray-700'
                         }`}
                       >
-                        {earning.status}
+                        {tv('status', earning.status)}
                       </span>
                     </td>
                   </tr>

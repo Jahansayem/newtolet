@@ -1,14 +1,16 @@
 import React from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const ProgressIndicator = () => {
+  const { t } = useLanguage()
   const { currentStep } = useAddProperty()
 
   const steps = [
-    { number: 1, label: 'Property Details' },
-    { number: 2, label: 'Pricing' },
-    { number: 3, label: 'Location' },
-    { number: 4, label: 'Upload' },
+    { number: 1, labelKey: 'addProperty.steps.propertyDetails' },
+    { number: 2, labelKey: 'addProperty.steps.pricing' },
+    { number: 3, labelKey: 'addProperty.steps.location' },
+    { number: 4, labelKey: 'addProperty.steps.upload' },
   ]
 
   return (
@@ -46,7 +48,7 @@ const ProgressIndicator = () => {
 
               {/* Label */}
               <p className='text-xs md:text-sm font-medium text-gray-700 text-center mt-2 max-w-[60px] sm:max-w-[80px] md:max-w-none leading-tight'>
-                {step.label}
+                {t(step.labelKey)}
               </p>
             </div>
 
@@ -66,7 +68,7 @@ const ProgressIndicator = () => {
 
       {/* Step Counter */}
       <div className='text-center mt-3 md:mt-4 text-xs md:text-sm text-gray-600'>
-        Step {currentStep} of 4
+        {t('addProperty.steps.stepOf', { current: currentStep, total: 4 })}
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import React, { useCallback, useRef } from 'react'
 import { validateImageFile } from '../../services/imageUploadService'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const ImageUploader = ({
   images = [],
@@ -7,8 +8,25 @@ const ImageUploader = ({
   error = null,
   existingImages = [], // Array of image URLs for edit mode
 }) => {
+  const { t } = useLanguage()
   const fileInputRef = useRef(null)
   const [isDragging, setIsDragging] = React.useState(false)
+  const [fileError, setFileError] = React.useState(null)
+
+  // One object URL per selected file, released when the selection changes or the component unmounts.
+  const previewUrls = React.useMemo(
+    () => images.map((image) => (typeof Blob !== 'undefined' && image instanceof Blob ? URL.createObjectURL(image) : '')),
+    [images]
+  )
+
+  React.useEffect(
+    () => () => {
+      previewUrls.forEach((url) => {
+        if (url) URL.revokeObjectURL(url)
+      })
+    },
+    [previewUrls]
+  )
 
   const handleImageSelect = useCallback(
     (files) => {
@@ -18,10 +36,12 @@ const ImageUploader = ({
       for (const file of fileArray) {
         const validation = validateImageFile(file)
         if (!validation.isValid) {
-          alert(validation.error)
+          setFileError(validation.error)
           return
         }
       }
+
+      setFileError(null)
 
       // Add files to state (store as File objects)
       onImagesChange([...images, ...fileArray])
@@ -97,7 +117,16 @@ const ImageUploader = ({
     <div className='space-y-3 md:space-y-4'>
       {/* Upload Area */}
       <div
+        role='button'
+        tabIndex={0}
+        aria-label={t('addProperty.aria.uploadZone')}
         onClick={handleUploadClick}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            handleUploadClick()
+          }
+        }}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -127,16 +156,16 @@ const ImageUploader = ({
             <path d='M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z' />
           </svg>
           <p className='text-base md:text-lg font-semibold text-gray-700 mb-1'>
-            {existingImages.length > 0 ? 'Add more images' : 'Tap here to upload photos'}
+            {existingImages.length > 0 ? t('addProperty.upload.addMore') : t('addProperty.upload.tapToUpload')}
           </p>
           <p className='text-xs md:text-sm text-gray-600 mb-2'>
-            or drag and drop images
+            {t('addProperty.upload.dragDrop')}
           </p>
           <p className='text-xs text-gray-500'>
-            {getTotalImageCount()} / 10 images{images.length > 0 && ` (${images.length} new, ${existingImages.length} existing)`}
+            {t('addProperty.upload.imageCount', { count: getTotalImageCount(), max: 10 })}{images.length > 0 && t('addProperty.upload.newExisting', { newCount: images.length, existingCount: existingImages.length })}
           </p>
           <p className='text-xs text-gray-500 mt-1'>
-            Max 5MB per image • JPG, PNG, WebP
+            {t('addProperty.upload.limits')}
           </p>
         </div>
       </div>
@@ -147,7 +176,7 @@ const ImageUploader = ({
       {existingImages.length > 0 && (
         <div className='space-y-2 md:space-y-3'>
           <h4 className='font-semibold text-sm md:text-base text-gray-800'>
-            Current Images ({existingImages.length})
+            {t('addProperty.upload.currentImages', { count: existingImages.length })}
           </h4>
 
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
@@ -160,7 +189,7 @@ const ImageUploader = ({
                 <div className='w-14 h-14 md:w-16 md:h-16 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden'>
                   <img
                     src={url}
-                    alt={`Current image ${index + 1}`}
+                    alt={t('addProperty.upload.currentImageAlt', { index: index + 1 })}
                     className='w-full h-full object-cover'
                   />
                 </div>
@@ -168,14 +197,14 @@ const ImageUploader = ({
                 {/* File Info */}
                 <div className='flex-1 min-w-0'>
                   <p className='text-xs md:text-sm font-medium text-gray-800 truncate'>
-                    Image {index + 1}
+                    {t('addProperty.upload.imageLabel', { index: index + 1 })}
                   </p>
                   <p className='text-xs text-gray-500'>
-                    Server
+                    {t('addProperty.upload.server')}
                   </p>
                   {index === 0 && (
                     <p className='text-[10px] md:text-xs font-semibold text-green-600'>
-                      📌 Thumbnail
+                      {t('addProperty.upload.thumbnail')}
                     </p>
                   )}
                 </div>
@@ -185,7 +214,8 @@ const ImageUploader = ({
                   type='button'
                   onClick={() => removeExistingImage(url)}
                   className='p-2 md:p-2.5 text-red-600 hover:bg-red-100 rounded active:bg-red-200 min-w-[40px] min-h-[40px] flex items-center justify-center'
-                  title='Remove this image'
+                  title={t('addProperty.upload.removeImage')}
+                  aria-label={t('addProperty.upload.removeImage')}
                 >
                   <svg className='w-4 h-4 md:w-5 md:h-5' fill='currentColor' viewBox='0 0 20 20'>
                     <path
@@ -201,11 +231,17 @@ const ImageUploader = ({
         </div>
       )}
 
+      {fileError && (
+        <p role='alert' className='text-red-600 text-xs md:text-sm'>
+          {fileError}
+        </p>
+      )}
+
       {/* New Image Previews */}
       {images.length > 0 && (
         <div className='space-y-2 md:space-y-3'>
           <h4 className='font-semibold text-sm md:text-base text-gray-800'>
-            New Images ({images.length})
+            {t('addProperty.upload.newImages', { count: images.length })}
           </h4>
 
           <div className='grid grid-cols-1 sm:grid-cols-2 gap-2'>
@@ -217,8 +253,8 @@ const ImageUploader = ({
                 {/* Thumbnail */}
                 <div className='w-14 h-14 md:w-16 md:h-16 bg-gray-200 rounded-lg flex-shrink-0 overflow-hidden'>
                   <img
-                    src={URL.createObjectURL(image)}
-                    alt={`Preview ${index + 1}`}
+                    src={previewUrls[index]}
+                    alt={t('addProperty.upload.previewAlt', { index: index + 1 })}
                     className='w-full h-full object-cover'
                   />
                 </div>
@@ -226,14 +262,14 @@ const ImageUploader = ({
                 {/* File Info */}
                 <div className='flex-1 min-w-0'>
                   <p className='text-xs md:text-sm font-medium text-gray-800 truncate'>
-                    {image.name || `Image ${index + 1}`}
+                    {image.name || t('addProperty.upload.imageLabel', { index: index + 1 })}
                   </p>
                   <p className='text-xs text-gray-500'>
-                    {(image.size / 1024 / 1024).toFixed(1)}MB
+                    {t('addProperty.upload.sizeMb', { size: (image.size / 1024 / 1024).toFixed(1) })}
                   </p>
                   {existingImages.length === 0 && index === 0 && (
                     <p className='text-[10px] md:text-xs font-semibold text-green-600'>
-                      📌 Thumbnail
+                      {t('addProperty.upload.thumbnail')}
                     </p>
                   )}
                 </div>
@@ -245,8 +281,9 @@ const ImageUploader = ({
                     type='button'
                     onClick={() => moveImage(index, index - 1)}
                     disabled={index === 0}
-                    className='p-2 text-gray-600 hover:bg-gray-200 disabled:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 rounded active:bg-gray-300 min-w-[36px] h-9 flex items-center justify-center'
-                    title='Move up'
+                    className='p-2 text-gray-600 hover:bg-gray-200 disabled:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 rounded active:bg-gray-300 min-w-10 h-10 flex items-center justify-center'
+                    title={t('addProperty.upload.moveUp')}
+                    aria-label={t('addProperty.upload.moveUp')}
                   >
                     <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
                       <path
@@ -262,8 +299,9 @@ const ImageUploader = ({
                     type='button'
                     onClick={() => moveImage(index, index + 1)}
                     disabled={index === images.length - 1}
-                    className='p-2 text-gray-600 hover:bg-gray-200 disabled:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 rounded active:bg-gray-300 min-w-[36px] h-9 flex items-center justify-center'
-                    title='Move down'
+                    className='p-2 text-gray-600 hover:bg-gray-200 disabled:text-gray-300 disabled:cursor-not-allowed disabled:opacity-50 rounded active:bg-gray-300 min-w-10 h-10 flex items-center justify-center'
+                    title={t('addProperty.upload.moveDown')}
+                    aria-label={t('addProperty.upload.moveDown')}
                   >
                     <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
                       <path
@@ -278,8 +316,9 @@ const ImageUploader = ({
                   <button
                     type='button'
                     onClick={() => removeImage(index)}
-                    className='p-2 text-red-600 hover:bg-red-100 rounded active:bg-red-200 min-w-[36px] h-9 flex items-center justify-center'
-                    title='Delete'
+                    className='p-2 text-red-600 hover:bg-red-100 rounded active:bg-red-200 min-w-10 h-10 flex items-center justify-center'
+                    title={t('common.delete')}
+                    aria-label={t('common.delete')}
                   >
                     <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
                       <path
@@ -300,7 +339,7 @@ const ImageUploader = ({
       {getTotalImageCount() > 0 && (
         <div className='bg-blue-50 border border-blue-200 rounded-lg p-2.5 md:p-3'>
           <p className='text-xs md:text-sm text-blue-800'>
-            <strong>ℹ️ Note:</strong> First image will be your property thumbnail
+            <strong>{t('addProperty.upload.noteLabel')}</strong> {t('addProperty.upload.noteFirstThumbnail')}
           </p>
         </div>
       )}
@@ -308,10 +347,10 @@ const ImageUploader = ({
       {/* Instructions */}
       <div className='bg-green-50 border border-green-200 rounded-lg p-2.5 md:p-3'>
         <div className='text-xs md:text-sm text-green-800 grid grid-cols-2 gap-1'>
-          <div>✓ Min 1 image</div>
-          <div>✓ Max 10 images</div>
-          <div>✓ First = thumbnail</div>
-          <div>✓ Max 5MB each</div>
+          <div>{t('addProperty.upload.ruleMin')}</div>
+          <div>{t('addProperty.upload.ruleMax')}</div>
+          <div>{t('addProperty.upload.ruleThumbnail')}</div>
+          <div>{t('addProperty.upload.ruleSize')}</div>
         </div>
       </div>
     </div>

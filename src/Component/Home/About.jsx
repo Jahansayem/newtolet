@@ -1,54 +1,42 @@
-import { FaBuilding, FaUsers, FaAward, FaHandshake } from 'react-icons/fa'
+'use client'
 
-const About = () => {
+import { FaBuilding, FaUsers, FaAward, FaHandshake } from 'react-icons/fa'
+import { useLanguage } from '../../i18n/useLanguage'
+
+const About = ({ headingLevel = 'h2' }) => {
+    const Heading = headingLevel
+    const { t } = useLanguage()
     const stats = [
-        { icon: <FaBuilding />, value: "500+", label: "Properties Listed" },
-        { icon: <FaUsers />, value: "10K+", label: "Happy Customers" },
-        { icon: <FaAward />, value: "15+", label: "Years Experience" },
-        { icon: <FaHandshake />, value: "98%", label: "Client Satisfaction" }
+        { icon: <FaBuilding />, value: "500+", label: t('home.about.stats.propertiesListed') },
+        { icon: <FaUsers />, value: "10K+", label: t('home.about.stats.happyCustomers') },
+        { icon: <FaAward />, value: "15+", label: t('home.about.stats.yearsExperience') },
+        { icon: <FaHandshake />, value: "98%", label: t('home.about.stats.clientSatisfaction') }
     ]
 
     return (
-        <section className="py-12 md:py-20 bg-gray-50">
-            {/* Header Section */}
-            <div className="text-center mb-10 md:mb-16 px-6 animate-fade-in-up">
-                <div className="inline-flex items-center gap-2 bg-[#1E73B8]/10 text-[#1E73B8] px-4 py-2 rounded-full mb-4 hover-scale">
-                    <FaBuilding />
-                    <span className="text-sm font-medium">About Us</span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-3">
-                    Your Trusted Property Partner
-                </h2>
-                <p className="text-gray-500 max-w-lg mx-auto text-sm sm:text-base">
-                    We connect property seekers with their dream homes through trust, transparency, and exceptional service.
+        <section className="py-12 md:py-20">
+            <div className="mx-auto max-w-2xl px-4 text-center">
+                <p className="ui-eyebrow">{t('home.about.badge')}</p>
+                <Heading className="mt-3 text-2xl font-bold leading-tight text-ink md:text-3xl">
+                    {t('home.about.title')}
+                </Heading>
+                <p className="mx-auto mt-3 max-w-lg text-body text-muted">
+                    {t('home.about.description')}
                 </p>
             </div>
 
-            {/* Main Content */}
-            <div className="max-w-6xl mx-auto ">
-                {/* Stats Section */}
-                <div className="mt-5">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
-                        {stats.map((stat, index) => (
-                            <div
-                                key={index}
-                                className="bg-white rounded-xl p-3 shadow-sm hover:shadow-xl transition-all duration-300 text-center group hover-lift"
-                            >
-                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#1E73B8]/10 rounded-full flex items-center justify-center mx-auto mb-3 group-hover:bg-[#1E73B8]/20 group-hover:scale-110 transition-all duration-300">
-                                    <span className="text-[#1E73B8] text-lg sm:text-xl">{stat.icon}</span>
-                                </div>
-                                <p className="text-2xl sm:text-3xl font-bold text-gray-800 mb-1">
-                                    {stat.value}
-                                </p>
-                                <p className="text-xs sm:text-sm text-gray-500">
-                                    {stat.label}
-                                </p>
+            <div className="mx-auto mt-10 max-w-5xl">
+                <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                    {stats.map((stat, index) => (
+                        <div key={index} className="ui-card p-5 text-center">
+                            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-brand" aria-hidden="true">
+                                <span className="text-lg">{stat.icon}</span>
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-               
+                            <dd className="ui-price text-2xl md:text-3xl">{stat.value}</dd>
+                            <dt className="mt-1 text-caption text-muted">{stat.label}</dt>
+                        </div>
+                    ))}
+                </dl>
             </div>
         </section>
     )

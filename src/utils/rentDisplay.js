@@ -4,7 +4,7 @@ export const isRentNegotiable = (pricing = {}) =>
   pricing?.is_rent_negotiable === true || pricing?.is_rent_negotiable === 'true'
 
 export const getRentDisplayParts = (pricing = {}, options = {}) => {
-  const { prefix = 'BDT ', fallback = 'N/A' } = options
+  const { prefix = 'BDT ', fallback = 'N/A', negotiableLabel = NEGOTIABLE_RENT_LABEL } = options
   const amount = Number(pricing?.rent_amount_bdt)
   const hasValidAmount = Number.isFinite(amount) && amount > 0
   const negotiable = isRentNegotiable(pricing)
@@ -14,7 +14,7 @@ export const getRentDisplayParts = (pricing = {}, options = {}) => {
     fallback,
     hasValidAmount,
     isNegotiable: negotiable,
-    negotiableLabel: NEGOTIABLE_RENT_LABEL,
+    negotiableLabel,
   }
 }
 

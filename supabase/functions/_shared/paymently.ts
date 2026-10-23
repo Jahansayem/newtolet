@@ -21,18 +21,16 @@ export const getSupabaseUrl = () =>
     getEnv("SUPABASE_URL", ["NEXT_PUBLIC_SUPABASE_URL"]),
   );
 
+export const getSupabasePublicUrl = () =>
+  trimTrailingSlash(
+    getEnv("SUPABASE_PUBLIC_URL", ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL"]),
+  );
+
 export const getSupabaseAnonKey = () =>
   getEnv("SUPABASE_ANON_KEY", ["NEXT_PUBLIC_SUPABASE_ANON_KEY"]);
 
 export const getSupabaseServiceRoleKey = () =>
   getEnv("SUPABASE_SERVICE_ROLE_KEY");
-
-export const getPaymentlyBaseUrl = () =>
-  trimTrailingSlash(
-    getEnv("UDDOKTAPAY_BASE_URL", [], "https://newtoletbd.paymently.io/api"),
-  );
-
-export const getPaymentlyApiKey = () => getEnv("UDDOKTAPAY_API_KEY");
 
 export const getSiteUrl = () =>
   trimTrailingSlash(
@@ -64,53 +62,34 @@ export const createUserClient = (token: string) =>
     },
   });
 
-const createPaymentlyHeaders = () => ({
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  "RT-UDDOKTAPAY-API-KEY": getPaymentlyApiKey(),
-});
-
-const parsePaymentlyResponse = async (response: Response) => {
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      payload?.message ||
-        payload?.error ||
-        `Paymently request failed with status ${response.status}`,
-    );
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim()) return error.trim();
+  try {
+    const serialized = JSON.stringify(error);
+    if (serialized && serialized !== "{}") return serialized;
+  } catch {
+    // Ignore serialization errors and use the fallback.
   }
-
-  return payload;
+  return fallback;
 };
 
-export const createPaymentlyCharge = async (payload: Record<string, unknown>) => {
-  const response = await fetch(`${getPaymentlyBaseUrl()}/checkout-v2`, {
-    method: "POST",
-    headers: createPaymentlyHeaders(),
-    body: JSON.stringify(payload),
-  });
-
-  return parsePaymentlyResponse(response);
-};
-
-export const verifyPaymentlyPayment = async (invoiceId: string) => {
-  const response = await fetch(`${getPaymentlyBaseUrl()}/verify-payment`, {
-    method: "POST",
-    headers: createPaymentlyHeaders(),
-    body: JSON.stringify({ invoice_id: invoiceId }),
-  });
-
-  return parsePaymentlyResponse(response);
-};
+export const getPaymentErrorMessage = (error: unknown, fallback: string) =>
+  getErrorMessage(error, fallback);
 
 export const getFunctionUrl = (name: string) =>
-  `${getSupabaseUrl()}/functions/v1/${name}`;
+  `${getSupabasePublicUrl()}/functions/v1/${name}`;
 
-export const getCheckoutUrls = () => ({
-  redirect_url: `${getSiteUrl()}/payment-confirm`,
-  cancel_url: `${getSiteUrl()}/payment-confirm?state=cancelled`,
-  webhook_url: getFunctionUrl("paymently-webhook"),
+export const getEpsCheckoutUrls = (merchantTransactionId: string) => ({
+  successUrl: `${getSiteUrl()}/payment-confirm?provider=eps&reference=${
+    encodeURIComponent(merchantTransactionId)
+  }`,
+  failUrl: `${getSiteUrl()}/payment-confirm?provider=eps&state=failed&reference=${
+    encodeURIComponent(merchantTransactionId)
+  }`,
+  cancelUrl: `${getSiteUrl()}/payment-confirm?provider=eps&state=cancelled&reference=${
+    encodeURIComponent(merchantTransactionId)
+  }`,
 });
 
 export const getBearerToken = (request: Request) => {
@@ -157,6 +136,3 @@ export const getAuthenticatedContext = async (request: Request) => {
 
   return { token, user, profile, adminClient };
 };
-
-export const validateWebhookRequest = (request: Request) =>
-  request.headers.get("RT-UDDOKTAPAY-API-KEY") === getPaymentlyApiKey();

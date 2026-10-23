@@ -288,7 +288,7 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
                   <select
                     value={order.status || 'pending'}
                     onChange={(event) => handleOrderStatusChange(order.id, event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#465fff]"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
                   >
                     <option value="pending">Pending</option>
                     <option value="confirmed">Confirmed</option>
@@ -309,7 +309,7 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
                 <button
                   type="button"
                   onClick={() => handleOpenJobFeedModal(order)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-[#465fff] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6]"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
                 >
                   <MdEdit />
                   Edit homepage job feed
@@ -357,7 +357,7 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
                   value={jobFeedDraft.title}
                   onChange={(event) => setJobFeedDraft({ ...jobFeedDraft, title: event.target.value })}
                   placeholder={buildOrderJobFeedFallbackTitle(editingJobFeedOrder)}
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
                 />
               </div>
 
@@ -368,7 +368,7 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
                   value={jobFeedDraft.description}
                   onChange={(event) => setJobFeedDraft({ ...jobFeedDraft, description: event.target.value })}
                   placeholder={buildOrderJobFeedFallbackDescription(editingJobFeedOrder)}
-                  className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#465fff]"
+                  className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
                 />
               </div>
 
@@ -390,7 +390,7 @@ const AdminOrdersSection = ({ searchQuery = '' }) => {
                   type="button"
                   onClick={() => handleSaveOrderJobFeed(jobFeedDraft.isPosted)}
                   disabled={jobFeedSaving}
-                  className="rounded-2xl bg-[#465fff] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#3646d6] disabled:opacity-60"
+                  className="rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:opacity-60"
                 >
                   {jobFeedSaving ? 'Saving...' : 'Save Changes'}
                 </button>

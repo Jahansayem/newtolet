@@ -1,7 +1,16 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Suspense, startTransition, useEffect, useRef, useState } from 'react'
 
+/**
+ * Mounts its children only once the section scrolls near the viewport.
+ *
+ * Children are wrapped in their own Suspense boundary so a lazily loaded child
+ * (e.g. a `next/dynamic` component whose chunk has not been fetched yet) suspends
+ * inside this section — keeping the placeholder height — instead of bubbling up to
+ * the page-level boundary, which would swap the whole page for a skeleton, collapse
+ * the document height and reset the user's scroll position.
+ */
 const DeferredSection = ({
   children,
   fallback = null,
@@ -29,7 +38,8 @@ const DeferredSection = ({
       ([entry]) => {
         if (entry.isIntersecting) {
           if (isMountedRef.current) {
-            setIsVisible(true)
+            // A transition lets React keep showing the placeholder while the child loads.
+            startTransition(() => setIsVisible(true))
           }
           observer.disconnect()
         }
@@ -49,7 +59,7 @@ const DeferredSection = ({
 
   return (
     <div ref={containerRef} className={className}>
-      {isVisible ? children : fallback}
+      {isVisible ? <Suspense fallback={fallback}>{children}</Suspense> : fallback}
     </div>
   )
 }

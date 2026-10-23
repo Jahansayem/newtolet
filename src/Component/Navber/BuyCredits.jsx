@@ -1,38 +1,35 @@
-import React, { useCallback, useEffect, useContext, useMemo, useRef, useState } from 'react';
-import { FiCreditCard, FiPhone, FiLock, FiCheckCircle, FiAlertCircle } from 'react-icons/fi';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { FiAlertCircle, FiCreditCard, FiLock, FiX } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../contexts/AuthContext';
-import { getCreditPackages, getPaymentGateways, createPaymentTransaction, completePayment } from '../../services/paymentService';
+import { getCreditPackages, getPaymentGateways, createPaymentTransaction } from '../../services/paymentService';
 import { getUserCredits } from '../../services/creditService';
 import { supabase } from '../../services/supabaseClient';
+import { useLanguage } from '../../i18n/useLanguage';
+import { translate, readStoredLanguage } from '../../i18n';
+import LanguageToggle from '../../components/LanguageToggle.jsx';
 
 const BuyCredits = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [currentCredits, setCurrentCredits] = useState(0);
-  const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [selectedPayment, setSelectedPayment] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
-  const [step, setStep] = useState(1); // 1: Phone, 2: Package, 3: Payment, 4: Confirm
+  const [packagesLoading, setPackagesLoading] = useState(true);
+  const [step, setStep] = useState(1); // 1: Package, 2: Payment, 3: Confirm
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
   const [isBlacklisted, setIsBlacklisted] = useState(false);
   const [blacklistReason, setBlacklistReason] = useState('');
   const [packages, setPackages] = useState([]);
   const isMountedRef = useRef(true);
-  const resetTimerRef = useRef(null);
 
-  // Cleanup on unmount
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (resetTimerRef.current) {
-        clearTimeout(resetTimerRef.current);
-      }
     };
   }, []);
 
@@ -53,9 +50,20 @@ const BuyCredits = () => {
     let isMounted = true;
 
     const loadPackages = async () => {
-      const packageData = await getCreditPackages();
-      if (isMounted && isMountedRef.current) {
-        setPackages(packageData || []);
+      setPackagesLoading(true);
+      try {
+        const packageData = await getCreditPackages();
+        if (isMounted && isMountedRef.current) {
+          setPackages(packageData || []);
+        }
+      } catch (loadError) {
+        if (isMounted && isMountedRef.current) {
+          setError(loadError.message || translate(readStoredLanguage(), 'payments.packages.errors.loadFailed'));
+        }
+      } finally {
+        if (isMounted && isMountedRef.current) {
+          setPackagesLoading(false);
+        }
       }
     };
 
@@ -70,11 +78,12 @@ const BuyCredits = () => {
     if (!user) return;
 
     void fetchCredits();
-    // Pre-fill phone if user has one
-    if (user.phone) {
-      setPhoneNumber(user.phone);
-    }
   }, [fetchCredits, user]);
+
+  const getDefaultPaymentMethod = useCallback(
+    () => paymentGateways[0] || null,
+    [paymentGateways]
+  );
 
   const checkBlacklistStatus = useCallback(async (userId) => {
     try {
@@ -88,97 +97,30 @@ const BuyCredits = () => {
 
       if (data && isMountedRef.current) {
         setIsBlacklisted(true);
-        setBlacklistReason(data.reason || 'Account restricted');
+        setBlacklistReason(data.reason || t('payments.packages.restricted.defaultReason'));
         return true;
       }
       return false;
     } catch {
-      // Table might not exist or no blacklist entry
       return false;
     }
-  }, []);
-
-  const validatePhone = (phone) => {
-    // Bangladeshi phone validation
-    const bdPhoneRegex = /^(\+880|880)?(1[3-9]\d{8})$/;
-    return bdPhoneRegex.test(phone.replace(/\s/g, ''));
-  };
-
-  const formatPhone = (phone) => {
-    // Format to +880 format
-    let formatted = phone.replace(/\s/g, '');
-    if (formatted.startsWith('01')) {
-      formatted = '+880' + formatted;
-    } else if (formatted.startsWith('880')) {
-      formatted = '+' + formatted;
-    }
-    return formatted;
-  };
-
-  const handlePhoneSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    if (!validatePhone(phoneNumber)) {
-      setError('Please enter a valid Bangladeshi phone number (e.g., 017XXXXXXXX or +88017XXXXXXXX)');
-      setLoading(false);
-      return;
-    }
-
-    const formattedPhone = formatPhone(phoneNumber);
-
-    try {
-      // Check if phone exists in users table
-      const { data: existingUser, error } = await supabase
-        .from('users')
-        .select('id, is_active, phone')
-        .eq('phone', formattedPhone)
-        .maybeSingle();
-
-      if (error) throw error;
-
-      if (!existingUser) {
-        setError('This phone number is not registered. Please register first.');
-        setLoading(false);
-        return;
-      }
-
-      if (!existingUser.is_active) {
-        setError('This account has been blocked. Please contact support.');
-        setLoading(false);
-        return;
-      }
-
-      // Check blacklist status
-      const blacklisted = await checkBlacklistStatus(existingUser.id);
-      if (blacklisted) {
-        setError(`Account restricted: ${blacklistReason}. You cannot purchase credits.`);
-        setLoading(false);
-        return;
-      }
-
-      setStep(2);
-    } catch {
-      setError('Failed to verify phone number. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [t]);
 
   const handlePackageSelect = (pkg) => {
     setSelectedPackage(pkg);
+    setSelectedPayment(getDefaultPaymentMethod());
+    setError('');
     setStep(3);
-  };
-
-  const handlePaymentSelect = (method) => {
-    setSelectedPayment(method);
-    setStep(4);
   };
 
   const handleConfirmPurchase = async () => {
     if (!user) {
-      setError('Please log in to continue.');
+      setError(t('payments.packages.errors.loginRequired'));
+      return;
+    }
+
+    if (!selectedPackage || !selectedPayment) {
+      setError(t('payments.packages.errors.selectionRequired'));
       return;
     }
 
@@ -186,49 +128,37 @@ const BuyCredits = () => {
     setError('');
 
     try {
-      // Final blacklist check
       const blacklisted = await checkBlacklistStatus(user.id);
       if (blacklisted) {
-        setError(`Account restricted: ${blacklistReason}. Cannot complete purchase.`);
+        setError(
+          t('payments.packages.restricted.purchaseBlocked', {
+            reason: blacklistReason || t('payments.packages.restricted.defaultReason'),
+          })
+        );
         setProcessingPayment(false);
         return;
       }
 
-      // Create transaction
-      const { data: transaction, error: transError } = await createPaymentTransaction(
-        user.id,
+      const { data: checkout, error: checkoutError } = await createPaymentTransaction(
         selectedPackage.id,
-        selectedPayment.id
+        {
+          paymentMethod: selectedPayment.id,
+        }
       );
 
-      if (transError) throw transError;
-
-      // Simulate payment gateway (in production, redirect to actual gateway)
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Complete payment
-      const { error: completeError } = await completePayment(transaction.transaction_id);
-
-      if (completeError) throw completeError;
-
-      if (isMountedRef.current) {
-        setSuccess(true);
-        await fetchCredits();
+      if (checkoutError || !checkout?.payment_url) {
+        throw checkoutError || new Error(t('payments.packages.errors.checkoutFailed'));
       }
 
-      // Reset after 3 seconds
-      resetTimerRef.current = setTimeout(() => {
-        if (isMountedRef.current) {
-          setSuccess(false);
-          setStep(1);
-          setSelectedPackage(null);
-          setSelectedPayment(null);
-        }
-      }, 3000);
-
+      window.location.assign(checkout.payment_url);
     } catch (err) {
       if (isMountedRef.current) {
-        setError(err.message || 'Payment failed. Please try again.');
+        const message = err.message || t('payments.packages.errors.continueFailed');
+        setError(
+          message.includes('EPS_')
+            ? t('payments.packages.errors.notConfigured')
+            : message
+        );
       }
     } finally {
       if (isMountedRef.current) {
@@ -238,54 +168,57 @@ const BuyCredits = () => {
   };
 
   const calculateDiscount = (pkg) => {
-    if (!pkg.discount) return pkg.price;
-    return pkg.price - (pkg.price * pkg.discount / 100);
+    if (!pkg.discount) return Number(pkg.price || 0);
+    return Number(pkg.price || 0) - (Number(pkg.price || 0) * Number(pkg.discount || 0)) / 100;
   };
 
-  if (isBlacklisted && step !== 1) {
+  if (isBlacklisted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+        <div className="relative bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <LanguageToggle size="sm" className="absolute right-4 top-4" />
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FiLock className="text-red-600 text-2xl" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Account Restricted</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">{t('payments.packages.restricted.title')}</h2>
           <p className="text-gray-600 mb-6">{blacklistReason}</p>
-          <p className="text-sm text-gray-500">Please contact support for assistance.</p>
+          <p className="text-sm text-gray-500">{t('payments.packages.restricted.contactSupport')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+    <div className="min-h-screen py-8 px-4">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Buy Credits</h1>
-              <p className="text-gray-600">Purchase credits to list properties and unlock features</p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('payments.packages.title')}</h1>
+              <p className="text-gray-600">{t('payments.packages.subtitle')}</p>
             </div>
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-3">
+              <LanguageToggle size="sm" />
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard')}
+                className="ui-btn ui-btn-ghost ui-btn-icon text-muted"
+                aria-label={t('common.close')}
+              >
+                <FiX className="text-xl" aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
-          {/* Current Credits */}
-          <div className="mt-4 bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl p-4 flex items-center justify-between">
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-ink p-4">
             <div className="flex items-center gap-3">
               <FiCreditCard className="text-white text-xl" />
-              <span className="text-gray-200 font-medium">Your Balance</span>
+              <span className="text-gray-200 font-medium">{t('payments.packages.yourBalance')}</span>
             </div>
             <span className="text-3xl font-bold text-white">{currentCredits}</span>
           </div>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
             <FiAlertCircle />
@@ -293,228 +226,137 @@ const BuyCredits = () => {
           </div>
         )}
 
-        {/* Success Message */}
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
-            <FiCheckCircle />
-            <span>Successfully purchased {selectedPackage?.credits} credits!</span>
-          </div>
-        )}
-
-        {/* Step 1: Phone Verification */}
         {step === 1 && (
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <span className="text-gray-900 font-bold">1</span>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Verify Phone Number</h2>
+              <h2 className="text-xl font-bold text-gray-900">{t('payments.packages.selectPackage')}</h2>
             </div>
 
-            <form onSubmit={handlePhoneSubmit}>
-              <div className="relative mb-4">
-                <FiPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="tel"
-                  placeholder="Enter phone number (e.g., 017XXXXXXXX)"
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent text-lg"
-                />
+            {packagesLoading ? (
+              <p className="text-gray-600">{t('payments.packages.loading')}</p>
+            ) : packages.length === 0 ? (
+              <p className="text-gray-600">{t('payments.packages.empty')}</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {packages.map((pkg) => {
+                  const finalPrice = calculateDiscount(pkg);
+                  const isPopular = pkg.popular;
+
+                  return (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      onClick={() => handlePackageSelect(pkg)}
+                      className={`relative w-full rounded-xl border-2 p-6 text-left transition-colors ${
+                        isPopular
+                          ? 'border-brand bg-brand-soft'
+                          : 'border-line hover:border-brand/50 hover:bg-canvas'
+                      }`}
+                    >
+                      {isPopular && (
+                        <span className="ui-badge ui-badge-promoted absolute -top-3 left-1/2 -translate-x-1/2">
+                          {t('payments.packages.popular')}
+                        </span>
+                      )}
+
+                      <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
+                      <div className="mt-2">
+                        <span className="text-3xl font-bold text-black">{pkg.credits}</span>
+                        <span className="text-gray-600 ml-1">{t('payments.packages.creditsUnit')}</span>
+                      </div>
+
+                      <div className="mt-4">
+                        {Number(pkg.discount || 0) > 0 ? (
+                          <div>
+                            <span className="text-gray-400 line-through text-sm">
+                              {t('payments.packages.priceBdt', { amount: Number(pkg.price || 0).toLocaleString('en-BD') })}
+                            </span>
+                            <span className="text-xl font-bold text-gray-900 ml-2">
+                              {t('payments.packages.priceBdt', { amount: finalPrice.toLocaleString('en-BD') })}
+                            </span>
+                            <span className="ml-2 text-gray-700 text-sm font-semibold">
+                              {t('payments.packages.discountOff', { discount: pkg.discount })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xl font-bold text-gray-900">
+                            {t('payments.packages.priceBdt', { amount: Number(pkg.price || 0).toLocaleString('en-BD') })}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-2 text-sm text-gray-500">
+                        {t('payments.packages.perCredit', { amount: (finalPrice / Number(pkg.credits || 1)).toFixed(2) })}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+            )}
 
-              <p className="text-sm text-gray-500 mb-6">
-                Enter your registered Bangladeshi phone number to continue
-              </p>
-
-              <button
-                type="submit"
-                disabled={loading || !phoneNumber}
-                className="w-full py-4 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Verifying...' : 'Continue'}
-              </button>
-            </form>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="mt-6 text-gray-600 hover:text-gray-800 font-medium"
+            >
+              {t('payments.packages.backToDashboard')}
+            </button>
           </div>
         )}
 
-        {/* Step 2: Select Package */}
-        {step === 2 && (
+        {step === 3 && (
           <div className="bg-white rounded-2xl shadow-lg p-8">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
                 <span className="text-gray-900 font-bold">2</span>
               </div>
-              <h2 className="text-xl font-bold text-gray-900">Select Credit Package</h2>
+              <h2 className="text-xl font-bold text-gray-900">{t('payments.checkout.title')}</h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {packages.map((pkg) => {
-                const finalPrice = calculateDiscount(pkg);
-                const isPopular = pkg.popular;
-
-                return (
-                  <div
-                    key={pkg.id}
-                    onClick={() => handlePackageSelect(pkg)}
-                    className={`relative p-6 rounded-xl border-2 cursor-pointer transition-all ${
-                      isPopular
-                        ? 'border-gray-900 bg-gray-100 ring-2 ring-gray-300'
-                        : 'border-gray-200 hover:border-gray-900 hover:bg-gray-50'
-                    }`}
-                  >
-                    {isPopular && (
-                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs font-bold px-3 py-1 rounded-full">
-                        POPULAR
-                      </span>
-                    )}
-
-                    <h3 className="text-lg font-bold text-gray-900">{pkg.name}</h3>
-                    <div className="mt-2">
-                      <span className="text-3xl font-bold text-black">{pkg.credits}</span>
-                      <span className="text-gray-600 ml-1">credits</span>
-                    </div>
-
-                    <div className="mt-4">
-                      {pkg.discount > 0 ? (
-                        <div>
-                          <span className="text-gray-400 line-through text-sm">৳{pkg.price}</span>
-                          <span className="text-xl font-bold text-gray-900 ml-2">৳{finalPrice}</span>
-                          <span className="ml-2 text-gray-700 text-sm font-semibold">{pkg.discount}% OFF</span>
-                        </div>
-                      ) : (
-                        <span className="text-xl font-bold text-gray-900">৳{pkg.price}</span>
-                      )}
-                    </div>
-
-                    <div className="mt-2 text-sm text-gray-500">
-                      ৳{(finalPrice / pkg.credits).toFixed(2)} per credit
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setStep(1)}
-              className="mt-6 text-gray-600 hover:text-gray-800 font-medium"
-            >
-              ← Back
-            </button>
-          </div>
-        )}
-
-        {/* Step 3: Select Payment Method */}
-        {step === 3 && (
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <span className="text-gray-900 font-bold">3</span>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">Select Payment Method</h2>
-            </div>
-
-            {/* Selected Package Summary */}
-            <div className="bg-gray-50 rounded-xl p-4 mb-6">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Selected Package:</span>
-                <div className="text-right">
-                  <span className="font-bold text-gray-900">{selectedPackage.name}</span>
-                  <span className="text-gray-900 font-bold ml-2">{selectedPackage.credits} credits</span>
-                </div>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-gray-600">Amount to Pay:</span>
-                <span className="text-xl font-bold text-gray-900">
-                  ৳{calculateDiscount(selectedPackage)}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Methods */}
-            <div className="space-y-3">
-              {paymentGateways.map((gateway) => (
-                <div
-                  key={gateway.id}
-                  onClick={() => handlePaymentSelect(gateway)}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-4 ${
-                    selectedPayment?.id === gateway.id
-                      ? 'border-gray-900 bg-gray-100'
-                      : 'border-gray-200 hover:border-gray-900'
-                  }`}
-                >
-                  <span className="text-2xl">{gateway.icon}</span>
-                  <span className="font-semibold text-gray-900">{gateway.name}</span>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setStep(2)}
-              className="mt-6 text-gray-600 hover:text-gray-800 font-medium"
-            >
-              ← Back
-            </button>
-          </div>
-        )}
-
-        {/* Step 4: Confirm Purchase */}
-        {step === 4 && (
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                <span className="text-gray-900 font-bold">4</span>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900">Confirm Purchase</h2>
-            </div>
-
-            {/* Order Summary */}
             <div className="bg-gray-50 rounded-xl p-6 space-y-4 mb-6">
               <div className="flex justify-between">
-                <span className="text-gray-600">Package:</span>
-                <span className="font-semibold">{selectedPackage.name}</span>
+                <span className="text-gray-600">{t('payments.checkout.packageLabel')}</span>
+                <span className="font-semibold">{selectedPackage?.name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Credits:</span>
-                <span className="font-semibold">{selectedPackage.credits}</span>
+                <span className="text-gray-600">{t('payments.checkout.creditsLabel')}</span>
+                <span className="font-semibold">{selectedPackage?.credits}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Payment Method:</span>
+                <span className="text-gray-600">{t('payments.checkout.methodLabel')}</span>
                 <span className="font-semibold flex items-center gap-2">
-                  {selectedPayment.icon} {selectedPayment.name}
+                  {selectedPayment?.icon} {selectedPayment?.name}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Phone:</span>
-                <span className="font-semibold">{formatPhone(phoneNumber)}</span>
-              </div>
               <div className="border-t pt-4 flex justify-between">
-                <span className="text-gray-900 font-semibold">Total Amount:</span>
+                <span className="text-gray-900 font-semibold">{t('payments.checkout.totalLabel')}</span>
                 <span className="text-xl font-bold text-gray-900">
-                  ৳{calculateDiscount(selectedPackage)}
+                  {t('payments.packages.priceBdt', { amount: calculateDiscount(selectedPackage).toLocaleString('en-BD') })}
                 </span>
               </div>
             </div>
 
             <div className="flex gap-4">
               <button
-                onClick={() => setStep(3)}
-                className="flex-1 py-4 bg-gray-200 text-gray-900 rounded-xl font-semibold hover:bg-gray-300 transition"
+                onClick={() => setStep(1)}
+                className="ui-btn ui-btn-secondary flex-1"
               >
-                Back
+                {t('common.back')}
               </button>
               <button
                 onClick={handleConfirmPurchase}
                 disabled={processingPayment}
-                className="flex-1 py-4 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="ui-btn ui-btn-primary flex-1"
               >
                 {processingPayment ? (
                   <>
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Processing...
+                    {t('payments.checkout.processing')}
                   </>
                 ) : (
-                  `Pay ৳${calculateDiscount(selectedPackage)}`
+                  t('payments.checkout.payButton', { amount: calculateDiscount(selectedPackage).toLocaleString('en-BD') })
                 )}
               </button>
             </div>

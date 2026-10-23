@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { validateImageFile } from '../../services/imageUploadService'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const IDVerification = ({
   idType = '',
@@ -11,6 +12,7 @@ const IDVerification = ({
   isVerified = false,
   error = null,
 }) => {
+  const { t, tv } = useLanguage()
   const [frontPreview, setFrontPreview] = useState(null)
   const [backPreview, setBackPreview] = useState(null)
 
@@ -76,11 +78,10 @@ const IDVerification = ({
           />
         </svg>
         <h4 className='text-lg font-bold text-green-900 mb-2'>
-          ✓ Already Verified
+          {t('addProperty.idVerification.alreadyVerified')}
         </h4>
         <p className='text-green-700'>
-          Your identity has been verified. You don't need to upload ID documents
-          again.
+          {t('addProperty.idVerification.alreadyVerifiedHint')}
         </p>
       </div>
     )
@@ -90,17 +91,16 @@ const IDVerification = ({
     <div className='space-y-4'>
       <div className='bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4'>
         <p className='text-sm text-amber-800'>
-          <strong>📋 ONE-TIME ID VERIFICATION</strong>
+          <strong>{t('addProperty.idVerification.oneTimeTitle')}</strong>
           <br />
-          Upload clear copies of your ID for verification. This is a one-time
-          requirement to build trust on the platform.
+          {t('addProperty.idVerification.oneTimeHint')}
         </p>
       </div>
 
       {/* ID Type Selection */}
       <div>
         <label className='block text-sm font-semibold text-gray-800 mb-3'>
-          ID Document Type *
+          {t('addProperty.idVerification.documentType')}
         </label>
         <div className='grid grid-cols-3 gap-2'>
           {idTypes.map((type) => (
@@ -118,7 +118,7 @@ const IDVerification = ({
               {type === 'National ID' && '🆔'}
               {type === 'Driving License' && '🚗'}
               <br />
-              <span className='text-xs'>{type}</span>
+              <span className='text-xs'>{tv('idTypes', type)}</span>
             </button>
           ))}
         </div>
@@ -129,7 +129,7 @@ const IDVerification = ({
           {/* Front Side Upload */}
           <div>
             <label className='block text-sm font-semibold text-gray-800 mb-2'>
-              {idType} - Front Side *
+              {t('addProperty.idVerification.frontSideLabel', { idType: tv('idTypes', idType) })}
             </label>
             <div
               onDrop={(e) => handleDrop(e, 'front')}
@@ -164,10 +164,10 @@ const IDVerification = ({
                   <div className='space-y-2'>
                     <img
                       src={frontPreview}
-                      alt='Front preview'
+                      alt={t('addProperty.idVerification.frontPreviewAlt')}
                       className='h-32 mx-auto rounded object-cover'
                     />
-                    <p className='text-sm text-gray-600'>Click to change</p>
+                    <p className='text-sm text-gray-600'>{t('addProperty.idVerification.clickToChange')}</p>
                   </div>
                 ) : (
                   <div>
@@ -179,7 +179,7 @@ const IDVerification = ({
                       <path d='M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z' />
                     </svg>
                     <p className='text-sm font-medium text-gray-700'>
-                      Select or drag {idType} front side
+                      {t('addProperty.idVerification.selectFront', { idType: tv('idTypes', idType) })}
                     </p>
                   </div>
                 )}
@@ -190,7 +190,7 @@ const IDVerification = ({
           {/* Back Side Upload */}
           <div>
             <label className='block text-sm font-semibold text-gray-800 mb-2'>
-              {idType} - Back Side *
+              {t('addProperty.idVerification.backSideLabel', { idType: tv('idTypes', idType) })}
             </label>
             <div
               onDrop={(e) => handleDrop(e, 'back')}
@@ -225,10 +225,10 @@ const IDVerification = ({
                   <div className='space-y-2'>
                     <img
                       src={backPreview}
-                      alt='Back preview'
+                      alt={t('addProperty.idVerification.backPreviewAlt')}
                       className='h-32 mx-auto rounded object-cover'
                     />
-                    <p className='text-sm text-gray-600'>Click to change</p>
+                    <p className='text-sm text-gray-600'>{t('addProperty.idVerification.clickToChange')}</p>
                   </div>
                 ) : (
                   <div>
@@ -240,7 +240,7 @@ const IDVerification = ({
                       <path d='M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z' />
                     </svg>
                     <p className='text-sm font-medium text-gray-700'>
-                      Select or drag {idType} back side
+                      {t('addProperty.idVerification.selectBack', { idType: tv('idTypes', idType) })}
                     </p>
                   </div>
                 )}
@@ -252,11 +252,10 @@ const IDVerification = ({
           {idFront && idBack && (
             <div className='bg-green-50 border border-green-200 rounded-lg p-4'>
               <p className='text-green-800 font-medium'>
-                ✓ Both sides uploaded successfully
+                {t('addProperty.idVerification.bothUploaded')}
               </p>
               <p className='text-green-700 text-sm mt-1'>
-                Documents will be reviewed by admin. You'll be notified once
-                verified.
+                {t('addProperty.idVerification.reviewNotice')}
               </p>
             </div>
           )}
@@ -267,13 +266,13 @@ const IDVerification = ({
 
       {/* Important Notes */}
       <div className='bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2'>
-        <h4 className='font-semibold text-gray-800 mb-2'>📌 Important Notes:</h4>
+        <h4 className='font-semibold text-gray-800 mb-2'>{t('addProperty.idVerification.notesTitle')}</h4>
         <ul className='text-sm text-gray-700 space-y-1'>
-          <li>✓ Upload clear, readable images of your ID</li>
-          <li>✓ Both front and back sides are required</li>
-          <li>✓ Images will be kept confidential</li>
-          <li>✓ One-time verification only</li>
-          <li>✓ Admin will review within 24 hours</li>
+          <li>{t('addProperty.idVerification.noteClear')}</li>
+          <li>{t('addProperty.idVerification.noteBothSides')}</li>
+          <li>{t('addProperty.idVerification.noteConfidential')}</li>
+          <li>{t('addProperty.idVerification.noteOneTime')}</li>
+          <li>{t('addProperty.idVerification.noteReviewTime')}</li>
         </ul>
       </div>
     </div>

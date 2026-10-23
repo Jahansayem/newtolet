@@ -332,7 +332,7 @@ const TransactionDetailModal = ({ transaction, onApprove, onClose, onStatusChang
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">Credits to Add</label>
-              <p className="font-bold text-[#1E73B8]600">{transaction.credits_to_add}</p>
+              <p className="font-bold text-brand">{transaction.credits_to_add}</p>
             </div>
             <div>
               <label className="block text-sm text-gray-600 mb-1">User</label>

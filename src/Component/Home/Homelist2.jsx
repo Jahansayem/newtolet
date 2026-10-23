@@ -12,6 +12,8 @@ import {
 } from '../../services/userPanelService';
 import { matchesPropertyCategory } from '../../lib/propertyCategories';
 import RentDisplay from '../../components/RentDisplay';
+import { getPropertyIdNumber } from '../../utils/propertyDisplaySerial';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const getCardImageSource = (item) =>
     item?.primary_image ||
@@ -20,6 +22,7 @@ const getCardImageSource = (item) =>
 
 const Homelist2 = ({ locationFilter }) => {
     const { list, selectedCategory } = useContext(listcontext)
+    const { t, tv, fd } = useLanguage()
     const [savedProperties, setSavedProperties] = useState([])
 
     useEffect(() => {
@@ -84,13 +87,18 @@ const Homelist2 = ({ locationFilter }) => {
         <div className='max-w-7xl mx-auto bg-gray-50 pb-8'>
             {/* Active Location Filter Indicator */}
             {locationFilter && (
-                <div className='mb-4 px-4 py-2 bg-[#1E73B8]/10 rounded-lg flex items-center justify-between'>
-                    <span className='text-sm text-[#1E73B8] font-medium'>
-                        Filtering by:
-                        {locationFilter.upazilla && ` ${locationFilter.upazilla}`}
-                        {locationFilter.district && !locationFilter.upazilla && ` ${locationFilter.district}`}
-                        {locationFilter.division && !locationFilter.district && !locationFilter.upazilla && ` ${locationFilter.division}`}
-                        {locationFilter.division && (locationFilter.district || locationFilter.upazilla) && `, ${locationFilter.division}`}
+                <div className='mb-4 px-4 py-2 bg-brand/10 rounded-lg flex items-center justify-between'>
+                    <span className='text-sm text-brand font-medium'>
+                        {t('home.list.filteringBy', {
+                            location: [
+                                locationFilter.upazilla
+                                    || locationFilter.district
+                                    || (locationFilter.division ? tv('divisions', locationFilter.division) : ''),
+                                locationFilter.division && (locationFilter.district || locationFilter.upazilla)
+                                    ? tv('divisions', locationFilter.division)
+                                    : '',
+                            ].filter(Boolean).join(', '),
+                        })}
                     </span>
                 </div>
             )}
@@ -103,7 +111,7 @@ const Homelist2 = ({ locationFilter }) => {
                                 <div className='relative'>
                                     <PropertyCardMedia
                                         src={getCardImageSource(item)}
-                                        alt={`${item.category} property in ${item.location?.area || 'Bangladesh'}`}
+                                        alt={t('home.list.cardAlt', { category: tv('categories', item.category || ''), area: item.location?.area || t('home.list.defaultArea') })}
                                         eager={index < 10}
                                         propertyType={item.property_type}
                                         category={item.category}
@@ -125,14 +133,14 @@ const Homelist2 = ({ locationFilter }) => {
                                 {/* Content section */}
                                 <div className='p-3 space-y-1 '>
                                     {/* Property ID */}
-                                    {item.property_id_number && (
-                                        <p className='text-[#1E73B8] text-xs font-bold'>
-                                            #{item.property_id_number}
-                                        </p>
-                                    )}
+                                    <p className='text-brand text-xs font-bold'>
+                                        {getPropertyIdNumber(item)
+                                            ? t('listing.card.idLabel', { id: getPropertyIdNumber(item) })
+                                            : ''}
+                                    </p>
                                     {/* Room & Bath count */}
                                     <p className='text-gray-500 text-sm'>
-                                        Room: {item.specifications?.total_rooms || 0} Bath: {item.specifications?.total_bathrooms || 0}
+                                        {t('home.list.roomsBaths', { rooms: item.specifications?.total_rooms || 0, baths: item.specifications?.total_bathrooms || 0 })}
                                     </p>
 
                                     {/* Divider */}
@@ -140,18 +148,18 @@ const Homelist2 = ({ locationFilter }) => {
 
                                     {/* Category Title */}
                                     <p className='text-gray-800 font-bold text-base'>
-                                        {item.category || 'Property'}
+                                        {item.category ? tv('categories', item.category) : t('home.list.propertyFallback')}
                                     </p>
 
                                     {/* Address */}
                                     <p className='text-gray-500 text-sm font-medium  truncate'>
-                                        Address: {item.location?.area || ''}, {item.location?.state_district || ''}
+                                        {t('home.list.address', { area: item.location?.area || '', district: item.location?.state_district || '' })}
                                     </p>
 
                                     {/* Posted Date */}
                                     {item.availability?.available_from && (
                                         <p className='text-gray-500 text-sm font-medium '>
-                                            Posted: {new Date(item.availability.available_from).toLocaleString('default', { month: 'long' })}
+                                            {t('home.list.posted', { month: fd(item.availability.available_from, { month: 'long' }) })}
                                         </p>
                                     )}
 

@@ -83,7 +83,7 @@ const InteractiveMap = ({
               <p className='text-sm text-gray-600 mt-0.5'>{propertyInfo.subtitle}</p>
             )}
             {propertyInfo.price && (
-              <p className='text-sm font-bold text-[#1E73B8] mt-1'>{propertyInfo.price}</p>
+              <p className='text-sm font-bold text-brand mt-1'>{propertyInfo.price}</p>
             )}
           </div>
         )}

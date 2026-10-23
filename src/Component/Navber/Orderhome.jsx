@@ -4,10 +4,12 @@ import { createPropertyInquiry } from "../../services/inquiryService";
 import useHydratedSnapshot from "../../hooks/useHydratedSnapshot";
 import { useAuth } from "../../hooks/useAuth";
 import { getPropertyById, getPropertyByIdCacheKey } from "../../services/propertyService";
+import { useLanguage } from "../../i18n/useLanguage";
 
 const Orderhome = () => {
     const [searchParams] = useSearchParams()
     const id = searchParams.get('id') || ''
+    const { t } = useLanguage()
     const { user, isLoading: isAuthLoading } = useAuth()
     const viewer = useMemo(() => ({
         viewerId: user?.id || null,
@@ -33,6 +35,7 @@ const Orderhome = () => {
     })
     const [formSubmitted, setFormSubmitted] = useState(false)
     const [formError, setFormError] = useState(null)
+    // Holds a dictionary key so the message follows the active language.
     const [loadError, setLoadError] = useState(null)
 
     useEffect(() => {
@@ -56,7 +59,7 @@ const Orderhome = () => {
         const loadProperty = async () => {
             if (!id) {
                 setLists(null)
-                setLoadError('Property ID is missing.')
+                setLoadError('orders.inquiry.errors.missingId')
                 setLoading(false)
                 return
             }
@@ -76,7 +79,7 @@ const Orderhome = () => {
                 console.error('Error loading inquiry property:', error)
                 if (isMounted && !hasCachedProperty) {
                     setLists(null)
-                    setLoadError('Property not found.')
+                    setLoadError('orders.inquiry.errors.notFound')
                 }
             } finally {
                 if (isMounted) {
@@ -123,7 +126,7 @@ const Orderhome = () => {
             setTimeout(() => setFormSubmitted(false), 5000)
         } catch (error) {
             console.error('Error submitting inquiry:', error)
-            setFormError('Failed to send message. Please try again.')
+            setFormError(t('orders.inquiry.errors.sendFailed'))
         } finally {
             setSubmitting(false)
         }
@@ -153,8 +156,8 @@ const Orderhome = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </div>
-                    <p className="text-red-800 font-bold text-xl">Property not found</p>
-                    <p className="text-red-600 text-sm mt-2">{loadError || "The property you're looking for doesn't exist."}</p>
+                    <p className="text-red-800 font-bold text-xl">{t('orders.inquiry.notFoundTitle')}</p>
+                    <p className="text-red-600 text-sm mt-2">{loadError ? t(loadError) : t('orders.inquiry.errors.notExist')}</p>
                 </div>
             </div>
         );
@@ -166,9 +169,9 @@ const Orderhome = () => {
                 {/* Header Section */}
                 <div className="text-center mb-12 animate-fade-in">
                     <h1 className="text-4xl font-bold text-gray-800 mb-4">
-                        Contact Property Owner
+                        {t('orders.inquiry.title')}
                     </h1>
-                    <p className="text-gray-600 text-lg">Get in touch to learn more about this amazing property</p>
+                    <p className="text-gray-600 text-lg">{t('orders.inquiry.subtitle')}</p>
                 </div>
 
                 <div className="grid lg:grid-cols-2 gap-8">
@@ -177,13 +180,13 @@ const Orderhome = () => {
                         {/* Property Details Card */}
                         <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100 hover:shadow-xl transition-all duration-300">
                             <div className="flex items-center mb-6">
-                                <div className="w-12 h-12 bg-[#1E73B8] rounded-xl flex items-center justify-center">
+                                <div className="w-12 h-12 bg-brand rounded-xl flex items-center justify-center">
                                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                     </svg>
                                 </div>
-                                <h3 className="font-bold text-2xl ml-4 text-gray-800">Property Location</h3>
+                                <h3 className="font-bold text-2xl ml-4 text-gray-800">{t('orders.inquiry.locationTitle')}</h3>
                             </div>
 
                             {lists.location ? (
@@ -193,8 +196,8 @@ const Orderhome = () => {
                                             <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path>
                                         </svg>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-600">District</p>
-                                            <p className="text-lg font-bold text-gray-800">{lists.location.state_district || 'N/A'}</p>
+                                            <p className="text-sm font-medium text-gray-600">{t('orders.inquiry.district')}</p>
+                                            <p className="text-lg font-bold text-gray-800">{lists.location.state_district || t('common.na')}</p>
                                         </div>
                                     </div>
 
@@ -203,8 +206,8 @@ const Orderhome = () => {
                                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
                                         </svg>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-600">Area</p>
-                                            <p className="text-lg font-bold text-gray-800">{lists.location.area || 'N/A'}</p>
+                                            <p className="text-sm font-medium text-gray-600">{t('orders.inquiry.area')}</p>
+                                            <p className="text-lg font-bold text-gray-800">{lists.location.area || t('common.na')}</p>
                                         </div>
                                     </div>
 
@@ -213,43 +216,43 @@ const Orderhome = () => {
                                             <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path>
                                         </svg>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-600">Contact Number</p>
-                                            <p className="text-lg font-bold text-gray-800">{lists.location.contact_number || 'N/A'}</p>
+                                            <p className="text-sm font-medium text-gray-600">{t('orders.inquiry.contactNumber')}</p>
+                                            <p className="text-lg font-bold text-gray-800">{lists.location.contact_number || t('common.na')}</p>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-gray-500 text-center py-8">Location information not available</p>
+                                <p className="text-gray-500 text-center py-8">{t('orders.inquiry.locationUnavailable')}</p>
                             )}
                         </div>
 
                         {/* Quick Info Card */}
                         <div className="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl shadow-xl p-8 text-white">
-                            <h4 className="font-bold text-xl mb-4">Why Contact Us?</h4>
+                            <h4 className="font-bold text-xl mb-4">{t('orders.inquiry.whyTitle')}</h4>
                             <ul className="space-y-3">
                                 <li className="flex items-center">
                                     <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
                                     </svg>
-                                    Fast response within 24 hours
+                                    {t('orders.inquiry.why.fast')}
                                 </li>
                                 <li className="flex items-center">
                                     <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
                                     </svg>
-                                    Schedule property viewing
+                                    {t('orders.inquiry.why.viewing')}
                                 </li>
                                 <li className="flex items-center">
                                     <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
                                     </svg>
-                                    Get detailed information
+                                    {t('orders.inquiry.why.info')}
                                 </li>
                                 <li className="flex items-center">
                                     <svg className="w-5 h-5 mr-3" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
                                     </svg>
-                                    Professional assistance
+                                    {t('orders.inquiry.why.assistance')}
                                 </li>
                             </ul>
                         </div>
@@ -263,7 +266,7 @@ const Orderhome = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                                 </svg>
                             </div>
-                            <h3 className="font-bold text-2xl ml-4 text-gray-800">Send a Message</h3>
+                            <h3 className="font-bold text-2xl ml-4 text-gray-800">{t('orders.inquiry.formTitle')}</h3>
                         </div>
 
                         {formSubmitted && (
@@ -272,7 +275,7 @@ const Orderhome = () => {
                                     <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
                                     </svg>
-                                    <p className="text-green-700 font-medium">Message sent successfully! We'll get back to you soon.</p>
+                                    <p className="text-green-700 font-medium">{t('orders.inquiry.success')}</p>
                                 </div>
                             </div>
                         )}
@@ -291,7 +294,7 @@ const Orderhome = () => {
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div>
                                 <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Full Name
+                                    {t('orders.inquiry.fullName')}
                                 </label>
                                 <input
                                     type="text"
@@ -301,13 +304,13 @@ const Orderhome = () => {
                                     onChange={handleInputChange}
                                     required
                                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-                                    placeholder="Enter your full name"
+                                    placeholder={t('orders.inquiry.fullNamePlaceholder')}
                                 />
                             </div>
 
                             <div>
                                 <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Email Address
+                                    {t('orders.inquiry.email')}
                                 </label>
                                 <input
                                     type="email"
@@ -317,13 +320,13 @@ const Orderhome = () => {
                                     onChange={handleInputChange}
                                     required
                                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-                                    placeholder="your.email@example.com"
+                                    placeholder={t('orders.inquiry.emailPlaceholder')}
                                 />
                             </div>
 
                             <div>
                                 <label htmlFor="phone" className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Phone Number
+                                    {t('orders.inquiry.phone')}
                                 </label>
                                 <input
                                     type="tel"
@@ -333,13 +336,13 @@ const Orderhome = () => {
                                     onChange={handleInputChange}
                                     required
                                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
-                                    placeholder="+1 (123) 456-7890"
+                                    placeholder={t('orders.inquiry.phonePlaceholder')}
                                 />
                             </div>
 
                             <div>
                                 <label htmlFor="message" className="block text-sm font-semibold text-gray-700 mb-2">
-                                    Your Message
+                                    {t('orders.inquiry.message')}
                                 </label>
                                 <textarea
                                     id="message"
@@ -349,7 +352,7 @@ const Orderhome = () => {
                                     required
                                     rows="5"
                                     className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all resize-none"
-                                    placeholder="I'm interested in this property and would like to know more about..."
+                                    placeholder={t('orders.inquiry.messagePlaceholder')}
                                 ></textarea>
                             </div>
 
@@ -364,11 +367,11 @@ const Orderhome = () => {
                                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                         </svg>
-                                        <span>Sending...</span>
+                                        <span>{t('orders.inquiry.sending')}</span>
                                     </>
                                 ) : (
                                     <>
-                                        <span>Send Message</span>
+                                        <span>{t('orders.inquiry.send')}</span>
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
                                         </svg>
@@ -379,7 +382,7 @@ const Orderhome = () => {
 
                         <div className="mt-6 pt-6 border-t border-gray-200">
                             <p className="text-sm text-gray-500 text-center">
-                                By submitting this form, you agree to our terms and privacy policy
+                                {t('orders.inquiry.disclaimer')}
                             </p>
                         </div>
                     </div>

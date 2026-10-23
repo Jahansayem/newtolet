@@ -1,22 +1,26 @@
+'use client'
+
 import banner from '../../assets/banner.jpg'
 import { FaQuestionCircle, FaUserPlus, FaKey, FaUserEdit, FaHome, FaShieldAlt } from 'react-icons/fa'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const Information = () => {
+    const { t } = useLanguage()
     const faqs = [
         {
             icon: <FaUserPlus className="text-primary" />,
-            question: "How do I create an account?",
-            answer: "Click the \"Sign Up\" button in the top right corner and follow the registration process. You'll need to provide your email, create a password, and verify your account."
+            question: t('home.faq.items.createAccount.question'),
+            answer: t('home.faq.items.createAccount.answer')
         },
         {
             icon: <FaKey className="text-primary" />,
-            question: "I forgot my password. What should I do?",
-            answer: "Click on \"Forgot Password\" on the login page and follow the instructions sent to your email. You'll receive a secure link to reset your password within minutes."
+            question: t('home.faq.items.forgotPassword.question'),
+            answer: t('home.faq.items.forgotPassword.answer')
         },
         {
             icon: <FaUserEdit className="text-primary" />,
-            question: "How do I update my profile information?",
-            answer: "Go to \"My Account\" settings and select \"Edit Profile\" to make changes. You can update your name, contact details, and profile picture anytime."
+            question: t('home.faq.items.updateProfile.question'),
+            answer: t('home.faq.items.updateProfile.answer')
         },
         
     ]
@@ -27,13 +31,13 @@ const Information = () => {
             <div className="text-center mb-10 md:mb-16 px-4">
                 <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
                     <FaQuestionCircle />
-                    <span className="text-sm font-medium">FAQ</span>
+                    <span className="text-sm font-medium">{t('home.faq.badge')}</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-3">
-                    Frequently Asked Questions
+                    {t('home.faq.title')}
                 </h2>
                 <p className="text-gray-500 max-w-md mx-auto text-sm sm:text-base">
-                    Find answers to common questions about our platform and services.
+                    {t('home.faq.description')}
                 </p>
             </div>
 
@@ -47,13 +51,13 @@ const Information = () => {
                             <img
                                 src={banner}
                                 className="relative w-full h-[250px] sm:h-[300px] md:h-[400px] object-cover rounded-2xl shadow-lg"
-                                alt="FAQ illustration"
+                                alt={t('home.faq.imageAlt')}
                             />
                             {/* Stats overlay */}
                             <div className="absolute -bottom-4 -right-4 sm:bottom-4 sm:right-4 bg-white rounded-xl shadow-lg p-3 sm:p-4">
                                 <div className="text-center">
                                     <p className="text-2xl sm:text-3xl font-bold text-primary">24/7</p>
-                                    <p className="text-xs sm:text-sm text-gray-500">Support Available</p>
+                                    <p className="text-xs sm:text-sm text-gray-500">{t('home.faq.supportAvailable')}</p>
                                 </div>
                             </div>
                         </div>
@@ -86,10 +90,10 @@ const Information = () => {
                         {/* Contact CTA */}
                         <div className="bg-gradient-to-r from-primary/5 to-secondary/5 rounded-xl p-4 sm:p-6 mt-6">
                             <p className="text-gray-700 text-sm sm:text-base mb-3">
-                                Still have questions? We're here to help!
+                                {t('home.faq.stillHaveQuestions')}
                             </p>
                             <button className="btn btn-primary btn-sm sm:btn-md">
-                                Contact Support
+                                {t('home.faq.contactSupport')}
                             </button>
                         </div>
                     </div>

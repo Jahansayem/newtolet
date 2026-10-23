@@ -65,6 +65,10 @@ CREATE TABLE IF NOT EXISTS public.users (
   email TEXT UNIQUE,
   phone TEXT,
   name TEXT,
+  full_name TEXT,
+  avatar_url TEXT,
+  google_id TEXT,
+  provider TEXT DEFAULT 'email',
   credits INTEGER DEFAULT 0,
   verified BOOLEAN DEFAULT false,
   created_at TIMESTAMP DEFAULT NOW(),
@@ -106,6 +110,9 @@ CREATE TABLE IF NOT EXISTS public.properties (
   updated_at TIMESTAMP DEFAULT NOW(),
   reviewed_at TIMESTAMPTZ,
   is_featured BOOLEAN DEFAULT false,
+  is_pinned BOOLEAN DEFAULT false,
+  pinned_at TIMESTAMPTZ,
+  pinned_until TIMESTAMPTZ,
   sub_area TEXT,
   total_kitchen INTEGER DEFAULT 0,
   property_id_number TEXT,
@@ -313,6 +320,10 @@ CREATE TABLE IF NOT EXISTS public.user_blacklist (
 
 ALTER TABLE IF EXISTS public.users
   ADD COLUMN IF NOT EXISTS phone TEXT,
+  ADD COLUMN IF NOT EXISTS full_name TEXT,
+  ADD COLUMN IF NOT EXISTS avatar_url TEXT,
+  ADD COLUMN IF NOT EXISTS google_id TEXT,
+  ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'email',
   ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false,
   ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
@@ -327,6 +338,9 @@ ALTER TABLE IF EXISTS public.properties
   ADD COLUMN IF NOT EXISTS total_rooms INTEGER,
   ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS pinned_until TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS sub_area TEXT,
   ADD COLUMN IF NOT EXISTS total_kitchen INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS property_id_number TEXT,
@@ -532,11 +546,13 @@ $$;
 CREATE INDEX IF NOT EXISTS idx_users_is_admin ON public.users(is_admin);
 CREATE INDEX IF NOT EXISTS idx_users_referral_code ON public.users(referral_code);
 CREATE INDEX IF NOT EXISTS idx_users_referred_by ON public.users(referred_by);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON public.users(google_id) WHERE google_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_properties_user_id ON public.properties(user_id);
 CREATE INDEX IF NOT EXISTS idx_properties_status ON public.properties(status);
 CREATE INDEX IF NOT EXISTS idx_properties_category ON public.properties(category);
 CREATE INDEX IF NOT EXISTS idx_properties_is_featured ON public.properties(is_featured);
-CREATE INDEX IF NOT EXISTS idx_properties_property_id_number ON public.properties(property_id_number);
+CREATE INDEX IF NOT EXISTS idx_properties_active_pin_sort ON public.properties(pinned_until DESC, created_at DESC) WHERE pinned_until IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS properties_property_id_number_key ON public.properties(property_id_number);
 CREATE INDEX IF NOT EXISTS idx_property_images_property_id ON public.property_images(property_id);
 CREATE INDEX IF NOT EXISTS idx_property_amenities_property_id ON public.property_amenities(property_id);
 CREATE INDEX IF NOT EXISTS idx_user_verifications_user_id ON public.user_verifications(user_id);
@@ -572,6 +588,73 @@ CREATE TRIGGER trg_properties_set_updated_at
 BEFORE UPDATE ON public.properties
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
+
+-- Public Property ID: sequential number from 100000, assigned by the database so it is
+-- unique and race-free (see supabase/migrations/20261021120000_property_id_number_sequence_and_lookup.sql).
+CREATE SEQUENCE IF NOT EXISTS public.property_id_number_seq;
+SELECT setval(
+  'public.property_id_number_seq',
+  GREATEST(
+    COALESCE((SELECT MAX(property_id_number::BIGINT) FROM public.properties WHERE property_id_number ~ '^\d+$'), 0),
+    99999
+  ),
+  true
+);
+
+CREATE OR REPLACE FUNCTION public.assign_property_id_number()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.property_id_number := nextval('public.property_id_number_seq')::TEXT;
+  ELSIF TG_OP = 'UPDATE' THEN
+    NEW.property_id_number := OLD.property_id_number;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_properties_assign_property_id_number ON public.properties;
+CREATE TRIGGER trg_properties_assign_property_id_number
+BEFORE INSERT OR UPDATE ON public.properties
+FOR EACH ROW
+EXECUTE FUNCTION public.assign_property_id_number();
+
+-- Resolve a public Property ID to the listing uuid (approved + active only). Callable by
+-- anonymous visitors; SECURITY DEFINER so no public SELECT policy on properties is needed.
+CREATE OR REPLACE FUNCTION public.find_public_property_id_by_number(p_number TEXT)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+DECLARE
+  v_number TEXT := btrim(COALESCE(p_number, ''));
+  v_id UUID;
+BEGIN
+  IF v_number !~ '^\d+$' THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT p.id
+  INTO v_id
+  FROM public.properties p
+  WHERE p.property_id_number = v_number
+    AND p.status = 'approved'
+    AND COALESCE(p.is_active, true) = true
+  LIMIT 1;
+
+  RETURN v_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.find_public_property_id_by_number(TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.find_public_property_id_by_number(TEXT) TO anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_user_orders_set_updated_at ON public.user_orders;
 CREATE TRIGGER trg_user_orders_set_updated_at

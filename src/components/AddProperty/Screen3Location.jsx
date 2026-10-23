@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
 import LocationPicker from './LocationPicker'
 import { FiMapPin, FiExternalLink } from 'react-icons/fi'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const Screen3Location = () => {
+  const { t } = useLanguage()
   const { formData, updateFormData, errors, clearErrors } =
     useAddProperty()
 
@@ -23,15 +25,15 @@ const Screen3Location = () => {
     <div className='space-y-4 md:space-y-6 pb-20 md:pb-24'>
       <div className='bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 md:p-6'>
         <h2 className='text-xl md:text-2xl font-bold text-gray-800 mb-2'>
-          Property Location
+          {t('addProperty.location.title')}
         </h2>
-        <p className='text-sm md:text-base text-gray-600'>Help tenants find your property easily.</p>
+        <p className='text-sm md:text-base text-gray-600'>{t('addProperty.location.subtitle')}</p>
       </div>
 
       {/* State/District */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-          State / District *
+          {t('addProperty.fields.stateDistrict')}
         </label>
         <input
           type='text'
@@ -42,7 +44,7 @@ const Screen3Location = () => {
               ? 'border-red-500 focus:ring-2 focus:ring-red-500'
               : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
           }`}
-          placeholder='e.g., Dhaka, Mumbai, New York'
+          placeholder={t('addProperty.placeholders.stateDistrict')}
         />
         {errors.state_district && (
           <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.state_district}</p>
@@ -52,7 +54,7 @@ const Screen3Location = () => {
       {/* Area */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-          Area *
+          {t('addProperty.fields.area')}
         </label>
         <input
           type='text'
@@ -63,7 +65,7 @@ const Screen3Location = () => {
               ? 'border-red-500 focus:ring-2 focus:ring-red-500'
               : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
           }`}
-          placeholder='e.g., Uttara, Kafrul, Chinatown'
+          placeholder={t('addProperty.placeholders.area')}
         />
         {errors.area && <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.area}</p>}
       </div>
@@ -71,7 +73,7 @@ const Screen3Location = () => {
       {/* Contact Number */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-          Contact Number *
+          {t('addProperty.fields.contactNumber')}
         </label>
         <div className='flex'>
           <span className='flex items-center px-3 md:px-4 py-2.5 md:py-3 bg-gray-100 border-2 border-r-0 border-gray-300 rounded-l-lg font-semibold text-sm md:text-base text-gray-700'>
@@ -88,21 +90,21 @@ const Screen3Location = () => {
                 ? 'border-red-500 focus:ring-2 focus:ring-red-500'
                 : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
             }`}
-            placeholder='1788888888'
+            placeholder={t('addProperty.placeholders.contactNumber')}
           />
         </div>
         {errors.contact_number && (
           <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.contact_number}</p>
         )}
         <p className='text-gray-500 text-xs mt-1'>
-          Format: +8801788888888 or 01788888888
+          {t('addProperty.fields.contactFormatHint')}
         </p>
       </div>
 
       {/* Short Description */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-          Short Description *
+          {t('addProperty.fields.shortDescription')}
         </label>
         <textarea
           value={formData.short_description}
@@ -113,13 +115,13 @@ const Screen3Location = () => {
               : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
           }`}
           rows='4'
-          placeholder='e.g., Fresh and clean house, newly renovated with modern amenities. Call me for further questions.'
+          placeholder={t('addProperty.placeholders.shortDescription')}
         />
         {errors.short_description && (
           <p className='text-red-500 text-xs md:text-sm mt-2'>{errors.short_description}</p>
         )}
         <p className='text-gray-500 text-xs mt-1'>
-          {formData.short_description.length} / 500 characters
+          {t('addProperty.fields.charCount', { count: formData.short_description.length, max: 500 })}
         </p>
       </div>
 
@@ -141,11 +143,11 @@ const Screen3Location = () => {
               clipRule='evenodd'
             />
           </svg>
-          {formData.lat && formData.lng ? 'UPDATE LOCATION ON MAP' : 'SET LOCATION ON MAP'}
+          {formData.lat && formData.lng ? t('addProperty.location.updateOnMap') : t('addProperty.location.setOnMap')}
         </button>
         {formData.lat && formData.lng && (
           <p className='text-green-600 text-xs md:text-sm mt-2 font-medium'>
-            ✓ Location set: ({formData.lat.toFixed(4)}, {formData.lng.toFixed(4)})
+            {t('addProperty.location.locationSet', { lat: formData.lat.toFixed(4), lng: formData.lng.toFixed(4) })}
           </p>
         )}
       </div>
@@ -156,7 +158,7 @@ const Screen3Location = () => {
           <div className='flex items-center justify-between mb-3'>
             <h3 className='text-base md:text-lg font-semibold text-gray-800 flex items-center gap-2'>
               <FiMapPin className='text-blue-600' />
-              Location Preview
+              {t('addProperty.location.preview')}
             </h3>
             <a
               href={`https://www.google.com/maps?q=${formData.lat},${formData.lng}`}
@@ -164,7 +166,7 @@ const Screen3Location = () => {
               rel='noopener noreferrer'
               className='text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1'
             >
-              Open in Google Maps
+              {t('addProperty.location.openInGoogleMaps')}
               <FiExternalLink size={14} />
             </a>
           </div>
@@ -173,7 +175,7 @@ const Screen3Location = () => {
           <div className='relative rounded-lg overflow-hidden border border-gray-200'>
             <iframe
               src={`https://www.openstreetmap.org/export/embed.html?bbox=${formData.lng - 0.01}%2C${formData.lat - 0.01}%2C${formData.lng + 0.01}%2C${formData.lat + 0.01}&layer=mapnik&marker=${formData.lat}%2C${formData.lng}`}
-              title='Property Location Preview'
+              title={t('addProperty.location.previewTitle')}
               className='w-full h-48 md:h-64'
               style={{ border: 0 }}
               allowFullScreen
@@ -186,16 +188,16 @@ const Screen3Location = () => {
           {formData.state_district || formData.area ? (
             <div className='mt-3 p-3 bg-gray-50 rounded-lg'>
               <p className='text-sm text-gray-700'>
-                <span className='font-medium'>Address:</span>{' '}
+                <span className='font-medium'>{t('addProperty.location.address')}</span>{' '}
                 {formData.area && <span className='text-blue-600'>{formData.area}</span>}
                 {formData.area && formData.state_district && <span>, </span>}
                 {formData.state_district && <span className='text-blue-600'>{formData.state_district}</span>}
               </p>
               {formData.sector && (
                 <p className='text-xs text-gray-600 mt-1'>
-                  Sector: {formData.sector}
-                  {formData.road && `, Road: ${formData.road}`}
-                  {formData.house_plot && `, House: ${formData.house_plot}`}
+                  {t('addProperty.location.sectorValue', { sector: formData.sector })}
+                  {formData.road && t('addProperty.location.roadValue', { road: formData.road })}
+                  {formData.house_plot && t('addProperty.location.houseValue', { house: formData.house_plot })}
                 </p>
               )}
             </div>
@@ -223,7 +225,7 @@ const Screen3Location = () => {
               clipRule='evenodd'
             />
           </svg>
-          Optional Details
+          {t('addProperty.fields.optionalDetails')}
         </button>
 
         {showOptional && (
@@ -231,14 +233,14 @@ const Screen3Location = () => {
             {/* Sector */}
             <div>
               <label className='block text-sm font-semibold text-gray-700 mb-1'>
-                Sector
+                {t('addProperty.fields.sector')}
               </label>
               <input
                 type='number'
                 value={formData.sector}
                 onChange={(e) => updateFormData({ sector: e.target.value })}
                 className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-                placeholder='e.g., 1, 2, 3'
+                placeholder={t('addProperty.placeholders.sector')}
                 min='1'
               />
             </div>
@@ -246,28 +248,28 @@ const Screen3Location = () => {
             {/* Road */}
             <div>
               <label className='block text-sm font-semibold text-gray-700 mb-1'>
-                Road
+                {t('addProperty.fields.road')}
               </label>
               <input
                 type='text'
                 value={formData.road}
                 onChange={(e) => updateFormData({ road: e.target.value })}
                 className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-                placeholder='e.g., Road 5'
+                placeholder={t('addProperty.placeholders.road')}
               />
             </div>
 
             {/* House/Plot */}
             <div>
               <label className='block text-sm font-semibold text-gray-700 mb-1'>
-                House / Plot Number
+                {t('addProperty.fields.housePlot')}
               </label>
               <input
                 type='text'
                 value={formData.house_plot}
                 onChange={(e) => updateFormData({ house_plot: e.target.value })}
                 className='w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-                placeholder='e.g., House 28/9/A'
+                placeholder={t('addProperty.placeholders.housePlot')}
               />
             </div>
           </div>
@@ -277,8 +279,7 @@ const Screen3Location = () => {
       {/* Info Box */}
       <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4'>
         <p className='text-xs md:text-sm text-blue-800'>
-          💡 <strong>Tip:</strong> Provide a detailed location so tenants can
-          easily find your property.
+          💡 <strong>{t('addProperty.tips.label')}</strong> {t('addProperty.location.tip')}
         </p>
       </div>
 

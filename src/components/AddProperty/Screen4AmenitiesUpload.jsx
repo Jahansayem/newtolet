@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
-import { validateScreen4 } from '../../utils/formValidation'
+import { validateScreen4Codes, localizeValidationErrors } from '../../utils/formValidation'
 import ImageUploader from './ImageUploader'
 import IDVerification from './IDVerification'
 import RentDisplay from '../RentDisplay'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const Screen4AmenitiesUpload = () => {
+  const { t, tv } = useLanguage()
   const { formData, updateFormData, errors, setFormErrors, clearErrors } =
     useAddProperty()
 
@@ -34,7 +36,7 @@ const Screen4AmenitiesUpload = () => {
 
   const handleNext = useCallback(() => {
     clearErrors()
-    const screenErrors = validateScreen4(formData)
+    const screenErrors = localizeValidationErrors(validateScreen4Codes(formData), t)
 
     if (Object.keys(screenErrors).length === 0) {
       // This is the final screen, so we don't call nextStep()
@@ -45,7 +47,7 @@ const Screen4AmenitiesUpload = () => {
       setFormErrors(screenErrors)
       return false
     }
-  }, [clearErrors, formData, setFormErrors])
+  }, [clearErrors, formData, setFormErrors, t])
 
   useEffect(() => {
     clearErrors()
@@ -63,16 +65,16 @@ const Screen4AmenitiesUpload = () => {
     <div className='space-y-4 md:space-y-8 pb-20 md:pb-24'>
       <div className='bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-4 md:p-6'>
         <h2 className='text-xl md:text-2xl font-bold text-gray-800 mb-2'>
-          Amenities & Upload
+          {t('addProperty.sections.amenitiesUpload')}
         </h2>
         <p className='text-sm md:text-base text-gray-600'>
-          Complete your listing with photos and amenity details.
+          {t('addProperty.sections.amenitiesUploadSubtitle')}
         </p>
       </div>
 
       {/* Amenities Section */}
       <div>
-        <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>Amenities</h3>
+        <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>{t('addProperty.sections.amenities')}</h3>
         <div className='grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3'>
           {amenitiesList.map((amenity) => (
             <label
@@ -85,14 +87,14 @@ const Screen4AmenitiesUpload = () => {
                 onChange={() => handleAmenityToggle(amenity)}
                 className='w-4 h-4 md:w-5 md:h-5 text-blue-600 rounded cursor-pointer'
               />
-              <span className='ml-2 font-medium text-xs md:text-sm text-gray-800'>{amenity}</span>
+              <span className='ml-2 font-medium text-xs md:text-sm text-gray-800'>{tv('amenities', amenity)}</span>
             </label>
           ))}
         </div>
         {formData.amenities.length > 0 && (
           <div className='mt-2 md:mt-3 p-2.5 md:p-3 bg-blue-50 rounded-lg'>
             <p className='text-xs md:text-sm text-blue-800'>
-              <strong>Selected:</strong> {formData.amenities.join(', ')}
+              <strong>{t('addProperty.amenities.selected')}</strong> {formData.amenities.map((a) => tv('amenities', a)).join(', ')}
             </p>
           </div>
         )}
@@ -100,12 +102,12 @@ const Screen4AmenitiesUpload = () => {
 
       {/* Availability Dates */}
       <div>
-        <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>Availability</h3>
+        <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>{t('addProperty.sections.availability')}</h3>
         <div className='grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4'>
           {/* Available From */}
           <div>
             <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-2'>
-              Available From *
+              {t('addProperty.fields.availableFrom')}
             </label>
             <input
               type='date'
@@ -129,7 +131,7 @@ const Screen4AmenitiesUpload = () => {
           {/* Deadline */}
           <div>
             <label className='block text-xs md:text-sm font-semibold text-gray-700 mb-2'>
-              Deadline *
+              {t('addProperty.fields.deadline')}
             </label>
             <input
               type='date'
@@ -151,7 +153,7 @@ const Screen4AmenitiesUpload = () => {
       {/* Image Upload Section */}
       <div>
         <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-          Property Photos
+          {t('addProperty.sections.propertyPhotos')}
         </h3>
         <ImageUploader
           images={formData.images}
@@ -163,7 +165,7 @@ const Screen4AmenitiesUpload = () => {
       {/* ID Verification Section */}
       <div>
         <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-          Identity Verification
+          {t('addProperty.sections.identityVerification')}
         </h3>
         <IDVerification
           idType={formData.id_type}
@@ -179,44 +181,44 @@ const Screen4AmenitiesUpload = () => {
 
       {/* Summary */}
       <div className='bg-gradient-to-r from-blue-50 to-primary-50 border border-blue-200 rounded-lg p-4 md:p-6 space-y-2 md:space-y-3'>
-        <h4 className='font-bold text-gray-800 text-base md:text-lg'>📋 Submission Summary</h4>
+        <h4 className='font-bold text-gray-800 text-base md:text-lg'>{t('addProperty.summary.title')}</h4>
 
         <div className='space-y-1.5 md:space-y-2 text-xs md:text-sm text-gray-700'>
           <p>
-            <strong>Category:</strong> {formData.category}
+            <strong>{t('addProperty.summary.category')}</strong> {tv('categories', formData.category)}
           </p>
           <p>
-            <strong>Property Type:</strong> {formData.property_type}
+            <strong>{t('addProperty.summary.propertyType')}</strong> {tv('propertyTypes', formData.property_type)}
           </p>
           <p>
-            <strong>Price:</strong>{' '}
+            <strong>{t('addProperty.summary.price')}</strong>{' '}
             <RentDisplay
               pricing={{
                 rent_amount_bdt: formData.rent_amount_bdt,
                 is_rent_negotiable: formData.is_rent_negotiable,
               }}
               prefix='৳ '
-              suffix={!formData.is_rent_negotiable || formData.rent_amount_bdt ? `per ${formData.rent_period}` : ''}
+              suffix={!formData.is_rent_negotiable || formData.rent_amount_bdt ? t('addProperty.pricing.perPeriod', { period: tv('rentPeriods', formData.rent_period) }) : ''}
             />
           </p>
           <p>
-            <strong>Location:</strong> {formData.area}, {formData.state_district}
+            <strong>{t('addProperty.summary.location')}</strong> {formData.area}, {formData.state_district}
           </p>
           <p>
-            <strong>Images:</strong> {formData.images.length} / 10
+            <strong>{t('addProperty.summary.images')}</strong> {t('addProperty.summary.imagesOutOf', { count: formData.images.length, max: 10 })}
           </p>
           <p>
-            <strong>Amenities:</strong>{' '}
+            <strong>{t('addProperty.summary.amenities')}</strong>{' '}
             {formData.amenities.length > 0
-              ? formData.amenities.join(', ')
-              : 'None selected'}
+              ? formData.amenities.map((a) => tv('amenities', a)).join(', ')
+              : t('addProperty.amenities.noneSelected')}
           </p>
         </div>
 
         <div className='bg-amber-50 border border-amber-200 rounded p-2.5 md:p-3 mt-3 md:mt-4'>
           <p className='text-xs md:text-sm text-amber-800'>
-            <strong>⚠️ Cost:</strong> This listing will cost you{' '}
-            <strong>20 credits</strong> to submit.
+            <strong>{t('addProperty.summary.costLabel')}</strong> {t('addProperty.summary.costPrefix')}{' '}
+            <strong>{t('addProperty.summary.costCredits')}</strong> {t('addProperty.summary.costSuffix')}
           </p>
         </div>
       </div>
@@ -225,13 +227,13 @@ const Screen4AmenitiesUpload = () => {
       <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
         <div className='text-xs md:text-sm text-green-800 space-y-1.5 md:space-y-2'>
           <div>
-            ✅ All required information has been filled in!
+            {t('addProperty.summary.allFilled')}
           </div>
           <div>
-            🎯 Click Submit to complete your property listing.
+            {t('addProperty.summary.clickSubmit')}
           </div>
           <div>
-            📝 Your listing will be reviewed by our admin team.
+            {t('addProperty.summary.adminReview')}
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   getAdminContactUnlockRefundRequests,
   reviewContactUnlockRefundRequest,
 } from '../../services/adminService'
+import { getPropertyDisplayLabel } from '../../utils/propertyDisplaySerial'
 
 const STATUS_STYLES = {
   requested: 'bg-yellow-100 text-yellow-800',
@@ -164,7 +165,7 @@ const ContactUnlockRefundReview = () => {
                       {request.property?.category || 'Property'}
                     </p>
                     <p className="text-sm text-slate-500">
-                      Property ID: {request.property?.property_id_number || request.property_id}
+                      {getPropertyDisplayLabel(request.property)}
                     </p>
                     <p className="text-sm text-slate-500">
                       {[request.property?.area, request.property?.state_district].filter(Boolean).join(', ')}
@@ -199,7 +200,7 @@ const ContactUnlockRefundReview = () => {
                   <div className="w-full max-w-md space-y-3">
                     <Link
                       to={buildListDetailsHref(request.property?.id || request.property_id)}
-                      className="inline-flex w-full items-center justify-center rounded-2xl bg-[#1E73B8] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#17639f]"
+                      className="inline-flex w-full items-center justify-center rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
                     >
                       Open Property
                     </Link>
@@ -214,7 +215,7 @@ const ContactUnlockRefundReview = () => {
                       }
                       rows={3}
                       placeholder="Admin note"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
                     />
 
                     <div className="flex flex-wrap gap-3">

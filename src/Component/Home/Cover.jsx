@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Pagination, Autoplay } from 'swiper/modules';
+import { FiChevronLeft, FiChevronRight, FiPause, FiPlay } from 'react-icons/fi';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import { getActiveCoverPhotos, getActiveCoverPhotosCacheKey } from '../../services/coverPhotoService';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
+import { useLanguage } from '../../i18n/useLanguage';
 import './Cover.css';
 
 const COVER_PHOTO_LIMIT = 6;
+const FRAME_CLASS = 'h-[200px] w-full md:h-[300px] xl:h-[340px]';
 
 const mapSlides = (photos = []) =>
     photos
@@ -20,6 +22,7 @@ const mapSlides = (photos = []) =>
         }));
 
 const Cover = () => {
+    const { t } = useLanguage();
     const {
         snapshot: cachedSlides,
         hasSnapshot: hasCachedSlides,
@@ -27,6 +30,23 @@ const Cover = () => {
     } = useHydratedSnapshot(getActiveCoverPhotosCacheKey(COVER_PHOTO_LIMIT));
     const [slides, setSlides] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [reduceMotion, setReduceMotion] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
+    const swiperRef = useRef(null);
+
+    // Respect the OS "reduce motion" preference: no autoplay, no slide animation.
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return undefined;
+        }
+
+        const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+        const sync = () => setReduceMotion(query.matches);
+        sync();
+        query.addEventListener('change', sync);
+
+        return () => query.removeEventListener('change', sync);
+    }, []);
     const isMounted = useRef(true);
     const requestIdRef = useRef(0);
 
@@ -86,77 +106,105 @@ const Cover = () => {
         fetchCoverPhotos();
     }, [hasCachedSlides, isHydrated]);
 
-    // Show loading state
+    const togglePlayback = () => {
+        const swiper = swiperRef.current;
+        if (!swiper?.autoplay) {
+            return;
+        }
+
+        if (isPaused) {
+            swiper.autoplay.start();
+        } else {
+            swiper.autoplay.stop();
+        }
+        setIsPaused((current) => !current);
+    };
+
     if (loading) {
         return (
-            <div className='w-full animate-fade-in-up'>
-                <div className="site-card-strong flex h-[180px] w-full items-center justify-center overflow-hidden rounded-[5px] bg-gray-200 md:h-[350px] xl:h-[400px]">
-                    <div className="text-gray-500 text-sm md:text-base">Loading cover photos...</div>
-                </div>
-            </div>
+            <div
+                role='status'
+                aria-label={t('home.cover.loading')}
+                className={`${FRAME_CLASS} animate-pulse rounded-2xl bg-slate-200`}
+            />
         );
     }
 
-    // Show message if no admin photos exist
+    // No admin cover photos: the hero already carries the message, so nothing else is rendered.
     if (slides.length === 0) {
-        return (
-            <div className='w-full animate-fade-in-up'>
-                <div className="site-card-strong relative flex h-[180px] w-full items-end overflow-hidden rounded-none bg-gradient-to-r from-[#1E73B8] to-[#1665a0] px-5 py-6 shadow-lg sm:px-8 sm:py-8 md:h-[350px] xl:h-[400px]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_30%),linear-gradient(135deg,rgba(30,115,184,0.98),rgba(11,37,64,0.92))]" />
-                    <div className="relative max-w-2xl text-white">
-                        <h2 className="text-2xl font-bold leading-tight sm:text-3xl md:text-5xl">Welcome to NewTolet.Com</h2>
-                        <Link to="/propertylist2" className="site-button-primary mt-5">
-                            Browse Properties
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        );
+        return null;
     }
+
+    const autoplayEnabled = !reduceMotion && slides.length > 1;
 
     return (
-        <div className='w-full animate-fade-in-up'>
-            <div className="relative mx-auto w-full">
-                <Swiper
-                    modules={[Navigation, Pagination, Autoplay]}
-                    navigation={{
-                        nextEl: '.swiper-button-next-custom',
-                        prevEl: '.swiper-button-prev-custom',
-                        hiddenClass: 'hidden'
-                    }}
-                    pagination={{
-                        clickable: true,
-                        dynamicBullets: true,
-                        dynamicMainBullets: 3
-                    }}
-                    autoplay={{ delay: 5000, disableOnInteraction: false }}
-                    loop
-                    className="site-card-strong relative h-[180px] w-full overflow-hidden rounded-[5px] bg-slate-100 shadow-lg group md:h-[350px] xl:h-[400px]"
-                >
-                    {slides.map((slide, index) => {
-                        return (
-                        <SwiperSlide key={slide.id}>
-                            <div className="relative h-full w-full bg-slate-100">
-                                <img
-                                    src={slide.image}
-                                    alt="Cover photo"
-                                    className="relative z-[1] h-full w-full object-cover"
-                                    loading={index === 0 ? 'eager' : 'lazy'}
-                                    fetchPriority={index === 0 ? 'high' : 'auto'}
-                                    decoding="async"
-                                    draggable={false}
-                                />
+        <div className='relative w-full'>
+            <Swiper
+                modules={[Navigation, Pagination, Autoplay]}
+                onSwiper={(instance) => {
+                    swiperRef.current = instance;
+                }}
+                navigation={{
+                    nextEl: '.swiper-button-next-custom',
+                    prevEl: '.swiper-button-prev-custom',
+                    hiddenClass: 'hidden'
+                }}
+                pagination={{
+                    clickable: true,
+                    dynamicBullets: true,
+                    dynamicMainBullets: 3
+                }}
+                autoplay={autoplayEnabled ? { delay: 5000, disableOnInteraction: false, pauseOnMouseEnter: true } : false}
+                speed={reduceMotion ? 0 : 300}
+                loop={slides.length > 1}
+                className={`cover-swiper relative ${FRAME_CLASS} overflow-hidden rounded-2xl border border-line bg-slate-100 shadow-card group`}
+            >
+                {slides.map((slide, index) => (
+                    <SwiperSlide key={slide.id}>
+                        <div className='relative h-full w-full bg-slate-100'>
+                            <img
+                                src={slide.image}
+                                alt={`${t('home.cover.photoAlt')} ${index + 1}`}
+                                className='relative z-[1] h-full w-full object-cover'
+                                loading={index === 0 ? 'eager' : 'lazy'}
+                                fetchPriority={index === 0 ? 'high' : 'auto'}
+                                decoding='async'
+                                draggable={false}
+                            />
+                        </div>
+                    </SwiperSlide>
+                ))}
+            </Swiper>
 
-                                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/72 via-slate-950/28 to-transparent"></div>
-                            </div>
-                        </SwiperSlide>
-                    )})}
-                </Swiper>
-
-                {/* Custom Navigation Buttons - Hidden on Mobile */}
-                <div className="swiper-button-prev-custom absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-gray-800 shadow-lg transition-all duration-300 hover:scale-105 hover:bg-white after:content-['<'] after:text-lg after:font-bold md:left-4 md:flex md:h-11 md:w-11"></div>
-                <div className="swiper-button-next-custom absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/88 text-gray-800 shadow-lg transition-all duration-300 hover:scale-105 hover:bg-white after:content-['>'] after:text-lg after:font-bold md:right-4 md:flex md:h-11 md:w-11"></div>
-            </div>
+            {slides.length > 1 ? (
+                <>
+                    <button
+                        type='button'
+                        aria-label={t('home.cover.previousSlide')}
+                        className='swiper-button-prev-custom ui-btn ui-btn-icon absolute left-3 top-1/2 z-10 hidden -translate-y-1/2 bg-white/90 text-ink shadow-raised hover:bg-white md:inline-flex'
+                    >
+                        <FiChevronLeft className='text-xl' aria-hidden='true' />
+                    </button>
+                    <button
+                        type='button'
+                        aria-label={t('home.cover.nextSlide')}
+                        className='swiper-button-next-custom ui-btn ui-btn-icon absolute right-3 top-1/2 z-10 hidden -translate-y-1/2 bg-white/90 text-ink shadow-raised hover:bg-white md:inline-flex'
+                    >
+                        <FiChevronRight className='text-xl' aria-hidden='true' />
+                    </button>
+                    {autoplayEnabled ? (
+                        <button
+                            type='button'
+                            onClick={togglePlayback}
+                            aria-pressed={isPaused}
+                            aria-label={isPaused ? t('home.cover.play') : t('home.cover.pause')}
+                            className='ui-btn ui-btn-icon absolute bottom-3 right-3 z-10 bg-ink/70 text-white hover:bg-ink'
+                        >
+                            {isPaused ? <FiPlay className='text-base' aria-hidden='true' /> : <FiPause className='text-base' aria-hidden='true' />}
+                        </button>
+                    ) : null}
+                </>
+            ) : null}
         </div>
     );
 };

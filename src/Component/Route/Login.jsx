@@ -1,25 +1,19 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { loginUser } from '../../services/authService';
+import { loginUser, signInWithGoogle } from '../../services/authService';
 import { buildDashboardHref, buildPageHref, canonicalizeInternalHref } from '../../lib/routePaths.js';
 import { useAuth } from '../../hooks/useAuth';
+import { FcGoogle } from 'react-icons/fc';
+import { useLanguage } from '../../i18n/useLanguage';
+import LanguageToggle from '../../components/LanguageToggle.jsx';
+import PasswordInput from './PasswordInput.jsx';
 import './Login.css';
 
 const AUTH_ROUTE_PREFIXES = ['/login', '/registration', '/forgot-password', '/reset-password'];
 
-const resolveRedirectTarget = (locationState) => {
+const normalizeRedirectTarget = (rawTarget) => {
     const fallbackHref = buildDashboardHref();
-    const from = locationState?.from;
-
-    if (!from) {
-        return fallbackHref;
-    }
-
-    const rawTarget =
-        typeof from === 'string'
-            ? from
-            : from.href || `${from.pathname || ''}${from.search || ''}${from.hash || ''}`;
 
     if (!rawTarget) {
         return fallbackHref;
@@ -38,16 +32,61 @@ const resolveRedirectTarget = (locationState) => {
     return targetHref;
 };
 
+const resolveRedirectTarget = (locationState, locationSearch = '') => {
+    const fallbackHref = buildDashboardHref();
+    const params = new URLSearchParams(locationSearch);
+    const nextTarget = params.get('next');
+
+    if (nextTarget) {
+        return normalizeRedirectTarget(nextTarget);
+    }
+
+    const from = locationState?.from;
+
+    if (!from) {
+        return fallbackHref;
+    }
+
+    const rawTarget =
+        typeof from === 'string'
+            ? from
+            : from.href || `${from.pathname || ''}${from.search || ''}${from.hash || ''}`;
+
+    return normalizeRedirectTarget(rawTarget);
+};
+
+const getOAuthErrorMessage = (locationSearch = '', locationHash = '', t) => {
+    const params = new URLSearchParams(locationSearch);
+    const hashParams = new URLSearchParams(locationHash.replace(/^#/, ''));
+    const error = params.get('error') || hashParams.get('error');
+    const description = params.get('error_description') || hashParams.get('error_description');
+
+    if (!error && !description) {
+        return '';
+    }
+
+    if (description?.toLowerCase().includes('already') || description?.toLowerCase().includes('identity')) {
+        return t('auth.google.linkFailed');
+    }
+
+    return description || t('auth.google.signInFailed');
+};
+
 const Login = () => {
+    const { t } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
     const { isAuthenticated, isLoading: isAuthLoading, handleLogin } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [allowRenderWhileAuthPending, setAllowRenderWhileAuthPending] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
     const [hasAttemptedLogin, setHasAttemptedLogin] = useState(false);
-    const redirectTarget = useMemo(() => resolveRedirectTarget(location.state), [location.state]);
+    const redirectTarget = useMemo(
+        () => resolveRedirectTarget(location.state, location.search),
+        [location.state, location.search]
+    );
     const isMountedRef = useRef(true);
     const hasNavigatedRef = useRef(false);
 
@@ -56,12 +95,20 @@ const Login = () => {
         if (typeof window === 'undefined') return;
 
         const params = new URLSearchParams(location.search);
+        const oauthError = getOAuthErrorMessage(location.search, location.hash, t);
+
+        if (oauthError) {
+            setErrorMessage(oauthError);
+            window.history.replaceState({}, '', buildPageHref('login'));
+            return;
+        }
+
         if (params.get('reset') === 'success') {
-            setSuccessMessage('Password reset successful! Please login with your new password.');
+            setSuccessMessage(t('auth.login.resetSuccess'));
             // Clear the URL parameter
             window.history.replaceState({}, '', buildPageHref('login'));
         }
-    }, [location.search]);
+    }, [location.search, location.hash, t]);
 
     // Only navigate after a successful login attempt, not during initial auth check
     useEffect(() => {
@@ -133,7 +180,7 @@ const Login = () => {
                 setHasAttemptedLogin(false);
             }
         } catch (error) {
-            setErrorMessage('Login failed. Please try again.');
+            setErrorMessage(t('auth.login.failed'));
             console.error('Login error:', error);
             setHasAttemptedLogin(false);
         } finally {
@@ -141,10 +188,29 @@ const Login = () => {
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        setIsGoogleLoading(true);
+        setErrorMessage('');
+        setSuccessMessage('');
+
+        const redirectUrl = new URL(buildPageHref('login'), window.location.origin);
+        redirectUrl.searchParams.set('oauth', 'google');
+        redirectUrl.searchParams.set('next', redirectTarget);
+
+        const result = await signInWithGoogle({
+            redirectTo: redirectUrl.toString(),
+        });
+
+        if (!result.success && isMountedRef.current) {
+            setErrorMessage(result.error);
+            setIsGoogleLoading(false);
+        }
+    };
+
     if ((isAuthLoading && !allowRenderWhileAuthPending) || isAuthenticated) {
         return (
             <div className='auth-shell min-h-screen justify-center'>
-                <span className='loading loading-spinner loading-xl text-[#1E73B8]'></span>
+                <span className='loading loading-spinner loading-xl text-brand'></span>
             </div>
         );
     }
@@ -172,77 +238,103 @@ const Login = () => {
             </div>
 
             {/* Geometric Shapes */}
-            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-[#1E73B8] opacity-20 rotate-45 animate-spin-slow'></div>
-            <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
+            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-brand opacity-20 rotate-45 animate-spin-slow'></div>
+            <div className='absolute bottom-32 left-16 w-16 h-16 bg-brand opacity-10 rounded-full animate-pulse-slow'></div>
             <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
             <form onSubmit={handleSubmit(onSubmit)} className='auth-form-shell'>
                 <div className='auth-card login-card-border text-sm'>
-                <p className='auth-title'>Login Here</p>
-                <p className='auth-subtitle'>Access saved listings, your dashboard, and property activity in one place.</p>
+                <div className='flex w-full justify-end'>
+                    <LanguageToggle size='sm' />
+                </div>
+                <h1 className='auth-title'>{t('auth.login.title')}</h1>
+                <p className='auth-subtitle'>{t('auth.login.subtitle')}</p>
 
                 {successMessage && (
-                    <div className='auth-message auth-message-success'>
+                    <div role='status' className='auth-message auth-message-success'>
                         {successMessage}
                     </div>
                 )}
 
                 {errorMessage && (
-                    <div className='auth-message auth-message-error'>
+                    <div role='alert' className='auth-message auth-message-error'>
                         {errorMessage}
                     </div>
                 )}
 
                 <div className='w-full'>
-                    <p className='auth-label'>Email</p>
+                    <label htmlFor='login-email' className='auth-label'>{t('auth.fields.email')}</label>
                     <input
+                        id='login-email'
                         type="email"
-                        placeholder='Email'
+                        autoComplete='email'
+                        aria-invalid={errors.email ? 'true' : undefined}
+                        aria-describedby={errors.email ? 'login-email-error' : undefined}
+                        placeholder={t('auth.placeholders.email')}
                         {...register("email", {
-                            required: "Email is required",
+                            required: t('auth.validation.emailRequired'),
                             pattern: {
                                 value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                message: "Invalid email address"
+                                message: t('auth.validation.emailInvalid')
                             }
                         })}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.email && <p className='text-red-700 text-xs'>{errors.email.message}</p>}
+                    {errors.email && <p id='login-email-error' role='alert' className='text-red-700 text-xs'>{errors.email.message}</p>}
                 </div>
 
                 <div className='w-full'>
-                    <p className='auth-label'>Password</p>
-                    <input
-                        type="password"
-                        placeholder='Password'
+                    <label htmlFor='login-password' className='auth-label'>{t('auth.fields.password')}</label>
+                    <PasswordInput
+                        id='login-password'
+                        autoComplete='current-password'
+                        aria-invalid={errors.password ? 'true' : undefined}
+                        aria-describedby={errors.password ? 'login-password-error' : undefined}
+                        placeholder={t('auth.placeholders.password')}
                         {...register("password", {
-                            required: "Password is required",
+                            required: t('auth.validation.passwordRequired'),
                             minLength: {
                                 value: 6,
-                                message: "Password must be at least 6 characters"
+                                message: t('auth.validation.passwordMin')
                             }
                         })}
                         className='auth-input my-2'
-                        disabled={isLoading}
+                        disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.password && <p className='text-red-700 text-xs'>{errors.password.message}</p>}
+                    {errors.password && <p id='login-password-error' role='alert' className='text-red-700 text-xs'>{errors.password.message}</p>}
                 </div>
 
                 <button
                     type="submit"
                     className='auth-submit disabled:cursor-not-allowed disabled:opacity-50'
-                    disabled={isLoading}
+                    disabled={isLoading || isGoogleLoading}
                 >
-                    {isLoading ? "Logging in..." : "Login"}
+                    {isLoading ? t('auth.login.submitting') : t('auth.login.submit')}
+                </button>
+
+                <div className='auth-divider' aria-hidden='true'>
+                    <span></span>
+                    <p>{t('auth.or')}</p>
+                    <span></span>
+                </div>
+
+                <button
+                    type='button'
+                    className='auth-google-button'
+                    onClick={handleGoogleSignIn}
+                    disabled={isLoading || isGoogleLoading}
+                >
+                    <FcGoogle className='auth-google-icon' aria-hidden='true' />
+                    <span>{isGoogleLoading ? t('auth.google.connecting') : t('auth.google.continue')}</span>
                 </button>
 
                 <div className='w-full space-y-2 pt-2 text-center'>
                     <p>
-                        Create a new account? <Link to='/registration' className='text-[#1E73B8] font-medium cursor-pointer hover:underline'>Register here</Link>
+                        {t('auth.login.noAccount')} <Link to='/registration' className='text-brand font-medium cursor-pointer hover:underline'>{t('auth.login.registerHere')}</Link>
                     </p>
                     <p className='pt-1'>
-                        <Link to='/forgot-password' className='text-[#1E73B8] font-semibold cursor-pointer hover:underline text-sm inline-block border-b border-transparent hover:border-[#1E73B8] pb-0.5 transition-all'>Forgot password?</Link>
+                        <Link to='/forgot-password' className='text-brand font-semibold cursor-pointer hover:underline text-sm inline-block border-b border-transparent hover:border-brand pb-0.5 transition-all'>{t('auth.login.forgotPassword')}</Link>
                     </p>
                 </div>
             </div>

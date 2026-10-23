@@ -1,5 +1,21 @@
 import './globals.css'
 import Providers from './providers'
+import Script from 'next/script'
+import { Hind_Siliguri, Poppins } from 'next/font/google'
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-poppins',
+})
+
+const hindSiliguri = Hind_Siliguri({
+  subsets: ['bengali', 'latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-hind-siliguri',
+})
 
 export const metadata = {
   title: 'NewTolet.Com - Find Rental Properties in Bangladesh',
@@ -31,6 +47,7 @@ export const metadata = {
       },
     ],
     locale: 'en_US',
+    alternateLocale: ['bn_BD'],
     type: 'website',
   },
   twitter: {
@@ -55,8 +72,60 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning className={`${poppins.variable} ${hindSiliguri.variable}`}>
+      <head>
+        <Script id="remove-extension-hydration-attrs" strategy="beforeInteractive">
+          {`
+            (function () {
+              try {
+                if (localStorage.getItem('appLanguage') === 'bn') {
+                  document.documentElement.lang = 'bn';
+                }
+              } catch (e) {}
+
+              var extensionAttributePattern = /^(bis_|__processed_)/;
+
+              function removeExtensionAttributes(root) {
+                if (!root || !root.querySelectorAll) return;
+                var nodes = root.querySelectorAll('*');
+
+                for (var index = 0; index < nodes.length; index += 1) {
+                  var node = nodes[index];
+                  var attributes = Array.prototype.slice.call(node.attributes || []);
+
+                  for (var attrIndex = 0; attrIndex < attributes.length; attrIndex += 1) {
+                    var name = attributes[attrIndex].name;
+                    if (extensionAttributePattern.test(name)) {
+                      node.removeAttribute(name);
+                    }
+                  }
+                }
+              }
+
+              removeExtensionAttributes(document);
+
+              new MutationObserver(function (mutations) {
+                for (var index = 0; index < mutations.length; index += 1) {
+                  var mutation = mutations[index];
+
+                  if (mutation.type === 'attributes' && extensionAttributePattern.test(mutation.attributeName)) {
+                    mutation.target.removeAttribute(mutation.attributeName);
+                  }
+
+                  for (var nodeIndex = 0; nodeIndex < mutation.addedNodes.length; nodeIndex += 1) {
+                    removeExtensionAttributes(mutation.addedNodes[nodeIndex]);
+                  }
+                }
+              }).observe(document.documentElement, {
+                attributes: true,
+                childList: true,
+                subtree: true
+              });
+            })();
+          `}
+        </Script>
+      </head>
+      <body suppressHydrationWarning>
         <Providers>{children}</Providers>
       </body>
     </html>

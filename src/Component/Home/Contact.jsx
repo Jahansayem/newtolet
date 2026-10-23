@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { supabase } from '../../services/supabaseClient';
+import React, { useId, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { submitFeedback } from '../../services/feedbackService';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const Contact = () => {
+    const { t } = useLanguage();
     const { user } = useAuth();
+    const idPrefix = useId();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -27,99 +30,103 @@ const Contact = () => {
         setErrorMessage('');
 
         try {
-            // Submit feedback to Supabase
-            const { error } = await supabase
-                .from('feedback')
-                .insert([{
-                    name: formData.name,
-                    email: formData.email,
-                    feedback: formData.message,
-                    user_id: user?.id || null,
-                    status: 'pending', // Default to pending for admin approval
-                    is_resolved: false
-                }])
-                .select();
+            const { error } = await submitFeedback({
+                userId: user?.id || null,
+                name: formData.name,
+                email: formData.email,
+                feedback: formData.message,
+            });
 
             if (error) throw error;
 
-            setSuccessMessage('Thank you for your feedback! It will be reviewed by our team.');
+            setSuccessMessage(t('home.contact.success'));
             setFormData({ name: '', email: '', message: '' });
-
-            setTimeout(() => setSuccessMessage(''), 5000);
         } catch (error) {
             console.error('Error submitting feedback:', error);
-            setErrorMessage('Failed to submit feedback. Please try again.');
-            setTimeout(() => setErrorMessage(''), 5000);
+            setErrorMessage(t('home.contact.error'));
         } finally {
             setLoading(false);
         }
     };
 
+    const fieldId = (name) => `${idPrefix}-${name}`;
+
     return (
-        <div>
-             <div className=' flex flex-col justify-center max-w-[480px] mx-auto mt-10 mb-10'>
-                <div className='text-center space-y-2 '>
-                    <h2 className='text-3xl font-medium uppercase'>Contact</h2>
-                    <p>You have contact any time.</p>
-                </div>
+        <div className='site-shell-narrow py-10 md:py-14'>
+            <div className='text-center'>
+                <h1 className='text-3xl font-bold leading-tight text-ink md:text-[32px]'>{t('home.contact.title')}</h1>
+                <p className='mx-auto mt-2 max-w-md text-body text-muted'>{t('home.contact.subtitle')}</p>
             </div>
 
-            {/* Success Message */}
-            {successMessage && (
-                <div className='max-w-2xl mx-auto mb-4 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg'>
-                    {successMessage}
-                </div>
-            )}
+            <form onSubmit={handleSubmit} className='ui-card mt-8 space-y-5 p-5 sm:p-6' noValidate={false}>
+                {successMessage && (
+                    <p role='status' className='ui-note ui-note-success'>
+                        {successMessage}
+                    </p>
+                )}
 
-            {/* Error Message */}
-            {errorMessage && (
-                <div className='max-w-2xl mx-auto mb-4 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg'>
-                    {errorMessage}
-                </div>
-            )}
+                {errorMessage && (
+                    <p role='alert' className='ui-note ui-note-danger text-danger'>
+                        {errorMessage}
+                    </p>
+                )}
 
-            <form onSubmit={handleSubmit} className='max-w-2xl mx-auto text-gray-600 pt-8'>
-                <div className='flex flex-wrap'>
-                    <div className='w-full md:w-1/2 text-left'>Your Name
+                <div className='grid gap-5 md:grid-cols-2'>
+                    <div>
+                        <label htmlFor={fieldId('name')} className='ui-label'>
+                            {t('home.contact.name')}<span className='ui-required' aria-hidden='true'>*</span>
+                        </label>
                         <input
-                            className='w-full border border-gray-300 rounded py-3 px-4 mt-2'
+                            id={fieldId('name')}
+                            className='ui-field'
                             name='name'
-                            type="text"
-                            placeholder='Your Name'
+                            type='text'
+                            autoComplete='name'
+                            placeholder={t('home.contact.name')}
                             value={formData.name}
                             onChange={handleChange}
                             required
                         />
                     </div>
-                    <div className='w-full md:w-1/2 text-left md:pl-4'>Your Email
+                    <div>
+                        <label htmlFor={fieldId('email')} className='ui-label'>
+                            {t('home.contact.email')}<span className='ui-required' aria-hidden='true'>*</span>
+                        </label>
                         <input
-                            className='w-full border border-gray-300 rounded py-3 px-4 mt-2'
+                            id={fieldId('email')}
+                            className='ui-field'
                             name='email'
-                            type="email"
-                            placeholder='Your Email'
+                            type='email'
+                            autoComplete='email'
+                            placeholder={t('home.contact.email')}
                             value={formData.email}
                             onChange={handleChange}
                             required
                         />
                     </div>
                 </div>
-                <div className='my-6 text-left'>
-                    Message
+
+                <div>
+                    <label htmlFor={fieldId('message')} className='ui-label'>
+                        {t('home.contact.message')}<span className='ui-required' aria-hidden='true'>*</span>
+                    </label>
                     <textarea
-                        className='w-full border border-gray-300 rounded py-3 px-4 mt-2 h-48 resize-none'
+                        id={fieldId('message')}
+                        className='ui-field min-h-40'
                         name='message'
-                        placeholder='Message'
+                        placeholder={t('home.contact.message')}
                         value={formData.message}
                         onChange={handleChange}
                         required
-                    ></textarea>
+                    />
                 </div>
+
                 <button
                     type='submit'
                     disabled={loading}
-                    className='bg-blue-600 w-full text-white py-2 px-12 mb-10 rounded hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed'
+                    className='ui-btn ui-btn-primary w-full sm:w-auto'
                 >
-                    {loading ? 'Sending...' : 'Send Message'}
+                    {loading ? t('home.contact.sending') : t('home.contact.send')}
                 </button>
             </form>
         </div>

@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { isRecoverableSupabaseError, supabase } from './supabaseClient'
 import {
   buildUserPanelCacheKey,
   invalidateUserPanelCache,
@@ -24,6 +24,7 @@ import {
   getSearchablePropertiesCacheKey,
   invalidatePropertyCatalogSnapshots,
 } from './propertyCatalogService'
+import { isPropertyActivelyPinned } from '../utils/propertyPinning'
 import { getAutoApproveProperties } from './adminService'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
@@ -231,6 +232,105 @@ const maskProtectedPropertyFields = (property, shouldRevealProtectedFields) => (
   protected_contact_unlocked: shouldRevealProtectedFields,
 })
 
+const normalizeCachedPublicPropertyDetail = (property) => {
+  if (!property?.id) {
+    return null
+  }
+
+  const normalizedImages = getNormalizedImages(property.images || [])
+  const normalizedPrimaryImage = normalizePropertyImageUrl(property.primary_image)
+  const images = normalizedImages.length
+    ? normalizedImages
+    : normalizedPrimaryImage
+      ? [normalizedPrimaryImage]
+      : []
+
+  return {
+    ...property,
+    protected_contact_unlocked: Boolean(property.protected_contact_unlocked),
+    specifications: property.specifications || {
+      total_rooms: property.total_rooms || 0,
+      dining_rooms: property.dining_rooms || 0,
+      living_rooms: property.living_rooms || 0,
+      total_bathrooms: property.total_bathrooms,
+      total_balcony: property.total_balcony ?? property.balcony,
+      total_kitchen: property.total_kitchen || null,
+      floor_level: property.floor_level,
+      room_size: property.room_size,
+    },
+    pricing: property.pricing || {
+      rent_amount_bdt: property.rent_amount_bdt,
+      rent_period: property.rent_period,
+      is_rent_negotiable: Boolean(property.is_rent_negotiable),
+    },
+    location: {
+      ...(property.location || {}),
+      state_district: property.location?.state_district ?? property.state_district,
+      area: property.location?.area ?? property.area,
+      sub_area: property.location?.sub_area ?? property.sub_area ?? null,
+      short_description:
+        property.location?.short_description ?? property.short_description ?? null,
+      contact_number: property.protected_contact_unlocked
+        ? property.location?.contact_number ?? property.contact_number ?? null
+        : null,
+      sector: property.protected_contact_unlocked
+        ? property.location?.sector ?? property.sector ?? null
+        : null,
+      road: property.protected_contact_unlocked
+        ? property.location?.road ?? property.road ?? null
+        : null,
+      house_plot: property.protected_contact_unlocked
+        ? property.location?.house_plot ?? property.house_plot ?? null
+        : null,
+    },
+    amenities: property.amenities || [],
+    availability: property.availability || {
+      available_from: property.available_from,
+      deadline: property.deadline,
+    },
+    images,
+    primary_image: normalizedPrimaryImage || images[0] || null,
+    is_active: property.is_active !== false,
+  }
+}
+
+const findPropertyInCachedCatalog = (propertyId) => {
+  const cacheKeys = [
+    getPropertyByIdCacheKey(propertyId),
+    getAllPropertiesCacheKey(),
+    getAllPropertiesCacheKey({ limit: 20, offset: 0 }),
+    getAllPropertiesCacheKey({ limit: 40, offset: 0 }),
+    getAllPropertiesCacheKey({ limit: 72, offset: 0 }),
+    getHomepagePropertiesCacheKey(),
+    getSearchablePropertiesCacheKey(),
+  ]
+  for (const cacheKey of cacheKeys) {
+    const cachedValue = readSnapshot(cacheKey)
+
+    if (!cachedValue) {
+      continue
+    }
+
+    const cachedProperties = Array.isArray(cachedValue) ? cachedValue : [cachedValue]
+    const property = cachedProperties.find(
+      (entry) => String(entry?.id) === String(propertyId)
+    )
+
+    if (!property) {
+      continue
+    }
+
+    const normalizedProperty = normalizeCachedPublicPropertyDetail(property)
+
+    if (normalizedProperty) {
+      writeSnapshot(getPropertyByIdCacheKey(propertyId), normalizedProperty)
+      return normalizedProperty
+    }
+  }
+
+  return null
+}
+
 const normalizePropertyDetail = (propertyForViewer, images, amenities) => ({
   id: propertyForViewer.id,
   property_id_number: propertyForViewer.property_id_number,
@@ -280,55 +380,12 @@ const normalizePropertyDetail = (propertyForViewer, images, amenities) => ({
   lng: propertyForViewer.lng,
   status: propertyForViewer.status,
   is_active: propertyForViewer.is_active !== false,
-  is_pinned: Boolean(propertyForViewer.is_pinned),
+  pinned_at: propertyForViewer.pinned_at || null,
+  pinned_until: propertyForViewer.pinned_until || null,
+  is_pinned: isPropertyActivelyPinned(propertyForViewer),
   created_at: propertyForViewer.created_at,
   createdAt: propertyForViewer.created_at,
 })
-
-/**
- * Generate a unique property ID number
- * Format: Simple sequential number starting from 100000 (e.g., 100000, 100001, 100002)
- * @returns {Promise<string>} - Unique property ID number
- */
-const generatePropertyIdNumber = async () => {
-  // Starting number for property IDs
-  const STARTING_ID = 100000
-
-  try {
-    // Get the highest existing property_id_number
-    const { data, error } = await supabase
-      .from('properties')
-      .select('property_id_number')
-      .not('property_id_number', 'is', null)
-      .order('property_id_number', { ascending: false })
-      .limit(1)
-
-    if (error) {
-      console.error('Error getting highest property ID:', error)
-    }
-
-    // Find the highest numeric ID
-    let highestNumber = STARTING_ID - 1  // Default to start - 1 if no properties
-    if (data && data.length > 0) {
-      // Try to extract number from various formats
-      for (const prop of data) {
-        const num = parseInt(prop.property_id_number)
-        if (!isNaN(num) && num > highestNumber) {
-          highestNumber = num
-        }
-      }
-    }
-
-    // Generate next sequential number
-    const nextNumber = highestNumber + 1
-
-    return String(nextNumber)
-  } catch (error) {
-    console.error('Error generating property ID:', error)
-    // Fallback: return starting ID
-    return String(STARTING_ID)
-  }
-}
 
 /**
  * Submit complete property listing
@@ -375,8 +432,9 @@ export const submitPropertyListing = async (
 
     // Note: Property listing is now free (no credit check required)
 
-    // ===== STEP 3: Generate Property ID Number =====
-    const propertyIdNumber = await generatePropertyIdNumber()
+    // ===== STEP 3: Property ID Number =====
+    // Assigned by the database (trigger + sequence) so it is unique and race-free.
+    // It is read back from the inserted row below.
 
     // ===== STEP 4: Resolve status from duplicate phone number rule =====
     const {
@@ -390,7 +448,6 @@ export const submitPropertyListing = async (
     // ===== STEP 5: Create property record =====
     const propertyData = {
       user_id: userId,
-      property_id_number: propertyIdNumber,
       category: formData.category,
       property_type: formData.property_type || 'Apartment', // Default to Apartment if not provided
       dining_rooms: formData.dining_rooms || 0,
@@ -415,10 +472,13 @@ export const submitPropertyListing = async (
       lat: formData.lat,
       lng: formData.lng,
       available_from: formData.available_from,
-      deadline: formData.deadline,
+      // Deadline is optional on the Add Property form; send NULL rather than '' to the DATE column.
+      deadline: formData.deadline || null,
       status: propertyStatus,
       is_active: true,
       is_pinned: false,
+      pinned_at: null,
+      pinned_until: null,
       reviewed_at: propertyStatus === 'approved' ? new Date().toISOString() : null,
       created_at: new Date().toISOString(),
     }
@@ -433,6 +493,8 @@ export const submitPropertyListing = async (
     }
 
     const propertyId = propertyRecord[0].id
+    // Public Property ID assigned by the database trigger; shown to the user after submit.
+    const propertyIdNumber = propertyRecord[0].property_id_number ?? null
 
     try {
       // ===== STEP 6: Upload images =====
@@ -507,6 +569,7 @@ export const submitPropertyListing = async (
       return {
         success: true,
         propertyId: propertyId,
+        propertyIdNumber,
         status: propertyStatus,
         message: getPropertySubmissionMessage({
           propertyStatus,
@@ -636,24 +699,34 @@ export const getPropertyById = async (propertyId, viewer = {}) => {
     return normalizedProperty
   } catch (error) {
     const isQuotaError = isSupabaseQuotaError(error)
+    const isConnectionError = isRecoverableSupabaseError(error)
 
     if (isMissingPropertyDetailRpcError(error)) {
       console.warn(`Property detail unavailable because ${PROPERTY_DETAIL_RPC} could not be loaded.`)
-    } else if (!isQuotaError) {
+    } else if (!isQuotaError && !isConnectionError) {
       const errorMessage = error?.message || error?.error_description || JSON.stringify(error) || 'Unknown error'
       console.error('Error fetching property:', errorMessage, { propertyId })
     }
 
     const cachedProperty = readSnapshot(cacheKey)
     if (cachedProperty) {
-      if (!isQuotaError) {
+      if (!isQuotaError && !isConnectionError) {
         console.warn('Using cached property details after fetch error:', propertyId)
       }
       return cachedProperty
     }
 
+    const cachedCatalogProperty = findPropertyInCachedCatalog(propertyId)
+    if (cachedCatalogProperty) {
+      return cachedCatalogProperty
+    }
+
     // For quota errors, throw a more user-friendly message
     if (isQuotaError) {
+      throw new Error('Service temporarily unavailable. Please try again later.')
+    }
+
+    if (isConnectionError) {
       throw new Error('Service temporarily unavailable. Please try again later.')
     }
 
@@ -975,7 +1048,9 @@ export const getPropertyForEdit = async (propertyId) => {
       amenities: (amenities || []).map((a) => a.amenity_type),
       status: property.status,
       is_active: property.is_active !== false,
-      is_pinned: Boolean(property.is_pinned),
+      pinned_at: property.pinned_at || null,
+      pinned_until: property.pinned_until || null,
+      is_pinned: isPropertyActivelyPinned(property),
     }
   } catch (error) {
     console.error('Error fetching property for edit:', error)
@@ -1073,6 +1148,7 @@ export const getUserProperties = async (userId) => {
 
         return properties.map((property) => ({
           id: property.id,
+          user_id: property.user_id,
           property_id_number: property.property_id_number,
           category: property.category,
           property_type: property.property_type || 'Apartment',
@@ -1122,7 +1198,9 @@ export const getUserProperties = async (userId) => {
           lng: property.lng,
           status: property.status,
           is_active: property.is_active !== false,
-          is_pinned: Boolean(property.is_pinned),
+          pinned_at: property.pinned_at || null,
+          pinned_until: property.pinned_until || null,
+          is_pinned: isPropertyActivelyPinned(property),
           created_at: property.created_at,
         }))
       },

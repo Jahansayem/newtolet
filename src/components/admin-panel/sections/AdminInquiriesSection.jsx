@@ -151,7 +151,7 @@ const AdminInquiriesSection = ({ searchQuery = '' }) => {
                   <select
                     value={inquiry.status || 'pending'}
                     onChange={(event) => handleInquiryStatusChange(inquiry.id, event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#465fff]"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
                   >
                     <option value="pending">Pending</option>
                     <option value="contacted">Contacted</option>

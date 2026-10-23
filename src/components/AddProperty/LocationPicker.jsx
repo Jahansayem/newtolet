@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const LocationPicker = ({
   onSelect,
@@ -6,6 +7,7 @@ const LocationPicker = ({
   initialLat = null,
   initialLng = null,
 }) => {
+  const { t } = useLanguage()
   const [lat, setLat] = useState(initialLat || '')
   const [lng, setLng] = useState(initialLng || '')
   const [searchAddress, setSearchAddress] = useState('')
@@ -222,7 +224,7 @@ const LocationPicker = ({
 
   const handleConfirm = () => {
     if (!lat || !lng) {
-      alert('Please select or enter coordinates')
+      alert(t('addProperty.alerts.coordinatesRequired'))
       return
     }
 
@@ -231,17 +233,17 @@ const LocationPicker = ({
 
     // Basic validation
     if (isNaN(latitude) || isNaN(longitude)) {
-      alert('Invalid coordinates')
+      alert(t('addProperty.alerts.invalidCoordinates'))
       return
     }
 
     if (latitude < -90 || latitude > 90) {
-      alert('Latitude must be between -90 and 90')
+      alert(t('addProperty.alerts.latitudeRange'))
       return
     }
 
     if (longitude < -180 || longitude > 180) {
-      alert('Longitude must be between -180 and 180')
+      alert(t('addProperty.alerts.longitudeRange'))
       return
     }
 
@@ -251,7 +253,7 @@ const LocationPicker = ({
   // Address search placeholder
   const handleGeocodeSearch = () => {
     if (!searchAddress.trim()) {
-      alert('Please enter an address')
+      alert(t('addProperty.alerts.addressRequired'))
       return
     }
 
@@ -262,9 +264,7 @@ const LocationPicker = ({
       setLat(DEFAULT_LAT)
       setLng(DEFAULT_LNG)
       setLoading(false)
-      alert(
-        'Note: Full address search requires geocoding API integration. Using default location for now.'
-      )
+      alert(t('addProperty.alerts.geocodingNotice'))
     }, 500)
   }
 
@@ -285,7 +285,7 @@ const LocationPicker = ({
       <div className='bg-white rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto'>
         {/* Header */}
         <div className='sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10'>
-          <h3 className='text-xl font-bold text-gray-800'>Select Location</h3>
+          <h3 className='text-xl font-bold text-gray-800'>{t('addProperty.location.picker.title')}</h3>
           <button
             onClick={onClose}
             className='text-gray-500 hover:text-gray-700'
@@ -308,7 +308,7 @@ const LocationPicker = ({
           {/* Address Search */}
           <div>
             <label className='block text-sm font-semibold text-gray-700 mb-2'>
-              Search Address
+              {t('addProperty.location.picker.searchAddress')}
             </label>
             <div className='flex gap-2'>
               <input
@@ -316,32 +316,32 @@ const LocationPicker = ({
                 value={searchAddress}
                 onChange={(e) => setSearchAddress(e.target.value)}
                 className='flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-                placeholder='e.g., Uttara Sector 7, Dhaka'
+                placeholder={t('addProperty.location.picker.searchPlaceholder')}
               />
               <button
                 onClick={handleGeocodeSearch}
                 disabled={loading}
                 className='px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-400'
               >
-                {loading ? '...' : 'Search'}
+                {loading ? '...' : t('common.search')}
               </button>
             </div>
             <p className='text-xs text-gray-500 mt-1'>
-              Use preset locations or enter coordinates manually
+              {t('addProperty.location.picker.searchHint')}
             </p>
           </div>
 
           {/* Preset Locations */}
           <div>
             <label className='block text-sm font-semibold text-gray-700 mb-2'>
-              Quick Select Locations (All Bangladesh)
+              {t('addProperty.location.picker.quickSelect')}
             </label>
             <input
               type='text'
               value={searchPreset}
               onChange={(e) => setSearchPreset(e.target.value)}
               className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3'
-              placeholder='Search location...'
+              placeholder={t('addProperty.location.picker.filterPlaceholder')}
             />
             <div className='max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 grid grid-cols-2 gap-2'>
               {filteredLocations.length > 0 ? (
@@ -362,31 +362,31 @@ const LocationPicker = ({
                 ))
               ) : (
                 <div className='col-span-2 text-center text-gray-500 py-4'>
-                  No locations found
+                  {t('addProperty.location.picker.noLocations')}
                 </div>
               )}
             </div>
             <p className='text-xs text-gray-500 mt-1'>
-              Showing {filteredLocations.length} of {presetLocations.length} locations
+              {t('addProperty.location.picker.showingCount', { shown: filteredLocations.length, total: presetLocations.length })}
             </p>
           </div>
 
           {/* Manual Coordinates */}
           <div>
             <label className='block text-sm font-semibold text-gray-700 mb-2'>
-              Manual Coordinates
+              {t('addProperty.location.picker.manualCoordinates')}
             </label>
             <div className='grid grid-cols-2 gap-3'>
               <div>
                 <label className='block text-xs text-gray-600 mb-1'>
-                  Latitude
+                  {t('addProperty.location.picker.latitude')}
                 </label>
                 <input
                   type='number'
                   value={lat}
                   onChange={(e) => setLat(e.target.value)}
                   className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-                  placeholder='e.g., 23.8103'
+                  placeholder={t('addProperty.location.picker.latPlaceholder')}
                   step='0.0001'
                   min='-90'
                   max='90'
@@ -394,14 +394,14 @@ const LocationPicker = ({
               </div>
               <div>
                 <label className='block text-xs text-gray-600 mb-1'>
-                  Longitude
+                  {t('addProperty.location.picker.longitude')}
                 </label>
                 <input
                   type='number'
                   value={lng}
                   onChange={(e) => setLng(e.target.value)}
                   className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
-                  placeholder='e.g., 90.4125'
+                  placeholder={t('addProperty.location.picker.lngPlaceholder')}
                   step='0.0001'
                   min='-180'
                   max='180'
@@ -409,16 +409,16 @@ const LocationPicker = ({
               </div>
             </div>
             <p className='text-xs text-gray-500 mt-2'>
-              Get coordinates from{' '}
+              {t('addProperty.location.picker.coordinatesFrom')}{' '}
               <a
                 href='https://maps.google.com'
                 target='_blank'
                 rel='noopener noreferrer'
                 className='text-blue-500 hover:underline'
               >
-                Google Maps
+                {t('addProperty.location.picker.googleMaps')}
               </a>
-              {' '}(right-click on location)
+              {' '}{t('addProperty.location.picker.rightClickHint')}
             </p>
           </div>
 
@@ -426,13 +426,13 @@ const LocationPicker = ({
           {lat && lng && (
             <div>
               <label className='block text-sm font-semibold text-gray-700 mb-2'>
-                Location Preview
+                {t('addProperty.location.picker.previewLabel')}
               </label>
               {mapPreviewUrl ? (
                 <div className='rounded-lg overflow-hidden border border-gray-200' style={{ height: '200px' }}>
                   <iframe
                     src={mapPreviewUrl}
-                    title='Location preview'
+                    title={t('addProperty.location.picker.previewTitle')}
                     className='w-full h-full'
                     style={{ border: 0 }}
                     allowFullScreen
@@ -442,12 +442,12 @@ const LocationPicker = ({
                 </div>
               ) : (
                 <div className='bg-gray-100 rounded-lg p-4 text-center text-gray-500 text-sm'>
-                  Map preview not available
+                  {t('addProperty.location.picker.previewUnavailable')}
                 </div>
               )}
               <div className='mt-2 bg-blue-50 border border-blue-200 rounded-lg p-3'>
                 <p className='text-sm text-blue-800'>
-                  <strong>Selected:</strong> {parseFloat(lat).toFixed(4)}, {parseFloat(lng).toFixed(4)}
+                  <strong>{t('addProperty.location.picker.selected')}</strong> {parseFloat(lat).toFixed(4)}, {parseFloat(lng).toFixed(4)}
                 </p>
               </div>
             </div>
@@ -456,8 +456,7 @@ const LocationPicker = ({
           {/* Info */}
           <div className='bg-amber-50 border border-amber-200 rounded-lg p-3'>
             <p className='text-xs text-amber-800'>
-              <strong>Tip:</strong> Precise location helps tenants find your
-              property easily on the map.
+              <strong>{t('addProperty.tips.label')}</strong> {t('addProperty.location.picker.tip')}
             </p>
           </div>
 
@@ -467,14 +466,14 @@ const LocationPicker = ({
               onClick={onClose}
               className='flex-1 px-4 py-2 border border-gray-300 rounded-lg font-semibold text-gray-700 hover:bg-gray-50'
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleConfirm}
               className='flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:bg-gray-400'
               disabled={!lat || !lng}
             >
-              Confirm Location
+              {t('addProperty.location.picker.confirm')}
             </button>
           </div>
         </div>

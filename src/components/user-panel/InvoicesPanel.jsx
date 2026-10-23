@@ -4,9 +4,11 @@ import React from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { getInvoices } from '../../services/userPanelService'
+import { useLanguage } from '../../i18n/useLanguage'
 import { EmptyState, formatPanelDate, PanelCard, PanelCardHeader } from './UserPanelPrimitives'
 
 const InvoicesPanel = () => {
+  const { t, tv, language } = useLanguage()
   const { user, isLoading } = useAuth()
   const {
     data: invoices = [],
@@ -22,7 +24,7 @@ const InvoicesPanel = () => {
   if (isLoading || invoicesLoading) {
     return (
       <PanelCard className="p-8">
-        <p className="text-slate-500">Loading invoices...</p>
+        <p className="text-slate-500">{t('dashboard.invoices.loading')}</p>
       </PanelCard>
     )
   }
@@ -30,27 +32,27 @@ const InvoicesPanel = () => {
   return (
     <PanelCard>
       <PanelCardHeader
-        title="Invoices"
-        subtitle="Credit purchases verified through the payment flow appear here."
-        status={isRefreshing ? 'Refreshing...' : null}
+        title={t('dashboard.invoices.title')}
+        subtitle={t('dashboard.invoices.subtitle')}
+        status={isRefreshing ? t('dashboard.common.refreshing') : null}
       />
 
       <div className="px-6 py-6">
         {invoices.length === 0 ? (
           <EmptyState
-            title="No invoices yet"
-            description="Your credit purchases will appear here after checkout is created."
+            title={t('dashboard.invoices.emptyTitle')}
+            description={t('dashboard.invoices.emptyDescription')}
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="pb-3 font-semibold">Invoice Code</th>
-                  <th className="pb-3 font-semibold">Package</th>
-                  <th className="pb-3 font-semibold">Price</th>
-                  <th className="pb-3 font-semibold">Status</th>
-                  <th className="pb-3 font-semibold">Created</th>
+                  <th className="pb-3 font-semibold">{t('dashboard.invoices.columns.invoiceCode')}</th>
+                  <th className="pb-3 font-semibold">{t('dashboard.invoices.columns.package')}</th>
+                  <th className="pb-3 font-semibold">{t('dashboard.invoices.columns.price')}</th>
+                  <th className="pb-3 font-semibold">{t('common.status')}</th>
+                  <th className="pb-3 font-semibold">{t('dashboard.invoices.columns.created')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -59,9 +61,9 @@ const InvoicesPanel = () => {
                     <td className="py-4 font-mono text-slate-700">
                       {invoice.invoice_id || invoice.transaction_id || invoice.id}
                     </td>
-                    <td className="py-4 text-slate-800">{invoice.description || 'Credit Package'}</td>
+                    <td className="py-4 text-slate-800">{invoice.description || t('dashboard.invoices.creditPackage')}</td>
                     <td className="py-4 font-semibold text-slate-900">
-                      BDT {Number(invoice.amount || 0).toFixed(2)}
+                      {t('dashboard.invoices.amount', { amount: Number(invoice.amount || 0).toFixed(2) })}
                     </td>
                     <td className="py-4">
                       <span
@@ -73,10 +75,10 @@ const InvoicesPanel = () => {
                               : 'bg-amber-100 text-amber-700'
                         }`}
                       >
-                        {invoice.status || 'pending'}
+                        {tv('status', invoice.status || 'pending')}
                       </span>
                     </td>
-                    <td className="py-4 text-slate-500">{formatPanelDate(invoice.created_at)}</td>
+                    <td className="py-4 text-slate-500">{formatPanelDate(invoice.created_at, true, language)}</td>
                   </tr>
                 ))}
               </tbody>

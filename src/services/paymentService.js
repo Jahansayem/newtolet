@@ -10,20 +10,12 @@ import { invokeSupabaseFunction } from './functionClient'
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
 
 const PAYMENT_GATEWAYS = {
-  BKASH: {
-    id: 'bkash',
-    name: 'bKash',
-    icon: '📱',
-  },
-  NAGAD: {
-    id: 'nagad',
-    name: 'Nagad',
-    icon: '💳',
-  },
-  ROCKET: {
-    id: 'rocket',
-    name: 'Rocket',
-    icon: '🚀',
+  EPS_PAYMENT: {
+    id: 'eps',
+    name: 'EPS Payment',
+    provider: 'eps',
+    icon: 'EPS',
+    description: 'Pay with bKash, Nagad, Rocket, cards, or bank via EPS',
   },
 }
 
@@ -58,7 +50,7 @@ export const getCreditPackage = async (packageId) => {
 
 export const getPaymentGateways = () => Object.values(PAYMENT_GATEWAYS)
 
-export const createPaymentTransaction = async (packageId) => {
+export const createPaymentTransaction = async (packageId, options = {}) => {
   try {
     const token = await getAccessToken()
 
@@ -71,6 +63,8 @@ export const createPaymentTransaction = async (packageId) => {
       token,
       body: {
         packageId,
+        paymentMethod: 'eps',
+        phoneNumber: options.phoneNumber || options.phone_number || null,
       },
     })
 
@@ -79,6 +73,8 @@ export const createPaymentTransaction = async (packageId) => {
         id: response?.data?.paymentId || null,
         transaction_id: response?.data?.transactionId || null,
         payment_url: response?.data?.paymentUrl || null,
+        provider: response?.data?.provider || null,
+        payment_method: response?.data?.paymentMethod || null,
       },
       error: null,
     }
@@ -88,18 +84,35 @@ export const createPaymentTransaction = async (packageId) => {
   }
 }
 
-export const verifyPayment = async (invoiceId) => {
+export const verifyPayment = async (invoiceOrOptions) => {
   try {
+    const options =
+      typeof invoiceOrOptions === 'object' && invoiceOrOptions !== null
+        ? invoiceOrOptions
+        : { invoiceId: invoiceOrOptions }
+
+    const provider = String(options.provider || '').toLowerCase()
+    const hasReference = Boolean(options.reference || options.slug)
+    const isGatewayReturn =
+      provider === 'eps' ||
+      hasReference ||
+      Boolean(options.paymentId || options.payment_id)
+
     const token = await getAccessToken()
 
-    if (!token) {
+    if (!token && !isGatewayReturn) {
       throw new Error('Authentication required')
     }
 
     const response = await invokeSupabaseFunction({
       functionName: 'paymently-verify',
       token,
-      body: { invoiceId },
+      body: {
+        invoiceId: options.invoiceId || options.invoice_id || null,
+        paymentId: options.paymentId || options.payment_id || null,
+        provider: options.provider || null,
+        reference: options.reference || options.slug || null,
+      },
     })
 
     const payment = mapPaymentTransactionRecord(response?.data?.payment || {})

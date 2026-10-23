@@ -37,6 +37,26 @@ export const normalizePropertyCategory = (value) => {
   return CATEGORY_ALIASES[normalizedValue.toLowerCase()] || normalizedValue
 }
 
+/** Every stored spelling that normalises to the given category (for `.in()` queries). */
+export const getPropertyCategoryValues = (category) => {
+  const canonical = normalizePropertyCategory(category)
+
+  if (!canonical) {
+    return []
+  }
+
+  const values = new Set([canonical])
+
+  Object.entries(CATEGORY_ALIASES).forEach(([alias, target]) => {
+    if (target === canonical) {
+      values.add(alias)
+      values.add(alias.replace(/\b\w/g, (char) => char.toUpperCase()))
+    }
+  })
+
+  return [...values]
+}
+
 export const getPropertyCategoryForMatch = (property) =>
   normalizePropertyCategory(property?.normalizedCategory || property?.category)
 

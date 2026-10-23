@@ -1,7 +1,9 @@
 import React from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const FormNavigation = ({ onSubmit, isLoading = false }) => {
+  const { t } = useLanguage()
   const { currentStep, prevStep, nextStep, isSubmitting } = useAddProperty()
 
   const isFirstStep = currentStep === 1
@@ -21,7 +23,7 @@ const FormNavigation = ({ onSubmit, isLoading = false }) => {
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
-          Back
+          {t('common.back')}
         </button>
 
         {/* Next or Submit Button */}
@@ -53,13 +55,13 @@ const FormNavigation = ({ onSubmit, isLoading = false }) => {
                     d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
                   />
                 </svg>
-                <span className='hidden sm:inline'>Submitting...</span>
-                <span className='sm:hidden'>Submit...</span>
+                <span className='hidden sm:inline'>{t('addProperty.navigation.submitting')}</span>
+                <span className='sm:hidden'>{t('addProperty.navigation.submittingShort')}</span>
               </>
             ) : (
               <>
-                <span className='hidden sm:inline'>Submit Property</span>
-                <span className='sm:hidden'>Submit</span>
+                <span className='hidden sm:inline'>{t('addProperty.navigation.submitProperty')}</span>
+                <span className='sm:hidden'>{t('common.submit')}</span>
                 <svg className='w-4 h-4 md:w-5 md:h-5' fill='currentColor' viewBox='0 0 20 20'>
                   <path
                     fillRule='evenodd'
@@ -80,7 +82,7 @@ const FormNavigation = ({ onSubmit, isLoading = false }) => {
                 : 'bg-blue-500 text-white hover:bg-blue-600'
             }`}
           >
-            <span>Next</span>
+            <span>{t('common.next')}</span>
             <svg className='w-4 h-4 md:w-5 md:h-5' fill='currentColor' viewBox='0 0 20 20'>
               <path
                 fillRule='evenodd'

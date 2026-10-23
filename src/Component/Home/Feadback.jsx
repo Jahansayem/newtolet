@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FaQuoteLeft } from 'react-icons/fa';
 import { getApprovedFeedback, getApprovedFeedbackCacheKey } from '../../services/feedbackService';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const Feedback = () => {
+    const { t } = useLanguage()
     const {
         snapshot: cachedFeedback,
         hasSnapshot: hasCachedFeedback,
@@ -13,6 +15,19 @@ const Feedback = () => {
     const [loading, setLoading] = useState(true)
     const scrollContainerRef = useRef(null)
     const [currentIndex, setCurrentIndex] = useState(0)
+    const [isPaused, setIsPaused] = useState(false)
+    const [reduceMotion, setReduceMotion] = useState(false)
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return undefined
+        }
+        const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const sync = () => setReduceMotion(query.matches)
+        sync()
+        query.addEventListener('change', sync)
+        return () => query.removeEventListener('change', sync)
+    }, [])
     const isMounted = useRef(true)
     const requestIdRef = useRef(0)
 
@@ -80,11 +95,11 @@ const Feedback = () => {
         }
 
         fetchFeedback()
-    }, [hasCachedFeedback, isHydrated])
+    }, [cachedFeedback, hasCachedFeedback, isHydrated])
 
     // Auto slide functionality
     useEffect(() => {
-        if (feed.length === 0) return
+        if (feed.length < 2 || isPaused || reduceMotion) return undefined
 
         const autoSlide = setInterval(() => {
             if (scrollContainerRef.current) {
@@ -108,16 +123,25 @@ const Feedback = () => {
         }, 4000) // Auto slide every 4 seconds
 
         return () => clearInterval(autoSlide)
-    }, [feed.length])
+    }, [feed.length, isPaused, reduceMotion])
 
     return (
-        <div className='bg-gray-50 '>
-            <div className='text-center max-w-[600px] mx-auto py-10 space-y-3  animate-fade-in-up'>
-                <h2 className='text-3xl md:text-4xl font-bold text-gray-800'>Customer Feedback</h2>
-                <p className='text-gray-600 text-sm sm:text-base mb-3'>Our Users send us bunch of smilies with our services, and we love them</p>
+        <section
+            className='py-6'
+            onMouseEnter={() => setIsPaused(true)}
+            onMouseLeave={() => setIsPaused(false)}
+            onFocus={() => setIsPaused(true)}
+            onBlur={() => setIsPaused(false)}
+            aria-roledescription='carousel'
+            aria-label={t('home.feedback.title')}
+        >
+            <div className='mx-auto max-w-2xl px-4 text-center'>
+                <p className='ui-eyebrow'>{t('home.feedback.eyebrow')}</p>
+                <h2 className='mt-3 text-2xl font-bold leading-tight text-ink md:text-3xl'>{t('home.feedback.title')}</h2>
+                <p className='mx-auto mt-3 max-w-lg text-body text-muted'>{t('home.feedback.subtitle')}</p>
             </div>
 
-            <div className=' animate-fade-in-up animation-delay-200'>
+            <div className='mt-8'>
                 {/* Auto-sliding touch-friendly container */}
                 <div
                     ref={scrollContainerRef}
@@ -140,38 +164,39 @@ const Feedback = () => {
                         feed.map((item, index) =>
                             <div
                                 key={item.id || index}
-                                className='min-w-[280px] sm:min-w-[300px] md:min-w-[350px] h-[200px] snap-start bg-white p-4 rounded-xl shadow-md border border-gray-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-2 group flex flex-col'
-                                style={{ animationDelay: `${index * 100}ms` }}
+                                className='ui-card flex h-[200px] min-w-[280px] snap-start flex-col p-4 sm:min-w-[300px] md:min-w-[350px]'
                             >
                                 {/* Name at top */}
                                 <div className='flex items-center gap-3 pb-4 mb-4 border-b border-gray-100'>
-                                    <div className='w-12 h-12 bg-[#1E73B8]/10 rounded-full flex items-center justify-center group-hover:bg-[#1E73B8]/20 transition-colors duration-300'>
-                                        <span className='text-[#1E73B8] font-bold text-xl'>{item.name?.charAt(0)?.toUpperCase()}</span>
+                                    <div className='flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft' aria-hidden='true'>
+                                        <span className='text-xl font-bold text-brand'>{item.name?.charAt(0)?.toUpperCase()}</span>
                                     </div>
                                     <div>
-                                        <p className='font-semibold text-gray-800'>{item.name}</p>
-                                        <p className='text-xs text-gray-400'>Customer</p>
+                                        <p className='font-semibold text-ink'>{item.name}</p>
+                                        <p className='text-caption text-muted'>{t('home.feedback.customer')}</p>
                                     </div>
                                 </div>
 
                                 {/* Feedback at bottom */}
-                                <FaQuoteLeft className='text-[#1E73B8]/20 text-2xl mb-3 group-hover:text-[#1E73B8]/40 transition-colors duration-300 flex-shrink-0' />
-                                <p className='text-gray-600 text-sm leading-relaxed line-clamp-3 flex-1 overflow-hidden'>{item.feedback}</p>
+                                <FaQuoteLeft className='mb-3 flex-shrink-0 text-2xl text-brand/25' aria-hidden='true' />
+                                <p className='line-clamp-3 flex-1 overflow-hidden text-caption text-muted'>{item.feedback}</p>
                             </div>
                         )
                     ) : (
-                        <div className='w-full flex justify-center py-8'>
-                            <p className='text-gray-500'>No feedback yet. Be the first to share your experience!</p>
+                        <div className='w-full py-6'>
+                            <p className='rounded-[var(--radius-panel)] border border-dashed border-line bg-canvas px-6 py-10 text-center text-body text-muted'>{t('home.feedback.empty')}</p>
                         </div>
                     )}
                 </div>
 
                 {/* Auto-slide indicator dots */}
                 {feed && feed.length > 1 && (
-                    <div className='flex justify-center gap-2 mt-4'>
+                    <div className='mt-4 flex justify-center gap-1' role='group' aria-label={t('home.feedback.title')}>
                         {feed.map((_, index) => (
                             <button
                                 key={index}
+                                type='button'
+                                aria-current={currentIndex === index ? 'true' : undefined}
                                 onClick={() => {
                                     if (scrollContainerRef.current) {
                                         const container = scrollContainerRef.current
@@ -183,14 +208,16 @@ const Feedback = () => {
                                         setCurrentIndex(index)
                                     }
                                 }}
-                                className={`w-2 h-2 rounded-full transition-all duration-300 ${currentIndex === index ? 'bg-[#1E73B8] w-6' : 'bg-gray-300'}`}
-                                aria-label={`Go to slide ${index + 1}`}
-                            />
+                                className='flex h-6 w-6 items-center justify-center rounded-full'
+                                aria-label={t('home.feedback.goToSlide', { index: index + 1 })}
+                            >
+                                <span className={`block h-2 rounded-full transition-all duration-300 ${currentIndex === index ? 'w-6 bg-brand' : 'w-2 bg-slate-300'}`} />
+                            </button>
                         ))}
                     </div>
                 )}
             </div>
-        </div>
+        </section>
     );
 };
 

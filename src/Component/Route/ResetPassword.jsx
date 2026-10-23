@@ -3,14 +3,21 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { resetPassword } from '../../services/authService';
 import { supabase } from '../../services/supabaseClient';
+import { useLanguage } from '../../i18n/useLanguage';
+import LanguageToggle from '../../components/LanguageToggle.jsx';
+import PasswordInput from './PasswordInput.jsx';
 import './Login.css';
 
 const ResetPassword = () => {
+    const { t } = useLanguage();
     const navigate = useNavigate();
     const location = useLocation();
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+    // Translation key for errors raised while verifying the recovery session,
+    // so the message follows the active language without re-running the check.
+    const [errorKey, setErrorKey] = useState('');
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
     const isMountedRef = useRef(true);
@@ -78,9 +85,7 @@ const ResetPassword = () => {
                     if (sessionError) {
                         console.error('❌ Session error:', sessionError);
                         if (isMountedRef.current) {
-                            setErrorMessage(
-                                'Invalid or expired reset link. The link may have been used already or has expired (links expire in 1 hour). Please request a new password reset.'
-                            );
+                            setErrorKey('auth.reset.errors.invalidLinkExpired');
                         }
                         return;
                     }
@@ -109,7 +114,7 @@ const ResetPassword = () => {
                     if (sessionError) {
                         console.error('❌ Session error:', sessionError);
                         if (isMountedRef.current) {
-                            setErrorMessage('Invalid or expired reset link. Please request a new password reset.');
+                            setErrorKey('auth.reset.errors.invalidLink');
                         }
                         return;
                     }
@@ -143,17 +148,13 @@ const ResetPassword = () => {
                 });
 
                 if (isMountedRef.current) {
-                    setErrorMessage(
-                        'Invalid or expired password reset link. Please request a new password reset.'
-                    );
+                    setErrorKey('auth.reset.errors.invalidResetLink');
                 }
 
             } catch (error) {
                 console.error('❌ Error checking recovery session:', error);
                 if (isMountedRef.current) {
-                    setErrorMessage(
-                        'Failed to verify reset link. Please request a new password reset.'
-                    );
+                    setErrorKey('auth.reset.errors.verifyFailed');
                 }
             } finally {
                 if (isMountedRef.current) {
@@ -168,11 +169,13 @@ const ResetPassword = () => {
     const onSubmit = async (data) => {
         // Prevent submission if not in recovery mode
         if (!isRecoveryMode) {
-            setErrorMessage('Invalid password reset session. Please request a new reset link.');
+            setErrorKey('');
+            setErrorMessage(t('auth.reset.errors.invalidSession'));
             return;
         }
 
         setIsLoading(true);
+        setErrorKey('');
         setErrorMessage('');
         setSuccessMessage('');
 
@@ -197,7 +200,7 @@ const ResetPassword = () => {
             }
         } catch (error) {
             if (isMountedRef.current) {
-                setErrorMessage('Failed to reset password. Please try again.');
+                setErrorMessage(t('auth.reset.errors.resetFailed'));
             }
             console.error('Password reset error:', error);
         } finally {
@@ -206,6 +209,8 @@ const ResetPassword = () => {
             }
         }
     };
+
+    const resolvedErrorMessage = errorKey ? t(errorKey) : errorMessage;
 
     // Show loading state while checking session
     if (isCheckingSession) {
@@ -232,15 +237,18 @@ const ResetPassword = () => {
                 </div>
 
                 {/* Geometric Shapes */}
-                <div className='absolute top-20 right-10 w-20 h-20 border-4 border-[#1E73B8] opacity-20 rotate-45 animate-spin-slow'></div>
-                <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
+                <div className='absolute top-20 right-10 w-20 h-20 border-4 border-brand opacity-20 rotate-45 animate-spin-slow'></div>
+                <div className='absolute bottom-32 left-16 w-16 h-16 bg-brand opacity-10 rounded-full animate-pulse-slow'></div>
                 <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
                 <div className='auth-form-shell'>
                     <div className='auth-card login-card-border text-sm'>
-                        <p className='auth-title'>Verifying Reset Link...</p>
+                        <div className='flex w-full justify-end'>
+                            <LanguageToggle size='sm' />
+                        </div>
+                        <p className='auth-title'>{t('auth.reset.verifying')}</p>
                         <div className='w-full flex justify-center py-8'>
-                            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-[#1E73B8]'></div>
+                            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-brand'></div>
                         </div>
                     </div>
                 </div>
@@ -271,28 +279,31 @@ const ResetPassword = () => {
             </div>
 
             {/* Geometric Shapes */}
-            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-[#1E73B8] opacity-20 rotate-45 animate-spin-slow'></div>
-            <div className='absolute bottom-32 left-16 w-16 h-16 bg-[#1E73B8] opacity-10 rounded-full animate-pulse-slow'></div>
+            <div className='absolute top-20 right-10 w-20 h-20 border-4 border-brand opacity-20 rotate-45 animate-spin-slow'></div>
+            <div className='absolute bottom-32 left-16 w-16 h-16 bg-brand opacity-10 rounded-full animate-pulse-slow'></div>
             <div className='absolute top-1/3 left-1/4 w-12 h-12 border-4 border-[#42a5f5] opacity-15 animate-bounce-slow'></div>
 
             <form onSubmit={handleSubmit(onSubmit)} className='auth-form-shell'>
                 <div className='auth-card login-card-border text-sm'>
-                    <p className='auth-title'>Reset Password</p>
+                    <div className='flex w-full justify-end'>
+                        <LanguageToggle size='sm' />
+                    </div>
+                    <h1 className='auth-title'>{t('auth.reset.title')}</h1>
                 <p className='auth-subtitle'>
-                    Enter your new password below.
+                    {t('auth.reset.subtitle')}
                 </p>
 
                 {/* Error Message */}
-                {errorMessage && (
-                    <div className='auth-message auth-message-error'>
-                        <p className='font-medium'>Error</p>
-                        <p className='text-xs mt-1'>{errorMessage}</p>
+                {resolvedErrorMessage && (
+                    <div role='alert' className='auth-message auth-message-error'>
+                        <p className='font-medium'>{t('auth.reset.errorTitle')}</p>
+                        <p className='text-xs mt-1'>{resolvedErrorMessage}</p>
                         {!isRecoveryMode && (
                             <Link
                                 to='/forgot-password'
                                 className='text-xs underline mt-2 inline-block hover:text-red-900'
                             >
-                                Request a new reset link
+                                {t('auth.reset.requestNewLink')}
                             </Link>
                         )}
                     </div>
@@ -300,10 +311,10 @@ const ResetPassword = () => {
 
                 {/* Success Message */}
                 {successMessage && (
-                    <div className='auth-message auth-message-success'>
-                        <p className='font-medium'>Success!</p>
+                    <div role='status' className='auth-message auth-message-success'>
+                        <p className='font-medium'>{t('auth.reset.successTitle')}</p>
                         <p className='text-xs mt-1'>{successMessage}</p>
-                        <p className='text-xs mt-2'>Redirecting to login...</p>
+                        <p className='text-xs mt-2'>{t('auth.reset.redirecting')}</p>
                     </div>
                 )}
 
@@ -311,37 +322,43 @@ const ResetPassword = () => {
                 {isRecoveryMode && !successMessage && (
                     <>
                         <div className='w-full'>
-                            <p className='auth-label'>New Password</p>
-                            <input
-                                type="password"
-                                placeholder='Enter new password'
+                            <label htmlFor='reset-new-password' className='auth-label'>{t('auth.fields.newPassword')}</label>
+                            <PasswordInput
+                                id='reset-new-password'
+                                autoComplete='new-password'
+                                aria-invalid={errors.newPassword ? 'true' : undefined}
+                                aria-describedby={errors.newPassword ? 'reset-new-password-error' : undefined}
+                                placeholder={t('auth.placeholders.newPassword')}
                                 {...register("newPassword", {
-                                    required: "New password is required",
+                                    required: t('auth.validation.newPasswordRequired'),
                                     minLength: {
                                         value: 6,
-                                        message: "Password must be at least 6 characters"
+                                        message: t('auth.validation.passwordMin')
                                     }
                                 })}
                                 className='auth-input my-2'
                                 disabled={isLoading}
                             />
-                            {errors.newPassword && <p className='text-red-700 text-xs'>{errors.newPassword.message}</p>}
+                            {errors.newPassword && <p id='reset-new-password-error' role='alert' className='text-red-700 text-xs'>{errors.newPassword.message}</p>}
                         </div>
 
                         <div className='w-full'>
-                            <p className='auth-label'>Confirm New Password</p>
-                            <input
-                                type="password"
-                                placeholder='Confirm new password'
+                            <label htmlFor='reset-confirm-password' className='auth-label'>{t('auth.fields.confirmNewPassword')}</label>
+                            <PasswordInput
+                                id='reset-confirm-password'
+                                autoComplete='new-password'
+                                aria-invalid={errors.confirmPassword ? 'true' : undefined}
+                                aria-describedby={errors.confirmPassword ? 'reset-confirm-password-error' : undefined}
+                                placeholder={t('auth.placeholders.confirmNewPassword')}
                                 {...register("confirmPassword", {
-                                    required: "Please confirm your password",
+                                    required: t('auth.validation.confirmPasswordRequired'),
                                     validate: (value) =>
-                                        value === newPassword || "Passwords do not match"
+                                        value === newPassword || t('auth.validation.passwordsMismatch')
                                 })}
                                 className='auth-input my-2'
                                 disabled={isLoading}
                             />
-                            {errors.confirmPassword && <p className='text-red-700 text-xs'>{errors.confirmPassword.message}</p>}
+                            {errors.confirmPassword && <p id='reset-confirm-password-error' role='alert' className='text-red-700 text-xs'>{errors.confirmPassword.message}</p>}
                         </div>
 
                         <button
@@ -349,14 +366,14 @@ const ResetPassword = () => {
                             className='auth-submit disabled:cursor-not-allowed disabled:opacity-50'
                             disabled={isLoading}
                         >
-                            {isLoading ? "Resetting..." : "Reset Password"}
+                            {isLoading ? t('auth.reset.submitting') : t('auth.reset.submit')}
                         </button>
                     </>
                 )}
 
                 <div className='w-full text-center space-y-2'>
                     <p>
-                        Remember your password? <Link to='/login' className='text-[#1E73B8] font-medium cursor-pointer hover:underline'>Login</Link>
+                        {t('auth.reset.rememberPassword')} <Link to='/login' className='text-brand font-medium cursor-pointer hover:underline'>{t('auth.reset.loginLink')}</Link>
                     </p>
                 </div>
             </div>

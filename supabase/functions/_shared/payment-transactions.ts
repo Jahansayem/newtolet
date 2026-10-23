@@ -1,5 +1,10 @@
 const AUTO_APPROVAL_THRESHOLD_BDT = 3000;
 const CREDITING_STATUS = "crediting";
+const PAYMENT_TRANSACTION_RELATIONS = `
+  *,
+  buyer:users!payment_transactions_user_id_fkey(name, email),
+  package:credit_packages!payment_transactions_package_id_fkey(package_name)
+`;
 
 const toNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
@@ -22,6 +27,80 @@ const mapGatewayStatusToPaymentStatus = (status: string) => {
     default:
       return "pending";
   }
+};
+
+const mapTiwloStatusToPaymentStatus = (status: string) => {
+  switch ((status || "").toLowerCase()) {
+    case "paid":
+    case "succeeded":
+    case "success":
+      return "awaiting_admin_approval";
+    case "expired":
+      return "cancelled";
+    case "payment_failed":
+    case "failed":
+      return "failed";
+    case "unpaid":
+    default:
+      return "pending";
+  }
+};
+
+const mapEpsStatusToPaymentStatus = (status: string) => {
+  switch ((status || "").toLowerCase()) {
+    case "success":
+      return "awaiting_admin_approval";
+    case "cancelled":
+    case "canceled":
+      return "cancelled";
+    case "failed":
+    case "error":
+      return "failed";
+    default:
+      return "pending";
+  }
+};
+
+const getProviderPayload = (verificationData: any) =>
+  verificationData?.data || verificationData || {};
+
+const getProviderName = (payload: any, fallback = "uddoktapay") =>
+  String(payload?.provider || fallback || "uddoktapay").toLowerCase();
+
+const getProviderInvoiceId = (payload: any, provider: string) => {
+  if (provider === "eps") {
+    return payload?.merchantTransactionId || null;
+  }
+
+  return provider === "tiwlopay"
+    ? payload?.invoiceId || payload?.invoice_id || null
+    : payload?.invoice_id || payload?.invoiceId || null;
+};
+
+const getProviderReference = (payload: any, provider: string) => {
+  if (provider === "eps") {
+    return payload?.merchantTransactionId || null;
+  }
+
+  return provider === "tiwlopay"
+    ? payload?.slug || payload?.id || getProviderInvoiceId(payload, provider)
+    : getProviderInvoiceId(payload, provider);
+};
+
+const getProviderStatus = (payload: any) => String(payload?.status || "");
+
+const isProviderPaid = (provider: string, status: string) => {
+  if (provider === "eps") return status.toLowerCase() === "success";
+  return provider === "tiwlopay"
+    ? ["paid", "succeeded", "success"].includes(status.toLowerCase())
+    : status.toUpperCase() === "COMPLETED";
+};
+
+const mapProviderStatusToPaymentStatus = (provider: string, status: string) => {
+  if (provider === "eps") return mapEpsStatusToPaymentStatus(status);
+  return provider === "tiwlopay"
+    ? mapTiwloStatusToPaymentStatus(status)
+    : mapGatewayStatusToPaymentStatus(status);
 };
 
 export const buildTransactionId = () =>
@@ -94,6 +173,9 @@ export const createPendingPaymentTransaction = async (
     amount: number;
     creditsToAdd: number;
     description: string;
+    provider?: string;
+    paymentMethod?: string;
+    customerPhone?: string | null;
   },
 ) => {
   const { data, error } = await adminClient
@@ -106,7 +188,9 @@ export const createPendingPaymentTransaction = async (
       status: "pending",
       credits_to_add: payload.creditsToAdd,
       description: payload.description,
-      provider: "uddoktapay",
+      provider: payload.provider || "uddoktapay",
+      payment_method: normalizeMethod(payload.paymentMethod),
+      customer_phone: payload.customerPhone || null,
     })
     .select("*")
     .maybeSingle();
@@ -127,7 +211,7 @@ export const updatePaymentTransactionById = async (
       updated_at: new Date().toISOString(),
     })
     .eq("id", paymentId)
-    .select("*, users(name, email), credit_packages(package_name)")
+    .select(PAYMENT_TRANSACTION_RELATIONS)
     .maybeSingle();
 
   if (error) throw error;
@@ -140,7 +224,7 @@ export const getPaymentTransactionById = async (
 ) => {
   const { data, error } = await adminClient
     .from("payment_transactions")
-    .select("*, users(name, email), credit_packages(package_name)")
+    .select(PAYMENT_TRANSACTION_RELATIONS)
     .eq("id", paymentId)
     .maybeSingle();
 
@@ -154,7 +238,7 @@ export const getPaymentTransactionForInvoice = async (
 ) => {
   const { data, error } = await adminClient
     .from("payment_transactions")
-    .select("*, users(name, email), credit_packages(package_name)")
+    .select(PAYMENT_TRANSACTION_RELATIONS)
     .or(`invoice_id.eq.${invoiceId},reference.eq.${invoiceId}`)
     .maybeSingle();
 
@@ -165,11 +249,13 @@ export const getPaymentTransactionForInvoice = async (
 const getPaymentTransactionFromVerification = async (
   adminClient: any,
   verificationData: any,
+  provider = "uddoktapay",
 ) => {
-  const payload = verificationData?.data || verificationData || {};
+  const payload = getProviderPayload(verificationData);
   const metadata = payload?.metadata || {};
   const paymentId = metadata.payment_transaction_id || metadata.payment_id || null;
-  const invoiceId = payload?.invoice_id || null;
+  const invoiceId = getProviderInvoiceId(payload, provider);
+  const reference = getProviderReference(payload, provider);
 
   if (paymentId) {
     const payment = await getPaymentTransactionById(adminClient, paymentId);
@@ -178,6 +264,10 @@ const getPaymentTransactionFromVerification = async (
 
   if (invoiceId) {
     return getPaymentTransactionForInvoice(adminClient, invoiceId);
+  }
+
+  if (reference) {
+    return getPaymentTransactionForInvoice(adminClient, reference);
   }
 
   return null;
@@ -200,28 +290,36 @@ const creditApprovedPayment = async (
 export const syncGatewayPayment = async (
   adminClient: any,
   verificationData: any,
+  fallbackProvider = "uddoktapay",
 ) => {
-  const payload = verificationData?.data || verificationData || {};
-  const gatewayStatus = String(payload?.status || "").toUpperCase();
-  const invoiceId = payload?.invoice_id || null;
+  const payload = getProviderPayload(verificationData);
+  const provider = getProviderName(payload, fallbackProvider);
+  const gatewayStatus = getProviderStatus(payload);
+  const invoiceId = getProviderInvoiceId(payload, provider);
+  const reference = getProviderReference(payload, provider);
   const payment = await getPaymentTransactionFromVerification(
     adminClient,
     verificationData,
+    provider,
   );
 
   if (!payment) {
     throw new Error("Payment transaction not found for this invoice");
   }
 
-  const verifiedAmount = toNumber(payload?.amount, payment.amount ?? 0);
+  const verifiedAmount = toNumber(
+    provider === "eps" ? payload?.totalAmount : payload?.amount,
+    payment.amount ?? 0,
+  );
+  const nextStatus = mapProviderStatusToPaymentStatus(provider, gatewayStatus);
   const sharedUpdate = {
     amount: verifiedAmount,
     invoice_id: invoiceId || payment.invoice_id || null,
-    reference: invoiceId || payment.reference || null,
+    reference: reference || invoiceId || payment.reference || null,
     payment_method: normalizeMethod(payload?.payment_method) || payment.payment_method,
     sender_number: payload?.sender_number || null,
     gateway_payload: verificationData,
-    provider: "uddoktapay",
+    provider,
   };
 
   if (payment.status === "credited") {
@@ -232,7 +330,7 @@ export const syncGatewayPayment = async (
     return getPaymentTransactionById(adminClient, payment.id);
   }
 
-  if (gatewayStatus === "COMPLETED") {
+  if (isProviderPaid(provider, gatewayStatus)) {
     const syncedPayment = await updatePaymentTransactionById(adminClient, payment.id, {
       ...sharedUpdate,
       status: "awaiting_admin_approval",
@@ -247,6 +345,6 @@ export const syncGatewayPayment = async (
 
   return updatePaymentTransactionById(adminClient, payment.id, {
     ...sharedUpdate,
-    status: mapGatewayStatusToPaymentStatus(gatewayStatus),
+    status: nextStatus,
   });
 };

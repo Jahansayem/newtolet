@@ -10,6 +10,8 @@ import {
   saveWallet,
   setDefaultWallet,
 } from '../../services/referralService'
+import { useLanguage } from '../../i18n/useLanguage'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 const EMPTY_FORM = {
   id: null,
@@ -36,20 +38,6 @@ const CREDIT_TRANSACTION_LABELS = {
   contact_view: 'Contact Unlock',
   contact_view_refund: 'Contact Unlock Refund',
   photo_view: 'Photo Unlock',
-}
-
-const formatDate = (value) => {
-  if (!value) {
-    return 'N/A'
-  }
-
-  return new Date(value).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 const normalizeCreditHistoryEntry = (record) => {
@@ -103,16 +91,28 @@ const getHistoryType = (entry) => {
   return entry.credits_change >= 0 ? 'added' : 'spent'
 }
 
-const getStatusLabel = (entry) => {
+const getStatusLabel = (entry, tv) => {
   if (entry.source === 'payment') {
-    return String(entry.status || 'pending').replace(/_/g, ' ')
+    const raw = String(entry.status || 'pending')
+    const translated = tv('status', raw)
+    return translated === raw ? raw.replace(/_/g, ' ') : translated
   }
 
-  return entry.credits_change >= 0 ? 'completed' : 'spent'
+  return tv('status', entry.credits_change >= 0 ? 'completed' : 'spent')
 }
 
 const WalletsPanel = () => {
+  const { t, tv, fdt } = useLanguage()
   const { user, isLoading } = useAuth()
+
+  const formatDate = (value) =>
+    fdt(value, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }) || t('common.na')
   const [wallets, setWallets] = useState([])
   const [creditBalance, setCreditBalance] = useState(0)
   const [creditHistory, setCreditHistory] = useState([])
@@ -193,11 +193,11 @@ const WalletsPanel = () => {
     setSaving(false)
 
     if (saveError) {
-      setError(saveError.message || 'Unable to save wallet.')
+      setError(saveError.message || t('dashboard.wallets.saveError'))
       return
     }
 
-    setNotice(formData.id ? 'Wallet updated successfully.' : 'Wallet added successfully.')
+    setNotice(formData.id ? t('dashboard.wallets.updated') : t('dashboard.wallets.added'))
     resetForm()
     hydrateFromPanelData(await getWalletPanelData(user.id))
   }
@@ -215,14 +215,35 @@ const WalletsPanel = () => {
     setError('')
   }
 
-  const handleDelete = async (walletId) => {
+  const [pendingDeleteId, setPendingDeleteId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = (walletId) => {
+    setPendingDeleteId(walletId)
+  }
+
+  const confirmDelete = async () => {
+    const walletId = pendingDeleteId
+    if (!walletId) {
+      return
+    }
+    setDeleting(true)
+    try {
+      await performDelete(walletId)
+    } finally {
+      setDeleting(false)
+      setPendingDeleteId(null)
+    }
+  }
+
+  const performDelete = async (walletId) => {
     const { error: deleteError } = await deleteWallet(user?.id, walletId)
     if (deleteError) {
-      setError(deleteError.message || 'Unable to delete wallet.')
+      setError(deleteError.message || t('dashboard.wallets.deleteError'))
       return
     }
 
-    setNotice('Wallet removed.')
+    setNotice(t('dashboard.wallets.removed'))
     if (formData.id === walletId) {
       resetForm()
     }
@@ -232,18 +253,18 @@ const WalletsPanel = () => {
   const handleSetDefault = async (walletId) => {
     const { error: defaultError } = await setDefaultWallet(user?.id, walletId)
     if (defaultError) {
-      setError(defaultError.message || 'Unable to set default wallet.')
+      setError(defaultError.message || t('dashboard.wallets.defaultError'))
       return
     }
 
-    setNotice('Default wallet updated.')
+    setNotice(t('dashboard.wallets.defaultUpdated'))
     hydrateFromPanelData(await getWalletPanelData(user.id))
   }
 
   if (isLoading || panelLoading) {
     return (
       <div className="rounded-xl bg-white p-8 shadow">
-        <p className="text-gray-500">Loading wallet details...</p>
+        <p className="text-gray-500">{t('dashboard.wallets.loading')}</p>
       </div>
     )
   }
@@ -253,31 +274,30 @@ const WalletsPanel = () => {
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Credit Wallet</h2>
-            {isRefreshing ? <p className="mt-2 text-xs font-medium text-gray-400">Refreshing...</p> : null}
+            <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.wallets.creditTitle')}</h2>
+            {isRefreshing ? <p className="mt-2 text-xs font-medium text-gray-400">{t('dashboard.common.refreshing')}</p> : null}
             <p className="mt-2 text-sm text-gray-600">
-              Your available credits and recent add or spend history appear here after each verified
-              purchase and usage event.
+              {t('dashboard.wallets.creditDescription')}
             </p>
             <Link
               to={buildPageHref('book-buy-credits')}
-              className="mt-4 inline-flex items-center rounded-lg bg-[#1E73B8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1665a0]"
+              className="mt-4 inline-flex items-center rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover"
             >
-              Add Wallet Points
+              {t('dashboard.wallets.addPoints')}
             </Link>
           </div>
           <div className="rounded-xl bg-blue-50 px-5 py-4 text-right">
-            <p className="text-sm text-gray-600">Current Balance</p>
-            <p className="mt-1 text-3xl font-bold text-[#1E73B8]">{creditBalance}</p>
-            <p className="text-xs text-gray-500">credits</p>
+            <p className="text-sm text-gray-600">{t('dashboard.wallets.currentBalance')}</p>
+            <p className="mt-1 text-3xl font-bold text-brand">{creditBalance}</p>
+            <p className="text-xs text-gray-500">{t('dashboard.wallets.creditsUnit')}</p>
           </div>
         </div>
 
         {historyEntries.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-            <p className="text-lg font-semibold text-gray-900">No wallet history yet</p>
+            <p className="text-lg font-semibold text-gray-900">{t('dashboard.wallets.historyEmptyTitle')}</p>
             <p className="mt-2 text-sm text-gray-600">
-              Successful top-ups, spending, and failed payment attempts will appear here automatically.
+              {t('dashboard.wallets.historyEmptyDescription')}
             </p>
           </div>
         ) : (
@@ -285,10 +305,10 @@ const WalletsPanel = () => {
             <table className="min-w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-500">
-                  <th className="pb-3 font-medium">Date</th>
-                  <th className="pb-3 font-medium">Credits</th>
-                  <th className="pb-3 font-medium">Amount</th>
-                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 font-medium">{t('common.date')}</th>
+                  <th className="pb-3 font-medium">{t('dashboard.wallets.columns.credits')}</th>
+                  <th className="pb-3 font-medium">{t('common.amount')}</th>
+                  <th className="pb-3 font-medium">{t('common.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -315,12 +335,14 @@ const WalletsPanel = () => {
                         </span>
                       </td>
                       <td className="py-4 text-gray-900">
-                        {entry.amount > 0 ? `Tk ${Number(entry.amount).toFixed(2)}` : 'N/A'}
+                        {entry.amount > 0
+                          ? t('dashboard.wallets.amountTk', { amount: Number(entry.amount).toFixed(2) })
+                          : t('common.na')}
                       </td>
                       <td className="py-4">
                         <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${statusStyle}`}>
                           {entryType === 'pending' ? <FiClock size={12} /> : null}
-                          {getStatusLabel(entry)}
+                          {getStatusLabel(entry, tv)}
                         </span>
                       </td>
                     </tr>
@@ -336,18 +358,18 @@ const WalletsPanel = () => {
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Payout Wallets</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{t('dashboard.wallets.payoutTitle')}</h2>
               <p className="mt-2 text-sm text-gray-600">
-                Add your payout wallets so approved referral withdrawals can be sent to you.
+                {t('dashboard.wallets.payoutDescription')}
               </p>
             </div>
           </div>
 
           {wallets.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-              <p className="text-lg font-semibold text-gray-900">No payout wallet added yet</p>
+              <p className="text-lg font-semibold text-gray-900">{t('dashboard.wallets.payoutEmptyTitle')}</p>
               <p className="mt-2 text-sm text-gray-600">
-                Add at least one payout wallet before requesting a withdrawal.
+                {t('dashboard.wallets.payoutEmptyDescription')}
               </p>
             </div>
           ) : (
@@ -362,7 +384,7 @@ const WalletsPanel = () => {
                         </p>
                         {wallet.is_default ? (
                           <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">
-                            Default
+                            {t('dashboard.wallets.default')}
                           </span>
                         ) : null}
                       </div>
@@ -378,7 +400,7 @@ const WalletsPanel = () => {
                           className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                         >
                           <FiStar />
-                          Make Default
+                          {t('dashboard.wallets.makeDefault')}
                         </button>
                       ) : null}
                       <button
@@ -387,7 +409,7 @@ const WalletsPanel = () => {
                         className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                       >
                         <FiEdit2 />
-                        Edit
+                        {t('common.edit')}
                       </button>
                       <button
                         type="button"
@@ -395,7 +417,7 @@ const WalletsPanel = () => {
                         className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
                       >
                         <FiTrash2 />
-                        Delete
+                        {t('common.delete')}
                       </button>
                     </div>
                   </div>
@@ -407,103 +429,125 @@ const WalletsPanel = () => {
 
         <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-2">
-            <FiPlus className="text-[#1E73B8]" />
+            <FiPlus className="text-brand" />
             <h3 className="text-lg font-semibold text-gray-900">
-              {formData.id ? 'Edit Payout Wallet' : 'Add Payout Wallet'}
+              {formData.id ? t('dashboard.wallets.editWalletTitle') : t('dashboard.wallets.addWalletTitle')}
             </h3>
           </div>
 
           <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Banking Type</label>
+              <label htmlFor="wallet-banking-type" className="ui-label">{t('dashboard.wallets.bankingType')}</label>
               <select
+                id="wallet-banking-type"
                 value={formData.banking_type}
                 onChange={(event) =>
                   setFormData((current) => ({ ...current, banking_type: event.target.value }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                className="ui-field"
               >
                 <option value="bKash">bKash</option>
                 <option value="Nagad">Nagad</option>
                 <option value="Rocket">Rocket</option>
-                <option value="Bank">Bank</option>
+                <option value="Bank">{t('dashboard.wallets.bankOption')}</option>
               </select>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Wallet / Bank Name</label>
+              <label htmlFor="wallet-name" className="ui-label">{t('dashboard.wallets.walletName')}</label>
               <input
+                id="wallet-name"
                 type="text"
                 value={formData.bank_name}
                 onChange={(event) =>
                   setFormData((current) => ({ ...current, bank_name: event.target.value }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
-                placeholder="e.g. Personal bKash"
+                className="ui-field"
+                placeholder={t('dashboard.wallets.walletNamePlaceholder')}
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Account Number</label>
+              <label htmlFor="wallet-account-number" className="ui-label">{t('dashboard.wallets.accountNumber')}</label>
               <input
+                id="wallet-account-number"
                 type="text"
+                inputMode="numeric"
                 value={formData.account_number}
                 onChange={(event) =>
                   setFormData((current) => ({ ...current, account_number: event.target.value }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
-                placeholder="017XXXXXXXX"
+                className="ui-field"
+                placeholder={t('dashboard.wallets.accountNumberPlaceholder')}
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Account Name</label>
+              <label htmlFor="wallet-account-name" className="ui-label">{t('dashboard.wallets.accountName')}</label>
               <input
+                id="wallet-account-name"
                 type="text"
                 value={formData.account_name}
                 onChange={(event) =>
                   setFormData((current) => ({ ...current, account_name: event.target.value }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
-                placeholder="Name registered on the wallet"
+                className="ui-field"
+                placeholder={t('dashboard.wallets.accountNamePlaceholder')}
               />
             </div>
 
-            <label className="flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-sm text-gray-700">
+            <label className="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-body text-ink">
               <input
+                className="h-4 w-4 accent-brand"
                 type="checkbox"
                 checked={formData.is_default}
                 onChange={(event) =>
                   setFormData((current) => ({ ...current, is_default: event.target.checked }))
                 }
               />
-              Set as default payout wallet
+              {t('dashboard.wallets.setDefault')}
             </label>
 
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            {notice ? <p className="text-sm text-green-600">{notice}</p> : null}
+            {error ? <p role="alert" className="ui-error">{error}</p> : null}
+            {notice ? <p role="status" className="text-caption font-medium text-success">{notice}</p> : null}
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-[#1E73B8] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1665a0] disabled:cursor-not-allowed disabled:opacity-60"
+                className="ui-btn ui-btn-primary ui-btn-sm"
               >
-                {saving ? 'Saving...' : formData.id ? 'Update Wallet' : 'Add Wallet'}
+                {saving
+                  ? t('dashboard.common.saving')
+                  : formData.id
+                    ? t('dashboard.wallets.updateWallet')
+                    : t('dashboard.wallets.addWallet')}
               </button>
               {formData.id ? (
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+                  className="ui-btn ui-btn-secondary ui-btn-sm"
                 >
-                  Cancel Edit
+                  {t('dashboard.wallets.cancelEdit')}
                 </button>
               ) : null}
             </div>
           </form>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteId)}
+        onCancel={() => setPendingDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t('common.delete')}
+        description={t('dashboard.wallets.deleteConfirm')}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        closeLabel={t('common.close')}
+        busy={deleting}
+      />
     </div>
   )
 }

@@ -1,14 +1,28 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import {
-  getAuthenticatedContext,
-  verifyPaymentlyPayment,
-} from "../_shared/paymently.ts";
+import { createAdminClient, getAuthenticatedContext } from "../_shared/paymently.ts";
+import { checkEpsTransactionStatus } from "../_shared/eps.ts";
 import {
   getPaymentTransactionById,
   getPaymentTransactionForInvoice,
   syncGatewayPayment,
 } from "../_shared/payment-transactions.ts";
+
+const sanitizePayment = (payment: Record<string, unknown>) => ({
+  id: payment.id || null,
+  transaction_id: payment.transaction_id || null,
+  invoice_id: payment.invoice_id || null,
+  reference: payment.reference || null,
+  provider: payment.provider || null,
+  payment_method: payment.payment_method || null,
+  status: payment.status || "pending",
+  amount: payment.amount || 0,
+  credits_to_add: payment.credits_to_add || 0,
+  description: payment.description || null,
+  created_at: payment.created_at || null,
+  updated_at: payment.updated_at || null,
+  credited_at: payment.credited_at || null,
+});
 
 Deno.serve(async (request) => {
   try {
@@ -16,22 +30,62 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Method not allowed" }, { status: 405 });
     }
 
-    const { profile, adminClient } = await getAuthenticatedContext(request);
     const body = await request.json().catch(() => ({}));
-    const invoiceId = body?.invoiceId || body?.invoice_id;
+    const invoiceId = body?.invoiceId || body?.invoice_id || null;
+    const paymentId = body?.paymentId || body?.payment_id || null;
+    const reference = body?.reference || body?.slug || null;
+    const requestedProvider = String(body?.provider || "").toLowerCase();
+    const isEpsReturn = requestedProvider === "eps" || Boolean(reference && !invoiceId);
+
+    if (isEpsReturn) {
+      const adminClient = createAdminClient();
+      const lookupReference = reference || invoiceId;
+
+      if (!paymentId && !lookupReference) {
+        return Response.json({ error: "EPS payment reference is required" }, { status: 400 });
+      }
+
+      const payment = paymentId
+        ? await getPaymentTransactionById(adminClient, paymentId)
+        : await getPaymentTransactionForInvoice(adminClient, lookupReference);
+
+      if (!payment) {
+        return Response.json(
+          { error: "Payment transaction not found for this payment" },
+          { status: 404 },
+        );
+      }
+
+      const merchantTransactionId = payment.reference || lookupReference;
+
+      if (!merchantTransactionId) {
+        return Response.json({ error: "EPS payment reference is required" }, { status: 400 });
+      }
+
+      const statusResult = await checkEpsTransactionStatus(merchantTransactionId);
+      const verificationData = {
+        ...statusResult,
+        provider: "eps",
+        payment_method: "eps",
+      };
+
+      const syncedPayment = await syncGatewayPayment(adminClient, verificationData, "eps");
+
+      return Response.json({
+        data: {
+          payment: sanitizePayment(syncedPayment),
+          verification: verificationData,
+        },
+      });
+    }
+
+    const { profile, adminClient } = await getAuthenticatedContext(request);
 
     if (!invoiceId) {
       return Response.json({ error: "invoice_id is required" }, { status: 400 });
     }
 
-    const verificationData = await verifyPaymentlyPayment(invoiceId);
-    const payload = verificationData?.data || verificationData || {};
-    const metadata = payload?.metadata || {};
-    const paymentId = metadata.payment_transaction_id || metadata.payment_id || null;
-
-    const payment = paymentId
-      ? await getPaymentTransactionById(adminClient, paymentId)
-      : await getPaymentTransactionForInvoice(adminClient, invoiceId);
+    const payment = await getPaymentTransactionForInvoice(adminClient, invoiceId);
 
     if (!payment) {
       return Response.json(
@@ -44,11 +98,19 @@ Deno.serve(async (request) => {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const syncedPayment = await syncGatewayPayment(adminClient, verificationData);
+    const merchantTransactionId = payment.reference || invoiceId;
+    const statusResult = await checkEpsTransactionStatus(merchantTransactionId);
+    const verificationData = {
+      ...statusResult,
+      provider: "eps",
+      payment_method: "eps",
+    };
+
+    const syncedPayment = await syncGatewayPayment(adminClient, verificationData, "eps");
 
     return Response.json({
       data: {
-        payment: syncedPayment,
+        payment: sanitizePayment(syncedPayment),
         verification: verificationData,
       },
     });

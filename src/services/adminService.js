@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { isRecoverableSupabaseError, supabase } from './supabaseClient'
 import { getAccessToken } from './apiClient'
 import { invokeSupabaseFunction } from './functionClient'
 
@@ -2253,6 +2253,10 @@ export const getCreditCosts = async () => {
   try {
     return await getCreditCostsFromTable()
   } catch (error) {
+    if (isRecoverableSupabaseError(error)) {
+      return { ...DEFAULT_CREDIT_COSTS }
+    }
+
     if (!isMissingTableError(error) && !isSupabaseQuotaError(error)) {
       const errorMsg = error?.message || error?.toString() || 'Unknown error'
       console.error('Error getting credit costs from credit_settings:', errorMsg)
@@ -2261,6 +2265,10 @@ export const getCreditCosts = async () => {
     try {
       return await getCreditCostsFromSiteSettings()
     } catch (siteSettingsError) {
+      if (isRecoverableSupabaseError(siteSettingsError)) {
+        return { ...DEFAULT_CREDIT_COSTS }
+      }
+
       if (!isMissingTableError(siteSettingsError) && !isSupabaseQuotaError(siteSettingsError)) {
         const errorMsg = siteSettingsError?.message || siteSettingsError?.toString() || 'Unknown error'
         console.error('Error getting credit costs from site_settings:', errorMsg)

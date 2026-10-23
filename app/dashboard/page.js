@@ -10,7 +10,7 @@ import Footer from '../../src/Component/Home/Footer.jsx'
 export default function DashboardPage() {
   return (
     <Suspense fallback={null}>
-      <div className="min-h-screen bg-gray-50">
+      <div className="site-main min-h-screen bg-gray-50">
         <Navber />
         <FloatingQuickRail />
         <div className="max-w-full mx-auto">

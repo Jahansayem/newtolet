@@ -1,12 +1,16 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MdMoreVert } from 'react-icons/md';
+import { RxCross2 } from 'react-icons/rx';
+import { FiCalendar, FiHeart, FiMapPin } from 'react-icons/fi';
+import { LuBath, LuBedDouble } from 'react-icons/lu';
 import PropertyCardMedia from './PropertyCardMedia';
 import RentDisplay from './RentDisplay';
 import { buildListDetailsHref } from '../lib/routePaths';
 import { isRentNegotiable } from '../utils/rentDisplay';
+import { getPropertyIdNumber } from '../utils/propertyDisplaySerial';
 import { getStoredUser } from '../services/authService';
 import {
     getSavedPropertyIds,
@@ -19,6 +23,7 @@ import {
     toggleComparedProperty,
 } from '../services/propertyCompareService';
 import { submitPropertyReport } from '../services/propertyReportService';
+import { useLanguage } from '../i18n/useLanguage';
 
 const getCardImageSource = (item) =>
     item?.primary_image ||
@@ -35,35 +40,35 @@ const REPORT_REASONS = [
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : '');
 
-const buildCardTitle = (item) => {
+const buildCardTitle = (item, t, tv) => {
     const category = normalizeText(item?.category);
     const propertyType = normalizeText(item?.property_type);
     const parts = [];
 
     if (category) {
-        parts.push(category);
+        parts.push(tv('categories', category));
     }
 
     if (propertyType && propertyType.toLowerCase() !== category.toLowerCase()) {
-        parts.push(propertyType);
+        parts.push(tv('propertyTypes', propertyType));
     }
 
-    const title = parts.length ? parts.join(' ') : 'Property';
-    return title.toLowerCase().includes('rent') ? title : `${title} Rent`;
+    const title = parts.length ? parts.join(' ') : t('listing.card.titleFallback');
+    return title.toLowerCase().includes('rent') ? title : t('listing.card.rentTitle', { title });
 };
 
-const formatMonth = (dateValue) => {
+const formatMonth = (dateValue, fd, fallback) => {
     if (!dateValue) {
-        return 'N/A';
+        return fallback;
     }
 
     const date = new Date(dateValue);
 
     if (Number.isNaN(date.getTime())) {
-        return 'N/A';
+        return fallback;
     }
 
-    return date.toLocaleString('default', { month: 'long' });
+    return fd(date, { month: 'short' });
 };
 
 const PropertyListingCard = ({
@@ -74,6 +79,7 @@ const PropertyListingCard = ({
     onSavedPropertiesChange = null,
     onComparedPropertiesChange = null,
 }) => {
+    const { t, tv, fd } = useLanguage();
     const [isSaved, setIsSaved] = useState(false);
     const [isCompared, setIsCompared] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -82,7 +88,12 @@ const PropertyListingCard = ({
     const [reportMessage, setReportMessage] = useState('');
     const [reportFeedback, setReportFeedback] = useState({ type: '', text: '' });
     const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+    const [saveStatus, setSaveStatus] = useState('');
+    const reportTitleId = useId();
+    const menuId = useId();
+    const reportReasonRef = useRef(null);
     const menuRef = useRef(null);
+    const menuButtonRef = useRef(null);
     const isMountedRef = useRef(true);
     const itemId = item?.id;
     const rentPricing = useMemo(() => ({
@@ -95,7 +106,7 @@ const PropertyListingCard = ({
             ? { ...rentPricing, rent_amount_bdt: null }
             : rentPricing
     ), [isNegotiableRent, rentPricing]);
-    const cardTitle = useMemo(() => buildCardTitle(item), [item]);
+    const cardTitle = useMemo(() => buildCardTitle(item, t, tv), [item, t, tv]);
     const cardImageSource = useMemo(() => getCardImageSource(item), [item]);
 
     useEffect(() => {
@@ -185,6 +196,7 @@ const PropertyListingCard = ({
             if (event.key === 'Escape') {
                 if (isMountedRef.current) {
                     setIsMenuOpen(false);
+                    menuButtonRef.current?.focus();
                 }
             }
         };
@@ -202,15 +214,23 @@ const PropertyListingCard = ({
         event.preventDefault();
         event.stopPropagation();
 
-        const result = await toggleSavedProperty(getStoredUser()?.id || null, itemId);
+        try {
+            const result = await toggleSavedProperty(getStoredUser()?.id || null, itemId);
 
-        if (isMountedRef.current) {
-            setIsSaved(Boolean(result?.saved));
-            setIsMenuOpen(false);
-        }
+            if (isMountedRef.current) {
+                setIsSaved(Boolean(result?.saved));
+                setSaveStatus(result?.saved ? 'saved' : 'removed');
+                setIsMenuOpen(false);
+            }
 
-        if (Array.isArray(result?.propertyIds)) {
-            onSavedPropertiesChange?.(result.propertyIds);
+            if (Array.isArray(result?.propertyIds)) {
+                onSavedPropertiesChange?.(result.propertyIds);
+            }
+        } catch (error) {
+            console.error('Error toggling saved property:', error);
+            if (isMountedRef.current) {
+                setSaveStatus('error');
+            }
         }
     }, [itemId, onSavedPropertiesChange]);
 
@@ -223,6 +243,7 @@ const PropertyListingCard = ({
         if (isMountedRef.current) {
             setIsCompared(Boolean(result?.compared));
             setIsMenuOpen(false);
+            menuButtonRef.current?.focus();
         }
 
         if (Array.isArray(result?.propertyIds)) {
@@ -246,6 +267,7 @@ const PropertyListingCard = ({
         }
 
         setIsReportOpen(false);
+        menuButtonRef.current?.focus();
     }, [isSubmittingReport]);
 
     const handleReportSubmit = useCallback(async (event) => {
@@ -253,7 +275,7 @@ const PropertyListingCard = ({
         setReportFeedback({ type: '', text: '' });
 
         if (!reportReason.trim()) {
-            setReportFeedback({ type: 'error', text: 'Select a report reason.' });
+            setReportFeedback({ type: 'error', text: t('listing.card.report.selectReason') });
             return;
         }
 
@@ -271,8 +293,8 @@ const PropertyListingCard = ({
                 setReportFeedback({
                     type: 'success',
                     text: result.isLocalFallback
-                        ? 'Report saved locally.'
-                        : 'Report submitted successfully.',
+                        ? t('listing.card.report.savedLocally')
+                        : t('listing.card.report.submitted'),
                 });
                 setReportMessage('');
             }
@@ -280,7 +302,7 @@ const PropertyListingCard = ({
             if (isMountedRef.current) {
                 setReportFeedback({
                     type: 'error',
-                    text: error.message || 'Unable to submit report.',
+                    text: error.message || t('listing.card.report.failed'),
                 });
             }
         } finally {
@@ -288,162 +310,260 @@ const PropertyListingCard = ({
                 setIsSubmittingReport(false);
             }
         }
-    }, [itemId, reportMessage, reportReason]);
+    }, [itemId, reportMessage, reportReason, t]);
+
+    useEffect(() => {
+        if (!saveStatus) {
+            return undefined;
+        }
+
+        const timer = setTimeout(() => {
+            if (isMountedRef.current) {
+                setSaveStatus('');
+            }
+        }, 2500);
+
+        return () => clearTimeout(timer);
+    }, [saveStatus]);
+
+    useEffect(() => {
+        if (!isReportOpen) {
+            return undefined;
+        }
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                closeReportModal();
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        const frame = requestAnimationFrame(() => reportReasonRef.current?.focus());
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            cancelAnimationFrame(frame);
+        };
+    }, [isReportOpen, closeReportModal]);
+
+    // Stable public Property ID from the database; never a list position.
+    const propertyIdNumber = getPropertyIdNumber(item);
+    const propertyIdLabel = propertyIdNumber ? t('listing.card.idLabel', { id: propertyIdNumber }) : '';
+    const bedCount = item.total_rooms ?? item.specifications?.total_rooms ?? 0;
+    const bathCount = item.total_bathrooms ?? item.specifications?.total_bathrooms ?? 0;
+    const availableMonth = formatMonth(item.availability?.available_from ?? item.available_from, fd, t('common.na'));
+    const areaText = `${item.location?.area || t('listing.card.areaNotSet')}${item.location?.state_district ? `, ${item.location.state_district}` : ''}`;
 
     return (
         <>
-            <div className='group relative flex h-auto flex-col rounded-[14px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md'>
+            <article className='ui-card ui-card-interactive group relative flex h-full flex-col'>
                 <Link
                     to={buildListDetailsHref(item.id)}
-                    className='absolute inset-0 z-10 rounded-[14px]'
-                    aria-label={`View details for ${cardTitle}`}
+                    className='absolute inset-0 z-10 rounded-[var(--radius-card)]'
+                    aria-label={propertyIdLabel
+                        ? t('listing.card.viewDetailsLabelled', { title: cardTitle, label: propertyIdLabel })
+                        : t('listing.card.viewDetails', { title: cardTitle })}
                 />
-                <div className='pointer-events-none flex flex-col md:h-full'>
-                    <div className='overflow-hidden rounded-t-[14px] flex-shrink-0'>
+
+                <div className='pointer-events-none flex h-full flex-col'>
+                    <div className='overflow-hidden rounded-t-[var(--radius-card)]'>
                         <PropertyCardMedia
                             src={cardImageSource}
-                            alt={`${item.category} property in ${item.location?.area || 'Bangladesh'}`}
+                            alt={t('listing.card.imageAlt', {
+                                category: tv('categories', item.category),
+                                area: item.location?.area || t('listing.card.defaultCountry'),
+                            })}
                             eager={index < 10}
                             propertyType={item.property_type}
                             category={item.category}
                             pricing={displayRentPricing}
+                            isPinned={item.is_pinned}
                         />
                     </div>
 
-                    <div className='relative flex min-h-0 flex-col border-t border-slate-100 px-3 py-3 pr-10 md:flex-1'>
-                        {item.property_id_number && (
-                            <p className='text-xs font-semibold text-slate-500 flex-shrink-0'>
-                                ID: #{item.property_id_number}
-                            </p>
-                        )}
-                        <p className='line-clamp-1 text-base font-bold leading-6 text-[#1E73B8] flex-shrink-0'>
-                            {cardTitle}
-                        </p>
-                        <p className='line-clamp-1 text-sm leading-tight text-slate-700 flex-shrink-0 mb-0'>
-                            {item.location?.area || 'Area not set'}{item.location?.state_district ? `, ${item.location.state_district}` : ''}
-                        </p>
-
-                        <div className='mt-1 text-sm leading-tight text-slate-900 space-y-0'>
-                            <p className='line-clamp-1'>
-                                Bed: {item.total_rooms ?? item.specifications?.total_rooms ?? 0}, Bath: {item.total_bathrooms ?? item.specifications?.total_bathrooms ?? 0}
-                            </p>
-                            <p className='line-clamp-1'>
-                                To-Let from: {formatMonth(item.availability?.available_from ?? item.available_from)}
-                            </p>
-                            <p className='line-clamp-1'>
-                                Rent : <RentDisplay pricing={displayRentPricing} prefix='' suffix='BDT' />
-                            </p>
-                        </div>
-
-                        <div ref={menuRef} className='pointer-events-auto absolute right-2 top-11 z-20'>
-                            <button
-                                type='button'
-                                onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setIsMenuOpen((current) => !current);
-                                }}
-                                className='flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900'
-                                aria-label='Property actions'
-                                aria-expanded={isMenuOpen}
-                            >
-                                <MdMoreVert className='text-xl' />
-                            </button>
-
-                            {isMenuOpen && (
-                                <div
-                                    className='absolute right-0 top-8 w-40 overflow-hidden rounded-md border border-slate-200 bg-white py-1 text-sm text-slate-900 shadow-lg'
-                                    onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                    }}
-                                >
-                                    <button
-                                        type='button'
-                                        onClick={toggleSave}
-                                        className='block w-full px-3 py-2 text-left hover:bg-slate-50'
-                                    >
-                                        {isSaved ? 'Remove Saved' : 'Save Property'}
-                                    </button>
-                                    <button
-                                        type='button'
-                                        onClick={toggleCompare}
-                                        className='block w-full px-3 py-2 text-left hover:bg-slate-50'
-                                    >
-                                        {isCompared ? 'Remove Compare' : 'Add to Compare'}
-                                    </button>
-                                    <button
-                                        type='button'
-                                        onClick={openReportModal}
-                                        className='block w-full px-3 py-2 text-left hover:bg-slate-50'
-                                    >
-                                        Report Property
-                                    </button>
-                                </div>
+                    <div className='flex flex-1 flex-col px-3 pb-3 pt-2.5'>
+                        {/* Price first: the one number every tenant scans for. */}
+                        <p className='ui-price text-xl leading-7'>
+                            {isNegotiableRent ? (
+                                <span className='ui-badge ui-badge-neutral text-sm'>{t('listing.negotiable')}</span>
+                            ) : (
+                                <RentDisplay
+                                    pricing={displayRentPricing}
+                                    prefix='৳ '
+                                    suffix={t('listing.card.perMonthShort')}
+                                    suffixClassName='text-sm font-medium text-muted'
+                                />
                             )}
+                        </p>
+
+                        <h3 className='mt-1 line-clamp-2 min-h-[2.75rem] text-[15px] font-semibold leading-[22px] text-ink'>
+                            {cardTitle}
+                        </h3>
+
+                        <p className='mt-0.5 flex min-w-0 items-center gap-1 text-caption text-muted'>
+                            <FiMapPin className='shrink-0' aria-hidden='true' />
+                            <span className='truncate' title={areaText}>{areaText}</span>
+                        </p>
+
+                        <ul className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-ink/85' aria-label={t('listing.card.specsLabel')}>
+                            <li className='inline-flex items-center gap-1'>
+                                <LuBedDouble className='text-base text-muted' aria-hidden='true' />
+                                <span>{t('listing.card.beds', { count: bedCount })}</span>
+                            </li>
+                            <li className='inline-flex items-center gap-1'>
+                                <LuBath className='text-base text-muted' aria-hidden='true' />
+                                <span>{t('listing.card.baths', { count: bathCount })}</span>
+                            </li>
+                            <li className='inline-flex items-center gap-1'>
+                                <FiCalendar className='text-base text-muted' aria-hidden='true' />
+                                <span>{t('listing.card.availableFrom', { month: availableMonth })}</span>
+                            </li>
+                        </ul>
+
+                        <div className='mt-auto flex items-center justify-between gap-2 border-t border-line pt-2.5'>
+                            {propertyIdLabel ? (
+                                <span className='ui-id-ticket' title={t('listing.card.idTicketTitle')}>{propertyIdLabel}</span>
+                            ) : <span />}
+
+                            <div className='pointer-events-auto relative z-20 flex items-center gap-0.5'>
+                                <button
+                                    type='button'
+                                    onClick={toggleSave}
+                                    aria-pressed={isSaved}
+                                    aria-label={isSaved ? t('listing.card.removeSaved') : t('listing.card.saveProperty')}
+                                    className={`ui-btn ui-btn-icon ${isSaved ? 'bg-danger-soft text-danger' : 'ui-btn-ghost text-muted hover:text-danger'}`}
+                                >
+                                    <FiHeart className='text-lg' fill={isSaved ? 'currentColor' : 'none'} aria-hidden='true' />
+                                </button>
+
+                                <div ref={menuRef} className='relative'>
+                                    <button
+                                        ref={menuButtonRef}
+                                        type='button'
+                                        onClick={(event) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            setIsMenuOpen((current) => !current);
+                                        }}
+                                        className='ui-btn ui-btn-ghost ui-btn-icon text-muted'
+                                        aria-label={t('listing.card.actions')}
+                                        aria-haspopup='menu'
+                                        aria-expanded={isMenuOpen}
+                                        aria-controls={menuId}
+                                    >
+                                        <MdMoreVert className='text-xl' aria-hidden='true' />
+                                    </button>
+
+                                    {isMenuOpen && (
+                                        <div
+                                            id={menuId}
+                                            role='menu'
+                                            className='absolute bottom-full right-0 mb-1 w-48 overflow-hidden rounded-xl border border-line bg-white py-1 text-sm text-ink shadow-overlay'
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                            }}
+                                        >
+                                            <button
+                                                type='button'
+                                                role='menuitem'
+                                                onClick={toggleCompare}
+                                                className='block w-full px-3 py-2.5 text-left hover:bg-brand-soft hover:text-brand-pressed'
+                                            >
+                                                {isCompared ? t('listing.card.removeCompare') : t('listing.card.addToCompare')}
+                                            </button>
+                                            <button
+                                                type='button'
+                                                role='menuitem'
+                                                onClick={openReportModal}
+                                                className='block w-full px-3 py-2.5 text-left hover:bg-brand-soft hover:text-brand-pressed'
+                                            >
+                                                {t('listing.card.reportProperty')}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
+
+                        <p
+                            role='status'
+                            aria-live='polite'
+                            className={saveStatus
+                                ? `mt-2 rounded-lg px-2.5 py-1.5 text-caption font-medium ${saveStatus === 'error' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'}`
+                                : 'sr-only'}
+                        >
+                            {saveStatus === 'saved'
+                                ? t('listing.card.savedStatus')
+                                : saveStatus === 'removed'
+                                    ? t('listing.card.removedStatus')
+                                    : saveStatus === 'error'
+                                        ? t('listing.card.saveFailed')
+                                        : ''}
+                        </p>
                     </div>
                 </div>
-            </div>
+            </article>
 
             {isReportOpen && (
                 <div
-                    className='fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 px-4'
+                    className='fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 px-4'
                     onClick={closeReportModal}
                 >
                     <form
-                        className='w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl'
+                        role='dialog'
+                        aria-modal='true'
+                        aria-labelledby={reportTitleId}
+                        className='ui-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto p-5 shadow-overlay sm:p-6'
                         onSubmit={handleReportSubmit}
                         onClick={(event) => event.stopPropagation()}
                     >
                         <div className='flex items-start justify-between gap-4'>
                             <div>
-                                <h3 className='text-lg font-bold text-slate-900'>Report Property</h3>
-                                <p className='mt-1 text-sm text-slate-500'>{cardTitle}</p>
+                                <h3 id={reportTitleId} className='text-lg font-bold text-ink'>{t('listing.card.report.title')}</h3>
+                                <p className='mt-1 text-sm text-muted'>{cardTitle}</p>
                             </div>
                             <button
                                 type='button'
                                 onClick={closeReportModal}
-                                className='rounded-full px-2 py-1 text-xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-                                aria-label='Close report form'
+                                className='ui-btn ui-btn-ghost ui-btn-icon shrink-0 text-muted'
+                                aria-label={t('listing.card.report.close')}
                             >
-                                x
+                                <RxCross2 className='text-xl' aria-hidden='true' />
                             </button>
                         </div>
 
-                        <label className='mt-5 block text-sm font-semibold text-slate-700'>
-                            Reason
+                        <label className='mt-5 block'>
+                            <span className='ui-label'>{t('listing.card.report.reason')}</span>
                             <select
+                                ref={reportReasonRef}
                                 value={reportReason}
                                 onChange={(event) => setReportReason(event.target.value)}
-                                className='mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/15'
+                                className='ui-field'
                             >
                                 {REPORT_REASONS.map((reason) => (
                                     <option key={reason} value={reason}>
-                                        {reason}
+                                        {tv('reportReasons', reason)}
                                     </option>
                                 ))}
                             </select>
                         </label>
 
-                        <label className='mt-4 block text-sm font-semibold text-slate-700'>
-                            Message
+                        <label className='mt-4 block'>
+                            <span className='ui-label'>{t('listing.card.report.message')}</span>
                             <textarea
                                 value={reportMessage}
                                 onChange={(event) => setReportMessage(event.target.value)}
                                 rows={4}
-                                className='mt-2 w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/15'
-                                placeholder='Add details if needed'
+                                className='ui-field'
+                                placeholder={t('listing.card.report.messagePlaceholder')}
                             />
                         </label>
 
                         {reportFeedback.text && (
                             <p
-                                className={`mt-4 rounded-lg px-3 py-2 text-sm ${
-                                    reportFeedback.type === 'success'
-                                        ? 'bg-green-50 text-green-700'
-                                        : 'bg-red-50 text-red-700'
-                                }`}
+                                role={reportFeedback.type === 'error' ? 'alert' : 'status'}
+                                className={`ui-note mt-4 ${reportFeedback.type === 'success' ? 'ui-note-success' : 'ui-note-danger'}`}
                             >
                                 {reportFeedback.text}
                             </p>
@@ -453,16 +573,16 @@ const PropertyListingCard = ({
                             <button
                                 type='button'
                                 onClick={closeReportModal}
-                                className='rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50'
+                                className='ui-btn ui-btn-secondary ui-btn-sm'
                             >
-                                Cancel
+                                {t('common.cancel')}
                             </button>
                             <button
                                 type='submit'
                                 disabled={isSubmittingReport}
-                                className='rounded-lg bg-[#1E73B8] px-4 py-2 text-sm font-semibold text-white hover:bg-[#155b91] disabled:cursor-not-allowed disabled:opacity-60'
+                                className='ui-btn ui-btn-primary ui-btn-sm'
                             >
-                                {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+                                {isSubmittingReport ? t('listing.card.report.submitting') : t('listing.card.report.submit')}
                             </button>
                         </div>
                     </form>

@@ -1,7 +1,42 @@
-import { supabase } from './supabaseClient';
+import {
+    isRecoverableSupabaseError,
+    isSupabaseConnectionUnavailable,
+    isSupabaseProjectRestricted,
+    supabase
+} from './supabaseClient';
 import { readSnapshot, writeSnapshot } from './cacheService';
 
 export const getApprovedFeedbackCacheKey = () => 'feedback:approved';
+
+const getErrorMessage = (error) => {
+    if (!error) {
+        return 'Unknown error';
+    }
+
+    if (typeof error === 'string') {
+        return error;
+    }
+
+    return error.message || error.details || error.hint || JSON.stringify(error);
+};
+
+const getApprovedFeedbackFallback = (cacheKey, error = null) => {
+    const cachedFeedback = readSnapshot(cacheKey);
+
+    if (cachedFeedback) {
+        if (process.env.NODE_ENV === 'development' && error && !isRecoverableSupabaseError(error)) {
+            console.warn(`Using cached approved feedback after fetch failed: ${getErrorMessage(error)}`);
+        }
+
+        return { data: cachedFeedback, error: null };
+    }
+
+    if (error && process.env.NODE_ENV === 'development' && !isRecoverableSupabaseError(error)) {
+        console.warn('Approved feedback unavailable:', error);
+    }
+
+    return { data: [], error: null };
+};
 
 /**
  * Submit new feedback
@@ -24,7 +59,7 @@ export const submitFeedback = async (feedbackData) => {
         if (error) throw error;
         return { data, error: null };
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         console.error('Error submitting feedback:', errorMessage, error);
         return { data: null, error: { message: errorMessage, ...error } };
     }
@@ -44,7 +79,7 @@ export const getAllFeedback = async () => {
         if (error) throw error;
         return { data, error: null };
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         console.error('Error fetching feedback:', errorMessage, error);
         return { data: null, error: { message: errorMessage, ...error } };
     }
@@ -57,6 +92,14 @@ export const getAllFeedback = async () => {
 export const getApprovedFeedback = async () => {
     const cacheKey = getApprovedFeedbackCacheKey();
 
+    if (isSupabaseProjectRestricted() || isSupabaseConnectionUnavailable()) {
+        return getApprovedFeedbackFallback(cacheKey);
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return getApprovedFeedbackFallback(cacheKey);
+    }
+
     try {
         const { data, error } = await supabase
             .from('feedback')
@@ -64,24 +107,15 @@ export const getApprovedFeedback = async () => {
             .eq('status', 'approved')
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (error) {
+            return getApprovedFeedbackFallback(cacheKey, error);
+        }
+
         const approvedFeedback = data || [];
         writeSnapshot(cacheKey, approvedFeedback);
         return { data: approvedFeedback, error: null };
     } catch (error) {
-        // Better error logging with full details
-        const errorMessage = error?.message || String(error);
-        const errorDetails = error ? JSON.stringify(error, Object.getOwnPropertyNames(error), 2) : '{}';
-        console.error('Error fetching approved feedback:', errorMessage, errorDetails);
-
-        const cachedFeedback = readSnapshot(cacheKey);
-        if (cachedFeedback) {
-            console.warn('Using cached approved feedback after fetch error');
-            return { data: cachedFeedback, error: null };
-        }
-
-        // Return empty array instead of null to prevent UI crashes
-        return { data: [], error: { message: errorMessage, ...error } };
+        return getApprovedFeedbackFallback(cacheKey, error);
     }
 };
 
@@ -102,7 +136,7 @@ export const updateFeedbackStatus = async (feedbackId, status) => {
         if (error) throw error;
         return { data: data?.[0] || null, error: null };
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         console.error('Error updating feedback status:', errorMessage, error);
         return { data: null, error: { message: errorMessage, ...error } };
     }
@@ -123,7 +157,7 @@ export const deleteFeedback = async (feedbackId) => {
         if (error) throw error;
         return { data, error: null };
     } catch (error) {
-        const errorMessage = error?.message || String(error);
+        const errorMessage = getErrorMessage(error);
         console.error('Error deleting feedback:', errorMessage, error);
         return { data: null, error: { message: errorMessage, ...error } };
     }

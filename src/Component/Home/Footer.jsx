@@ -4,25 +4,27 @@ import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/f
 import { IoMdMail } from 'react-icons/io';
 import { FaPhone, FaLocationDot } from 'react-icons/fa6';
 import { IoChevronUp } from 'react-icons/io5';
+import { useLanguage } from '../../i18n/useLanguage';
+import { buildSearchHref } from './propertySearch';
 
 const LOGO_SRC = '/logo.png';
 const LOGO_FALLBACK_SRC = '/logo1.png';
 
 const footerLinks = [
-    { to: '/', label: 'Home' },
-    { to: '/propertylist2', label: 'Property List' },
-    { to: '/addproperty', label: 'Add Property' },
-    { to: '/about', label: 'About Us' },
-    { to: '/contact', label: 'Contact' },
+    { to: '/', labelKey: 'footer.links.home' },
+    { to: '/propertylist2', labelKey: 'footer.links.propertyList' },
+    { to: '/addproperty', labelKey: 'footer.links.addProperty' },
+    { to: '/about', labelKey: 'footer.links.aboutUs' },
+    { to: '/contact', labelKey: 'footer.links.contact' },
 ];
 
-const propertyTypeLinks = [
-    { to: '/propertylist?type=apartment', label: 'Apartments' },
-    { to: '/propertylist?type=house', label: 'Houses' },
-    { to: '/propertylist?type=villa', label: 'Villas' },
-    { to: '/propertylist?type=commercial', label: 'Commercial' },
-    { to: '/propertylist?type=land', label: 'Land' },
-];
+// Only property types the search page can actually filter by (see PROPERTY_TYPE_OPTIONS).
+// Labels come from the shared values.propertyTypes dictionary so EN/বাং stay in sync.
+const FOOTER_PROPERTY_TYPES = ['Apartment', 'House', 'Room', 'Office', 'Shop'];
+const propertyTypeLinks = FOOTER_PROPERTY_TYPES.map((type) => ({
+    to: buildSearchHref({ propertyType: type }),
+    type,
+}));
 
 const socialLinks = [
     { href: 'https://facebook.com', icon: FaFacebookF, label: 'Facebook' },
@@ -32,6 +34,7 @@ const socialLinks = [
 ];
 
 const Footer = () => {
+    const { t, tv } = useLanguage();
     const currentYear = new Date().getFullYear();
 
     const scrollToTop = () => {
@@ -39,22 +42,22 @@ const Footer = () => {
     };
 
     return (
-        <footer className='mt-16 bg-slate-950 text-white'>
-            <div className='site-shell-wide py-14 md:py-16'>
-                <div className='grid gap-10 border-b border-white/10 pb-12 md:grid-cols-2 xl:grid-cols-[1.15fr_repeat(3,minmax(0,1fr))]'>
-                    <div className='space-y-6'>
+        <footer className='mt-16 bg-ink text-white'>
+            <div className='site-shell py-12 md:py-16'>
+                <div className='grid gap-10 border-b border-white/10 pb-12 md:grid-cols-2 xl:grid-cols-[1.3fr_repeat(3,minmax(0,1fr))]'>
+                    <div className='space-y-5'>
                         <img
-                            className='w-40 brightness-0  invert transition-transform duration-300 hover:scale-[1.02] md:w-44'
+                            className='w-36 brightness-0 invert md:w-40'
                             src={LOGO_SRC}
-                            alt="Company Logo"
+                            alt={t('nav.logoAlt')}
                             onError={(event) => {
                                 event.currentTarget.src = LOGO_FALLBACK_SRC;
                             }}
                         />
-                        <p className='max-w-md text-sm leading-7 text-slate-300'>
-                            Your trusted partner in finding the right rental property. Search with clearer filters, browse verified listings, and move faster with tools built for real tenants.
+                        <p className='max-w-sm text-sm leading-6 text-primary-100/85'>
+                            {t('footer.tagline')}
                         </p>
-                        <div className='flex flex-wrap gap-3'>
+                        <div className='flex flex-wrap gap-2.5'>
                             {socialLinks.map(({ href, icon: Icon, label }) => (
                                 <a
                                     key={label}
@@ -62,69 +65,69 @@ const Footer = () => {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     aria-label={label}
-                                    className='flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition-all duration-300 hover:border-[#1E73B8] hover:bg-[#1E73B8] hover:text-white'
+                                    className='flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-primary-100 transition-colors hover:border-brand hover:bg-brand hover:text-white'
                                 >
-                                    <Icon className='text-sm' />
+                                    <Icon className='text-sm' aria-hidden='true' />
                                 </a>
                             ))}
                         </div>
                     </div>
 
-                    <div className='space-y-5'>
-                        <h3 className='text-base font-semibold text-white'>Quick Links</h3>
-                        <ul className='space-y-3 text-sm text-slate-300'>
-                            {footerLinks.map(({ to, label }) => (
-                                <li key={label}>
-                                    <Link to={to} className='inline-flex transition-colors duration-300 hover:text-[#67aee2]'>
-                                        {label}
+                    <div className='space-y-4'>
+                        <h2 className='ui-eyebrow text-primary-200'>{t('footer.quickLinks')}</h2>
+                        <ul className='space-y-1 text-sm'>
+                            {footerLinks.map(({ to, labelKey }) => (
+                                <li key={labelKey}>
+                                    <Link to={to} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>
+                                        {t(labelKey)}
                                     </Link>
                                 </li>
                             ))}
                         </ul>
                     </div>
 
-                    <div className='space-y-5'>
-                        <h3 className='text-base font-semibold text-white'>Property Types</h3>
-                        <ul className='space-y-3 text-sm text-slate-300'>
-                            {propertyTypeLinks.map(({ to, label }) => (
-                                <li key={label}>
-                                    <Link to={to} className='inline-flex transition-colors duration-300 hover:text-[#67aee2]'>
-                                        {label}
+                    <div className='space-y-4'>
+                        <h2 className='ui-eyebrow text-primary-200'>{t('footer.propertyTypes')}</h2>
+                        <ul className='space-y-1 text-sm'>
+                            {propertyTypeLinks.map(({ to, type }) => (
+                                <li key={type}>
+                                    <Link to={to} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>
+                                        {tv('propertyTypes', type)}
                                     </Link>
                                 </li>
                             ))}
                         </ul>
                     </div>
 
-                    <div className='space-y-5'>
-                        <h3 className='text-base font-semibold text-white'>Get In Touch</h3>
-                        <address className='space-y-4 text-sm not-italic text-slate-300'>
-                            <p className='flex items-start gap-3'>
-                                <FaPhone className='mt-1 text-[#67aee2]' />
-                                <span>09649551551</span>
+                    <div className='space-y-4'>
+                        <h2 className='ui-eyebrow text-primary-200'>{t('footer.getInTouch')}</h2>
+                        <address className='space-y-2 text-sm not-italic'>
+                            <p className='flex items-center gap-3'>
+                                <FaPhone className='text-primary-200' aria-hidden='true' />
+                                <a href='tel:09649551551' className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>09649551551</a>
                             </p>
-                            <p className='flex items-start gap-3 break-all'>
-                                <IoMdMail className='mt-1 text-[#67aee2]' />
-                                <span>newtolet.com@gmail.com</span>
+                            <p className='flex items-center gap-3 break-all'>
+                                <IoMdMail className='text-primary-200' aria-hidden='true' />
+                                <a href='mailto:newtolet.com@gmail.com' className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>newtolet.com@gmail.com</a>
                             </p>
                             <p className='flex items-start gap-3'>
-                                <FaLocationDot className='mt-1 text-[#67aee2]' />
-                                <span>Jugidor, Moulvibazar, Sylhet</span>
+                                <FaLocationDot className='mt-1 text-primary-200' aria-hidden='true' />
+                                <span className='text-primary-100/90'>{t('footer.address')}</span>
                             </p>
                         </address>
                     </div>
                 </div>
 
-                <div className='flex flex-col gap-4 py-6 text-center text-sm text-slate-400 md:flex-row md:items-center md:justify-between md:text-left'>
+                <div className='flex flex-col gap-4 py-6 text-center text-sm text-primary-100/75 md:flex-row md:items-center md:justify-between md:text-left'>
                     <div>
-                        <p>&copy; {currentYear} NewTolet. All rights reserved.</p>
+                        <p>{t('footer.copyright', { year: currentYear })}</p>
                         <p className='mt-1'>
-                            Developed by{' '}
+                            {t('footer.developedBy')}{' '}
                             <a
                                 href='https://www.wavezly.com'
                                 target='_blank'
                                 rel='noopener noreferrer'
-                                className='font-semibold text-white transition-colors duration-300 hover:text-[#67aee2]'
+                                className='font-semibold text-white transition-colors hover:text-primary-200'
                             >
                                 Wavezly
                             </a>
@@ -132,11 +135,12 @@ const Footer = () => {
                     </div>
 
                     <button
+                        type='button'
                         onClick={scrollToTop}
-                        className='ml-auto inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#1E73B8]/30 bg-[#1E73B8] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#1665a0] hover:shadow-lg md:ml-0'
-                        aria-label="Scroll to top"
+                        className='ui-btn ui-btn-icon-lg ml-auto border-white/20 bg-white/10 text-white hover:bg-brand md:ml-0'
+                        aria-label={t('footer.scrollToTop')}
                     >
-                        <IoChevronUp className='text-xl' />
+                        <IoChevronUp className='text-xl' aria-hidden='true' />
                     </button>
                 </div>
             </div>

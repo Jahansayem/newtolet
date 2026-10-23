@@ -1,10 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import {
-  createPaymentlyCharge,
   getAuthenticatedContext,
-  getCheckoutUrls,
+  getEpsCheckoutUrls,
+  getPaymentErrorMessage,
 } from "../_shared/paymently.ts";
+import { initializeEpsPayment } from "../_shared/eps.ts";
 import {
   assertUserCanPurchaseCredits,
   buildTransactionId,
@@ -13,6 +14,11 @@ import {
   getDisplayName,
   updatePaymentTransactionById,
 } from "../_shared/payment-transactions.ts";
+
+const PROVIDER = "eps";
+
+const buildMerchantTransactionId = (paymentId: string) =>
+  `EPS${Date.now()}${paymentId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
 
 Deno.serve(async (request) => {
   try {
@@ -36,6 +42,7 @@ Deno.serve(async (request) => {
     const finalAmount = Number((price - (price * discount) / 100).toFixed(2));
     const creditsToAdd = Number(selectedPackage.credits_amount ?? 0);
     const transactionId = buildTransactionId();
+    const customerPhone = body?.phoneNumber || body?.phone_number || profile.phone || "01700000000";
 
     const paymentTransaction = await createPendingPaymentTransaction(adminClient, {
       userId: profile.id,
@@ -44,53 +51,81 @@ Deno.serve(async (request) => {
       amount: finalAmount,
       creditsToAdd,
       description: `${selectedPackage.package_name} credit purchase`,
+      provider: PROVIDER,
+      paymentMethod: PROVIDER,
+      customerPhone,
     });
 
+    const merchantTransactionId = buildMerchantTransactionId(paymentTransaction.id);
+
     try {
-      const checkoutUrls = getCheckoutUrls();
-      const gatewayResponse = await createPaymentlyCharge({
-        full_name: getDisplayName(profile, user),
-        email: profile.email || user.email,
-        amount: finalAmount.toFixed(2),
-        metadata: {
-          user_id: profile.id,
-          payment_transaction_id: paymentTransaction.id,
-          transaction_id: paymentTransaction.transaction_id,
-          package_id: String(selectedPackage.id),
-          credits_to_add: String(creditsToAdd),
-        },
-        redirect_url: checkoutUrls.redirect_url,
-        return_type: "GET",
-        cancel_url: checkoutUrls.cancel_url,
-        webhook_url: checkoutUrls.webhook_url,
+      const checkoutUrls = getEpsCheckoutUrls(merchantTransactionId);
+
+      console.info("[paymently-create-checkout] starting EPS checkout", {
+        paymentId: paymentTransaction.id,
+        merchantTransactionId,
+        amount: finalAmount,
       });
 
-      const paymentUrl =
-        gatewayResponse?.payment_url ||
-        gatewayResponse?.data?.payment_url ||
-        gatewayResponse?.paymentUrl ||
-        null;
+      const gatewayResponse = await initializeEpsPayment({
+        merchantTransactionId,
+        customerOrderId: paymentTransaction.transaction_id,
+        totalAmount: finalAmount,
+        successUrl: checkoutUrls.successUrl,
+        failUrl: checkoutUrls.failUrl,
+        cancelUrl: checkoutUrls.cancelUrl,
+        customerName: getDisplayName(profile, user),
+        customerEmail: profile.email || user.email || "",
+        customerPhone,
+        productName: `${selectedPackage.package_name} credit purchase`,
+      });
+
+      const paymentUrl = gatewayResponse.redirectUrl;
 
       if (!paymentUrl) {
-        throw new Error("Paymently did not return a checkout URL");
+        throw new Error("EPS did not return a checkout URL");
       }
+
+      await updatePaymentTransactionById(adminClient, paymentTransaction.id, {
+        reference: merchantTransactionId,
+        gateway_payload: gatewayResponse,
+        provider: PROVIDER,
+        payment_method: PROVIDER,
+      });
 
       return Response.json({
         data: {
           paymentUrl,
           transactionId: paymentTransaction.transaction_id,
           paymentId: paymentTransaction.id,
+          provider: PROVIDER,
+          paymentMethod: PROVIDER,
+          reference: merchantTransactionId,
         },
       });
     } catch (error) {
+      const message = getPaymentErrorMessage(error, "Unable to start payment checkout");
+      console.error("[paymently-create-checkout] checkout creation failed", {
+        paymentId: paymentTransaction.id,
+        provider: PROVIDER,
+        message,
+      });
+
       await updatePaymentTransactionById(adminClient, paymentTransaction.id, {
         status: "failed",
+        gateway_payload: {
+          error: message,
+          provider: PROVIDER,
+          failed_at: new Date().toISOString(),
+        },
       }).catch(() => null);
 
-      throw error;
+      throw new Error(message);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to start payment checkout";
+    const message = getPaymentErrorMessage(error, "Unable to start payment checkout");
+    console.error("[paymently-create-checkout] request failed", { message });
+
     const status = message === "Missing authorization token" || message === "Invalid or expired session"
       ? 401
       : message === "Package is required"

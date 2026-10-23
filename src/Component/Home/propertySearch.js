@@ -3,28 +3,26 @@ import { HOME_CATEGORIES } from './categoryConfig'
 import { buildPageHref, canonicalizeInternalHref } from '../../lib/routePaths.js'
 import { matchesPropertyCategory } from '../../lib/propertyCategories'
 import {
+  PROPERTY_TYPE_OPTIONS,
+  matchesPropertyTypeOption,
+  resolvePropertyTypeOption,
+} from '../../lib/propertyTypes'
+import {
   DEFAULT_SEARCH_FILTERS,
   matchesKeywordSearch,
 } from './propertySearchCore'
+import { compareActivePinnedFirst } from '../../utils/propertyPinning'
 export { DEFAULT_SEARCH_FILTERS } from './propertySearchCore'
 export { normalizeSearchQuery } from './propertySearchCore'
 
-export const PROPERTY_TYPE_OPTIONS = [
-  'Apartment',
-  'House',
-  'Room',
-  'Sublet',
-  'Office',
-  'Shop',
-  'Warehouse',
-]
+export { PROPERTY_TYPE_OPTIONS }
 
 export const ROOM_FILTER_OPTIONS = ['1', '2', '3', '4', '5']
 
 export const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest First' },
-  { value: 'price_low', label: 'Price: Low to High' },
-  { value: 'price_high', label: 'Price: High to Low' },
+  { value: 'newest', labelKey: 'search.sort.newest' },
+  { value: 'price_low', labelKey: 'search.sort.priceLow' },
+  { value: 'price_high', labelKey: 'search.sort.priceHigh' },
 ]
 
 const LEGACY_PROPERTY_LIST_PATH = '/bd/property-listing'
@@ -77,6 +75,8 @@ const LOCATION_INDEX = (() => {
   const subAreaToUpazilla = {}
   const subAreaToDistrict = {}
   const subAreaToDivision = {}
+  const upazillaCandidates = {}
+  const subAreaCandidates = {}
 
   locationData.divisions.forEach((division) => {
     divisions.push(division.name)
@@ -92,6 +92,10 @@ const LOCATION_INDEX = (() => {
         upazillaByKey[upazilla.name.toLowerCase()] = upazilla.name
         upazillaToDistrict[upazilla.name.toLowerCase()] = district.name
         upazillaToDivision[upazilla.name.toLowerCase()] = division.name
+        ;(upazillaCandidates[upazilla.name.toLowerCase()] ||= []).push({
+          division: division.name,
+          district: district.name,
+        })
         subAreasByUpazilla[upazilla.name] = upazilla.sub_areas || []
         ;(upazilla.sub_areas || []).forEach((subArea) => {
           const subAreaKey = subArea.toLowerCase()
@@ -100,6 +104,11 @@ const LOCATION_INDEX = (() => {
           subAreaToUpazilla[subAreaKey] = upazilla.name
           subAreaToDistrict[subAreaKey] = district.name
           subAreaToDivision[subAreaKey] = division.name
+          ;(subAreaCandidates[subAreaKey] ||= []).push({
+            division: division.name,
+            district: district.name,
+            upazilla: upazilla.name,
+          })
         })
       })
     })
@@ -120,6 +129,8 @@ const LOCATION_INDEX = (() => {
     subAreaToUpazilla,
     subAreaToDistrict,
     subAreaToDivision,
+    upazillaCandidates,
+    subAreaCandidates,
   }
 })()
 
@@ -250,50 +261,59 @@ const buildLocationTrail = (filters) => {
   const upazillaKey = normalizeText(nextFilters.upazilla)
   const subAreaKey = normalizeText(nextFilters.subArea)
 
+  // Several upazilla / sub-area names exist in more than one district (e.g. Mirpur in Dhaka and
+  // Kushtia). Parents are inferred only when exactly one candidate fits what is already chosen;
+  // otherwise the chosen area is kept and the parents stay empty.
+  const fitsChosen = (candidate) =>
+    (!nextFilters.division || candidate.division === nextFilters.division) &&
+    (!nextFilters.district || candidate.district === nextFilters.district)
+  const upazillaCandidates = (LOCATION_INDEX.upazillaCandidates[upazillaKey] || []).filter(fitsChosen)
+  const subAreaCandidates = (LOCATION_INDEX.subAreaCandidates[subAreaKey] || []).filter(
+    (candidate) => fitsChosen(candidate) && (!nextFilters.upazilla || candidate.upazilla === nextFilters.upazilla)
+  )
+  const uniqueUpazilla = upazillaCandidates.length === 1 ? upazillaCandidates[0] : null
+  const uniqueSubArea = subAreaCandidates.length === 1 ? subAreaCandidates[0] : null
+
   if (!nextFilters.division) {
     nextFilters.division =
       LOCATION_INDEX.districtToDivision[districtKey] ||
-      LOCATION_INDEX.upazillaToDivision[upazillaKey] ||
-      LOCATION_INDEX.subAreaToDivision[subAreaKey] ||
+      uniqueUpazilla?.division ||
+      uniqueSubArea?.division ||
       ''
   }
 
   if (!nextFilters.district) {
-    nextFilters.district =
-      LOCATION_INDEX.upazillaToDistrict[upazillaKey] ||
-      LOCATION_INDEX.subAreaToDistrict[subAreaKey] ||
-      ''
+    nextFilters.district = uniqueUpazilla?.district || uniqueSubArea?.district || ''
   }
 
   if (!nextFilters.upazilla) {
-    nextFilters.upazilla = LOCATION_INDEX.subAreaToUpazilla[subAreaKey] || ''
+    nextFilters.upazilla = uniqueSubArea?.upazilla || ''
   }
 
-  if (!nextFilters.division) {
-    nextFilters.district = ''
-    nextFilters.upazilla = ''
-    nextFilters.subArea = ''
-    return nextFilters
+  if (nextFilters.district) {
+    const districts = nextFilters.division
+      ? LOCATION_INDEX.districtsByDivision[nextFilters.division] || []
+      : Object.values(LOCATION_INDEX.districtByKey)
+    if (!districts.includes(nextFilters.district)) {
+      nextFilters.district = ''
+    }
   }
 
-  const districts = LOCATION_INDEX.districtsByDivision[nextFilters.division] || []
-  if (!districts.includes(nextFilters.district)) {
-    nextFilters.district = ''
-    nextFilters.upazilla = ''
-    nextFilters.subArea = ''
-    return nextFilters
+  if (nextFilters.upazilla) {
+    const known = (LOCATION_INDEX.upazillaCandidates[upazillaKey] || []).some(fitsChosen)
+    if (!known) {
+      nextFilters.upazilla = ''
+      nextFilters.subArea = ''
+    }
   }
 
-  const upazillas = LOCATION_INDEX.upazillasByDistrict[nextFilters.district] || []
-  if (!upazillas.includes(nextFilters.upazilla)) {
-    nextFilters.upazilla = ''
-    nextFilters.subArea = ''
-    return nextFilters
-  }
-
-  const subAreas = LOCATION_INDEX.subAreasByUpazilla[nextFilters.upazilla] || []
-  if (!subAreas.includes(nextFilters.subArea)) {
-    nextFilters.subArea = ''
+  if (nextFilters.subArea) {
+    const known = (LOCATION_INDEX.subAreaCandidates[subAreaKey] || []).some(
+      (candidate) => fitsChosen(candidate) && (!nextFilters.upazilla || candidate.upazilla === nextFilters.upazilla)
+    )
+    if (!known) {
+      nextFilters.subArea = ''
+    }
   }
 
   return nextFilters
@@ -317,9 +337,8 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
   nextFilters.category = HOME_CATEGORIES.includes(nextFilters.category)
     ? nextFilters.category
     : DEFAULT_SEARCH_FILTERS.category
-  nextFilters.propertyType = PROPERTY_TYPE_OPTIONS.includes(nextFilters.propertyType)
-    ? nextFilters.propertyType
-    : DEFAULT_SEARCH_FILTERS.propertyType
+  nextFilters.propertyType =
+    resolvePropertyTypeOption(nextFilters.propertyType) || DEFAULT_SEARCH_FILTERS.propertyType
   nextFilters.rooms = ROOM_FILTER_OPTIONS.includes(nextFilters.rooms) ? nextFilters.rooms : ''
   nextFilters.sort = SORT_OPTIONS.some((option) => option.value === nextFilters.sort)
     ? nextFilters.sort
@@ -438,8 +457,9 @@ export const updateSearchFilters = (filters, key, value) => {
     nextFilters.category = DEFAULT_SEARCH_FILTERS.category
   }
 
-  if (key === 'propertyType' && !PROPERTY_TYPE_OPTIONS.includes(nextFilters.propertyType)) {
-    nextFilters.propertyType = DEFAULT_SEARCH_FILTERS.propertyType
+  if (key === 'propertyType') {
+    nextFilters.propertyType =
+      resolvePropertyTypeOption(nextFilters.propertyType) || DEFAULT_SEARCH_FILTERS.propertyType
   }
 
   if (key === 'sort' && !SORT_OPTIONS.some((option) => option.value === nextFilters.sort)) {
@@ -453,38 +473,15 @@ export const updateSearchFilters = (filters, key, value) => {
     nextFilters.subArea = ''
   }
 
-  // When district changes to empty (All), clear division to show all districts from all divisions
-  // When district changes to a specific value, clear downstream filters
+  // When district changes, keep the selected division and clear only downstream filters.
   if (key === 'district') {
-    if (!nextFilters.district) {
-      // User selected "All Districts" - clear division to show all districts
-      nextFilters.division = ''
-    }
     nextFilters.upazilla = ''
     nextFilters.subArea = ''
   }
 
-  // When upazilla changes to empty (All), clear district to show all upazillas
-  // When upazilla changes to a specific value, clear downstream filters
+  // When area changes, keep division/district and clear only sub-area.
   if (key === 'upazilla') {
-    if (!nextFilters.upazilla) {
-      // User selected "All Areas" - clear district to show all areas
-      nextFilters.district = ''
-      // Also clear division since district is cleared
-      nextFilters.division = ''
-    }
     nextFilters.subArea = ''
-  }
-
-  // When subArea changes to empty (All), clear upazilla to show all sub-areas
-  if (key === 'subArea') {
-    if (!nextFilters.subArea) {
-      // User selected "All Sub-areas" - clear upazilla to show all sub-areas
-      nextFilters.upazilla = ''
-      // Cascade clearing: district and division should also be cleared
-      nextFilters.district = ''
-      nextFilters.division = ''
-    }
   }
 
   return buildLocationTrail(nextFilters)
@@ -555,11 +552,11 @@ const resolvePropertyLocation = (item) => {
   let district = ''
 
   if (stateDistrict && !division) {
-    if (LOCATION_INDEX.divisions.some((entry) => normalizeText(entry) === stateDistrict)) {
-      division = stateDistrict
-    } else if (LOCATION_INDEX.districtToDivision[stateDistrict]) {
+    if (LOCATION_INDEX.districtToDivision[stateDistrict]) {
       district = stateDistrict
       division = normalizeText(LOCATION_INDEX.districtToDivision[stateDistrict])
+    } else if (LOCATION_INDEX.divisions.some((entry) => normalizeText(entry) === stateDistrict)) {
+      division = stateDistrict
     }
   }
 
@@ -568,9 +565,19 @@ const resolvePropertyLocation = (item) => {
     division = normalizeText(LOCATION_INDEX.districtToDivision[area])
   }
 
-  if (area && LOCATION_INDEX.upazillaToDistrict[area]) {
-    district = normalizeText(LOCATION_INDEX.upazillaToDistrict[area])
-    division = normalizeText(LOCATION_INDEX.upazillaToDivision[area])
+  if (area && !district) {
+    const candidates = LOCATION_INDEX.upazillaCandidates[area] || []
+    if (candidates.length === 1) {
+      district = normalizeText(candidates[0].district)
+      division = normalizeText(candidates[0].division)
+    }
+  } else if (area && district && !division) {
+    const candidate = (LOCATION_INDEX.upazillaCandidates[area] || []).find(
+      (entry) => normalizeText(entry.district) === district
+    )
+    if (candidate) {
+      division = normalizeText(candidate.division)
+    }
   }
 
   return {
@@ -649,7 +656,7 @@ export const matchesPropertySearch = (item, searchInput = '') => {
 
   return (
     matchesPropertyCategory(item, filters.category) &&
-    (!filters.propertyType || filters.propertyType === 'All' || normalizeText(item?.property_type) === normalizeText(filters.propertyType)) &&
+    matchesPropertyTypeOption(item?.property_type, filters.propertyType) &&
     matchesBudgetFilters(item, filters) &&
     matchesRoomFilter(item, filters) &&
     matchesLocationFilters(item, filters) &&
@@ -659,16 +666,32 @@ export const matchesPropertySearch = (item, searchInput = '') => {
 
 export const sortProperties = (properties, sort = DEFAULT_SEARCH_FILTERS.sort) => {
   const nextProperties = [...properties]
+  const withPinnedFirst = (comparison) =>
+    nextProperties.sort((left, right) => {
+      const pinComparison = compareActivePinnedFirst(left, right)
+
+      if (pinComparison !== 0) {
+        return pinComparison
+      }
+
+      return comparison(left, right)
+    })
 
   if (sort === 'price_low') {
-    return nextProperties.sort((left, right) => (getPropertyPrice(left) ?? Number.MAX_SAFE_INTEGER) - (getPropertyPrice(right) ?? Number.MAX_SAFE_INTEGER))
+    return withPinnedFirst(
+      (left, right) =>
+        (getPropertyPrice(left) ?? Number.MAX_SAFE_INTEGER) -
+        (getPropertyPrice(right) ?? Number.MAX_SAFE_INTEGER)
+    )
   }
 
   if (sort === 'price_high') {
-    return nextProperties.sort((left, right) => (getPropertyPrice(right) ?? -1) - (getPropertyPrice(left) ?? -1))
+    return withPinnedFirst(
+      (left, right) => (getPropertyPrice(right) ?? -1) - (getPropertyPrice(left) ?? -1)
+    )
   }
 
-  return nextProperties.sort(
+  return withPinnedFirst(
     (left, right) => new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime()
   )
 }
@@ -682,21 +705,42 @@ export const applyPropertySearch = (properties, filters = DEFAULT_SEARCH_FILTERS
 export const hasActiveSearchFilters = (filters = DEFAULT_SEARCH_FILTERS) =>
   Object.entries(DEFAULT_SEARCH_FILTERS).some(([key, value]) => (filters[key] || '') !== value)
 
+/**
+ * Active filter chips as translation descriptors: render with `t(chip.labelKey, chip.vars)`.
+ * `valueNamespace` marks `vars.value` as a DB enum that should go through `tv()` first, and
+ * `valueLabelKey` marks it as a dictionary key (sort labels). `getSearchChipLabel` handles both.
+ */
 export const getActiveSearchChips = (filters = DEFAULT_SEARCH_FILTERS) => {
   const chips = []
 
-  if (filters.search) chips.push({ key: 'search', label: `Keyword: ${filters.search}` })
-  if (filters.division) chips.push({ key: 'division', label: `Division: ${filters.division}` })
-  if (filters.district) chips.push({ key: 'district', label: `District: ${filters.district}` })
-  if (filters.upazilla) chips.push({ key: 'upazilla', label: `Area: ${filters.upazilla}` })
-  if (filters.subArea) chips.push({ key: 'subArea', label: `Sub-area: ${filters.subArea}` })
-  if (filters.category && filters.category !== 'All') chips.push({ key: 'category', label: `Category: ${filters.category}` })
-  if (filters.propertyType && filters.propertyType !== 'All') chips.push({ key: 'propertyType', label: `Type: ${filters.propertyType}` })
-  if (filters.minPrice) chips.push({ key: 'minPrice', label: `Min ৳${filters.minPrice}` })
-  if (filters.maxPrice) chips.push({ key: 'maxPrice', label: `Max ৳${filters.maxPrice}` })
-  if (filters.rooms) chips.push({ key: 'rooms', label: `${filters.rooms}+ rooms` })
+  if (filters.search) chips.push({ key: 'search', labelKey: 'search.chips.keyword', vars: { value: filters.search } })
+  if (filters.division) chips.push({ key: 'division', labelKey: 'search.chips.division', vars: { value: filters.division }, valueNamespace: 'divisions' })
+  if (filters.district) chips.push({ key: 'district', labelKey: 'search.chips.district', vars: { value: filters.district } })
+  if (filters.upazilla) chips.push({ key: 'upazilla', labelKey: 'search.chips.area', vars: { value: filters.upazilla } })
+  if (filters.subArea) chips.push({ key: 'subArea', labelKey: 'search.chips.subArea', vars: { value: filters.subArea } })
+  if (filters.category && filters.category !== 'All') chips.push({ key: 'category', labelKey: 'search.chips.category', vars: { value: filters.category }, valueNamespace: 'categories' })
+  if (filters.propertyType && filters.propertyType !== 'All') chips.push({ key: 'propertyType', labelKey: 'search.chips.type', vars: { value: filters.propertyType }, valueNamespace: 'propertyTypes' })
+  if (filters.minPrice) chips.push({ key: 'minPrice', labelKey: 'search.chips.minPrice', vars: { value: filters.minPrice } })
+  if (filters.maxPrice) chips.push({ key: 'maxPrice', labelKey: 'search.chips.maxPrice', vars: { value: filters.maxPrice } })
+  if (filters.rooms) chips.push({ key: 'rooms', labelKey: 'search.chips.rooms', vars: { value: filters.rooms } })
+  if (filters.sort && filters.sort !== DEFAULT_SEARCH_FILTERS.sort) {
+    const sortOption = SORT_OPTIONS.find((option) => option.value === filters.sort)
+    chips.push({ key: 'sort', labelKey: 'search.chips.sort', vars: { value: filters.sort }, valueLabelKey: sortOption?.labelKey })
+  }
 
   return chips
+}
+
+export const getSearchChipLabel = (chip, t, tv) => {
+  let value = chip?.vars?.value
+
+  if (chip?.valueLabelKey) {
+    value = t(chip.valueLabelKey)
+  } else if (chip?.valueNamespace && typeof tv === 'function') {
+    value = tv(chip.valueNamespace, value)
+  }
+
+  return t(chip.labelKey, { ...chip.vars, value })
 }
 
 export const getSearchLocationPayload = (filters = DEFAULT_SEARCH_FILTERS) => {

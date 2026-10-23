@@ -1,9 +1,11 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { listcontext } from '../Route/Listprovaider';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const List = () => {
     const [category, setCategory] = useState([])
     const { selectedCategory, setSelectedCategory } = useContext(listcontext)
+    const { t, tv } = useLanguage()
 
     useEffect(() => {
         fetch('/Category.json')
@@ -21,18 +23,18 @@ const List = () => {
             <div className='hidden md:flex flex-wrap justify-center gap-4 mt-5 pb-12'>
                 <button
                     onClick={() => handleCategoryClick('All')}
-                    className={`px-6 py-2 rounded-full font-medium transition-all duration-300 ${selectedCategory === 'All' ? 'bg-[#1E73B8] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#1E73B8] hover:text-[#1E73B8]'}`}
+                    className={`px-6 py-2 rounded-full font-medium transition-all duration-300 ${selectedCategory === 'All' ? 'bg-brand text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-brand hover:text-brand'}`}
                 >
-                    All
+                    {t('common.all')}
                 </button>
                 {
                     category.map((item) => (
                         <button
                             key={item.id}
                             onClick={() => handleCategoryClick(item.category)}
-                            className={`px-6 py-2 rounded-full font-medium transition-all duration-300 ${selectedCategory === item.category ? 'bg-[#1E73B8] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#1E73B8] hover:text-[#1E73B8]'}`}
+                            className={`px-6 py-2 rounded-full font-medium transition-all duration-300 ${selectedCategory === item.category ? 'bg-brand text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-brand hover:text-brand'}`}
                         >
-                            {item.category}
+                            {tv('categories', item.category)}
                         </button>
                     ))
                 }
@@ -42,18 +44,18 @@ const List = () => {
             <div className='md:hidden flex gap-3 mt-5 pb-12 px-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide touch-pan-x' style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}>
                 <button
                     onClick={() => handleCategoryClick('All')}
-                    className={`px-5 py-2 rounded-full font-medium transition-all duration-300 flex-shrink-0 snap-start ${selectedCategory === 'All' ? 'bg-[#1E73B8] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#1E73B8] hover:text-[#1E73B8]'}`}
+                    className={`px-5 py-2 rounded-full font-medium transition-all duration-300 flex-shrink-0 snap-start ${selectedCategory === 'All' ? 'bg-brand text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-brand hover:text-brand'}`}
                 >
-                    All
+                    {t('common.all')}
                 </button>
                 {
                     category.map((item) => (
                         <button
                             key={item.id}
                             onClick={() => handleCategoryClick(item.category)}
-                            className={`px-5 py-2 rounded-full font-medium transition-all duration-300 flex-shrink-0 snap-start ${selectedCategory === item.category ? 'bg-[#1E73B8] text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-[#1E73B8] hover:text-[#1E73B8]'}`}
+                            className={`px-5 py-2 rounded-full font-medium transition-all duration-300 flex-shrink-0 snap-start ${selectedCategory === item.category ? 'bg-brand text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-brand hover:text-brand'}`}
                         >
-                            {item.category}
+                            {tv('categories', item.category)}
                         </button>
                     ))
                 }

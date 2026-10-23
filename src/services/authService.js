@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { checkSupabaseAuthServiceAvailability, isRecoverableSupabaseError, supabase } from './supabaseClient';
 import { clearUserPanelCache } from './cacheService';
 
 /**
@@ -10,6 +10,38 @@ const isMissingProfileError = (error) =>
     error?.code === 'PGRST116' ||
     error?.details?.includes('0 rows') ||
     error?.message?.includes('JSON object requested, multiple (or no) rows returned');
+
+const getStoredUserPayload = (userData = {}) => ({
+    id: userData.id,
+    name: userData.name,
+    email: userData.email,
+    credits: userData.credits,
+    verified: userData.verified,
+    phone: userData.phone,
+    referral_username: userData.referral_username,
+    referral_code: userData.referral_code,
+    referred_by: userData.referred_by,
+    is_admin: userData.is_admin,
+    is_active: userData.is_active,
+    full_name: userData.full_name,
+    avatar_url: userData.avatar_url,
+    google_id: userData.google_id,
+    provider: userData.provider,
+});
+
+export const persistAuthenticatedUser = (userData, session) => {
+    if (typeof window === 'undefined' || !userData) {
+        return;
+    }
+
+    localStorage.setItem('user', JSON.stringify(getStoredUserPayload(userData)));
+
+    if (session?.access_token) {
+        localStorage.setItem('authToken', session.access_token);
+    }
+
+    window.dispatchEvent(new Event('userLogin'));
+};
 
 const fetchUserProfile = async (userId) => {
     if (!userId) {
@@ -47,6 +79,17 @@ const getUserProfileWithRepair = async (userId) => {
     }
 
     if (initialProfile.data) {
+        try {
+            await ensureCurrentUserProfile();
+            const syncedProfile = await fetchUserProfile(userId);
+
+            if (!syncedProfile.error && syncedProfile.data) {
+                return syncedProfile.data;
+            }
+        } catch (error) {
+            console.warn('User profile metadata sync skipped:', error);
+        }
+
         return initialProfile.data;
     }
 
@@ -63,6 +106,73 @@ const getUserProfileWithRepair = async (userId) => {
     }
 
     return repairedProfile.data;
+};
+
+const getOAuthRedirectTo = (redirectTo) => {
+    if (redirectTo) {
+        return redirectTo;
+    }
+
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+
+    return `${window.location.origin}/login`;
+};
+
+const trimTrailingSlash = (value = '') =>
+    typeof value === 'string' ? value.trim().replace(/\/+$/, '') : '';
+
+const getPublicSiteUrl = () => {
+    const configuredSiteUrl = trimTrailingSlash(process.env.NEXT_PUBLIC_SITE_URL);
+
+    if (configuredSiteUrl) {
+        return configuredSiteUrl;
+    }
+
+    if (typeof window !== 'undefined') {
+        return trimTrailingSlash(window.location.origin);
+    }
+
+    return '';
+};
+
+const getPasswordResetRedirectTo = () => {
+    const siteUrl = getPublicSiteUrl();
+
+    return siteUrl ? `${siteUrl}/reset-password` : undefined;
+};
+
+export const signInWithGoogle = async ({ redirectTo } = {}) => {
+    try {
+        const availability = await checkSupabaseAuthServiceAvailability();
+
+        if (!availability.available) {
+            throw new Error(availability.error || 'Google sign in is temporarily unavailable.');
+        }
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: getOAuthRedirectTo(redirectTo),
+                queryParams: {
+                    prompt: 'select_account',
+                },
+            },
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        return { success: true, data, error: null };
+    } catch (error) {
+        return {
+            success: false,
+            data: null,
+            error: error.message || 'Google sign in failed. Please try again.',
+        };
+    }
 };
 
 // ============================================================================
@@ -100,25 +210,25 @@ export const registerUser = async (name, email, password) => {
             throw new Error(authError.message || 'Registration failed');
         }
 
-        // Create user profile in users table
-        const { data: userData, error: userError } = await supabase
-            .from('users')
-            .insert([
-                {
-                    id: authData.user.id,
-                    name: name,
-                    email: email,
-                    credits: 0,
-                    verified: false
-                }
-            ])
-            .select()
-            .single();
+        if (!authData.user) {
+            throw new Error('Registration failed - no user created');
+        }
 
-        if (userError) {
-            // Clean up auth user if profile creation fails
-            await supabase.auth.admin.deleteUser(authData.user.id);
-            throw new Error('Failed to create user profile');
+        let userData = {
+            id: authData.user.id,
+            name,
+            email,
+            credits: 0,
+            verified: false
+        };
+
+        if (authData.session) {
+            try {
+                userData = await getUserProfileWithRepair(authData.user.id);
+            } catch (profileError) {
+                console.error('Error creating user profile after registration:', profileError);
+                throw new Error('Registration succeeded, but profile setup failed. Please verify your email and login.');
+            }
         }
 
         return {
@@ -164,26 +274,7 @@ export const loginUser = async (email, password) => {
         // Get user profile
         const userData = await getUserProfileWithRepair(authData.user.id);
 
-        // Store user in localStorage
-        localStorage.setItem('user', JSON.stringify({
-            id: userData.id,
-            name: userData.name,
-            email: userData.email,
-            credits: userData.credits,
-            verified: userData.verified,
-            phone: userData.phone,
-            referral_username: userData.referral_username,
-            referral_code: userData.referral_code,
-            referred_by: userData.referred_by,
-            is_admin: userData.is_admin,
-            is_active: userData.is_active
-        }));
-
-        // Store auth token
-        localStorage.setItem('authToken', authData.session.access_token);
-
-        // Dispatch custom event to notify components (like Navbar) that login is complete
-        window.dispatchEvent(new Event('userLogin'));
+        persistAuthenticatedUser(userData, authData.session);
 
         return {
             success: true,
@@ -254,7 +345,13 @@ export const getCurrentUser = async () => {
         return await getUserProfileWithRepair(authData.user.id);
 
     } catch (error) {
-        console.error('Error fetching current user:', error);
+        if (isRecoverableSupabaseError(error)) {
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('Current user unavailable (service unreachable):', error?.message || error);
+            }
+        } else {
+            console.error('Error fetching current user:', error);
+        }
         return null;
     }
 };
@@ -264,13 +361,27 @@ export const getSession = async () => {
         const { data: sessionData, error } = await supabase.auth.getSession();
 
         if (error) {
-            throw new Error(error.message);
+            if (isRecoverableSupabaseError(error)) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn('Session unavailable (service unreachable):', error?.message || error);
+                }
+            } else {
+                console.error('Error fetching session:', error);
+            }
+
+            return null;
         }
 
-        return sessionData.session;
+        return sessionData?.session || null;
 
     } catch (error) {
-        console.error('Error fetching session:', error);
+        if (isRecoverableSupabaseError(error)) {
+            if (process.env.NODE_ENV === 'development') {
+                console.warn('Session unavailable (service unreachable):', error?.message || error);
+            }
+        } else {
+            console.error('Error fetching session:', error);
+        }
         return null;
     }
 };
@@ -285,9 +396,9 @@ export const requestPasswordReset = async (email) => {
             throw new Error('Email is required');
         }
 
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${window.location.origin}/reset-password`,
-        });
+        const redirectTo = getPasswordResetRedirectTo();
+        const resetOptions = redirectTo ? { redirectTo } : undefined;
+        const { error } = await supabase.auth.resetPasswordForEmail(email, resetOptions);
 
         if (error) {
             throw new Error(error.message || 'Failed to send reset email');
@@ -551,5 +662,7 @@ export default {
     getStoredUser,
     isUserAdmin,
     addCreditsToUser,
-    deductCreditsFromUser
+    deductCreditsFromUser,
+    persistAuthenticatedUser,
+    signInWithGoogle
 };

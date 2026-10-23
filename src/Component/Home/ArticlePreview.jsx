@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { FiArrowRight, FiBookOpen, FiHome, FiMapPin } from 'react-icons/fi';
 import { ARTICLE_ITEMS } from './articleContent';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const ARTICLE_ICONS = {
     book: FiBookOpen,
@@ -10,20 +11,22 @@ const ARTICLE_ICONS = {
 };
 
 const ArticlePreview = () => {
+    const { t } = useLanguage();
+
     return (
         <section className='py-12 md:py-16'>
-            <div className='site-card-strong overflow-hidden p-5 sm:p-7 md:p-9'>
+            <div className='ui-panel overflow-hidden p-5 sm:p-7 md:p-9'>
                 <div className='grid gap-8 lg:grid-cols-[0.9fr_1.4fr] lg:items-center'>
                     <div>
-                        <p className='site-kicker'>Rental Articles</p>
-                        <h2 className='mt-3 text-balance text-3xl font-bold text-gray-800 md:text-4xl'>
-                            Learn before you rent
+                        <p className='site-kicker'>{t('home.articles.kicker')}</p>
+                        <h2 className='mt-3 text-balance text-2xl font-bold leading-tight text-ink md:text-3xl'>
+                            {t('home.articles.title')}
                         </h2>
-                        <p className='mt-4 text-sm leading-7 text-gray-600 md:text-base'>
-                            Practical rental tips, area guides, and tenant checklists to help users make faster and safer decisions.
+                        <p className='mt-4 max-w-prose text-body text-muted'>
+                            {t('home.articles.description')}
                         </p>
-                        <Link to='/article' className='site-button-primary mt-6 inline-flex items-center gap-2 text-sm'>
-                            Read Articles
+                        <Link to='/article' className='ui-btn ui-btn-primary mt-6'>
+                            {t('home.articles.readArticles')}
                             <FiArrowRight />
                         </Link>
                     </div>
@@ -35,16 +38,16 @@ const ArticlePreview = () => {
                             return (
                                 <article
                                     key={item.title}
-                                    className='rounded-3xl border border-gray-100 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg'
+                                    className='ui-card p-5'
                                 >
-                                    <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${item.accent} text-white shadow-md`}>
+                                    <div className='mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft text-brand' aria-hidden='true'>
                                         <Icon className='text-xl' />
                                     </div>
-                                    <h3 className='text-base font-bold leading-6 text-gray-800'>
-                                        {item.title}
+                                    <h3 className='text-base font-semibold leading-6 text-ink'>
+                                        {t(`home.articles.items.${item.id}.title`)}
                                     </h3>
-                                    <p className='mt-3 text-sm leading-6 text-gray-500'>
-                                        {item.description}
+                                    <p className='mt-2 text-caption text-muted'>
+                                        {t(`home.articles.items.${item.id}.description`)}
                                     </p>
                                 </article>
                             );

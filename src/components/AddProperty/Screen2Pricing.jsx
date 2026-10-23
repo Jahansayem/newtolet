@@ -1,8 +1,10 @@
 import React, { useEffect } from 'react'
 import { useAddProperty } from '../../contexts/AddPropertyContext'
 import RentDisplay from '../RentDisplay'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const Screen2Pricing = () => {
+  const { t, tv } = useLanguage()
   const { formData, updateFormData, errors, clearErrors } =
     useAddProperty()
 
@@ -16,17 +18,17 @@ const Screen2Pricing = () => {
     <div className='space-y-4 md:space-y-6 pb-20 md:pb-24'>
       <div className='bg-gradient-to-br from-blue-50 to-primary-50 rounded-lg p-4 md:p-6'>
         <h2 className='text-xl md:text-2xl font-bold text-gray-800 mb-2'>
-          Set Your Rental Price
+          {t('addProperty.pricing.title')}
         </h2>
         <p className='text-sm md:text-base text-gray-600'>
-          Help tenants understand your rental terms and pricing.
+          {t('addProperty.pricing.subtitle')}
         </p>
       </div>
 
       {/* Rent Amount */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-2'>
-          Monthly Rent Amount (BDT) {formData.is_rent_negotiable ? '' : '*'}
+          {t('addProperty.fields.monthlyRentAmount')} {formData.is_rent_negotiable ? '' : '*'}
         </label>
         <div className='relative'>
           <span className='absolute left-3 md:left-4 top-2.5 md:top-3 text-lg md:text-xl font-semibold text-gray-600'>
@@ -43,7 +45,7 @@ const Screen2Pricing = () => {
                 ? 'border-red-500 focus:ring-2 focus:ring-red-500'
                 : 'border-gray-300 focus:ring-2 focus:ring-blue-500'
             }`}
-            placeholder='Enter rent amount'
+            placeholder={t('addProperty.placeholders.rentAmount')}
             min='1'
           />
         </div>
@@ -58,7 +60,11 @@ const Screen2Pricing = () => {
                 is_rent_negotiable: formData.is_rent_negotiable,
               }}
               prefix='৳ '
-              suffix={`per ${formData.rent_period?.toLowerCase() || 'period'}`}
+              suffix={t('addProperty.pricing.perPeriod', {
+                period: formData.rent_period
+                  ? tv('rentPeriods', formData.rent_period).toLowerCase()
+                  : t('addProperty.pricing.periodFallback'),
+              })}
             />
           </p>
         )}
@@ -72,15 +78,15 @@ const Screen2Pricing = () => {
           className='mt-1 h-4 w-4 text-blue-600 bg-white'
         />
         <span>
-          <span className='block text-sm md:text-base font-semibold text-gray-800'>Rent is negotiable</span>
-          <span className='block text-xs md:text-sm text-gray-600'>Tenants will see this listing as negotiable. You can leave the amount empty.</span>
+          <span className='block text-sm md:text-base font-semibold text-gray-800'>{t('addProperty.fields.rentNegotiable')}</span>
+          <span className='block text-xs md:text-sm text-gray-600'>{t('addProperty.fields.rentNegotiableHint')}</span>
         </span>
       </label>
 
       {/* Rent Period */}
       <div>
         <label className='block text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-          Rental Period *
+          {t('addProperty.fields.rentalPeriod')}
         </label>
         <div className='grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3'>
           {rentPeriods.map((period) => (
@@ -101,7 +107,7 @@ const Screen2Pricing = () => {
                 {period === 'Yearly' && '📈'}
               </span>
               <br />
-              <span className='text-xs md:text-sm'>{period}</span>
+              <span className='text-xs md:text-sm'>{tv('rentPeriods', period)}</span>
             </button>
           ))}
         </div>
@@ -113,10 +119,10 @@ const Screen2Pricing = () => {
       {/* Price Examples */}
       {formData.is_rent_negotiable && !formData.rent_amount_bdt && formData.rent_period && (
         <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
-          <h3 className='font-semibold text-sm md:text-base text-green-900 mb-2 md:mb-3'>Price Summary</h3>
+          <h3 className='font-semibold text-sm md:text-base text-green-900 mb-2 md:mb-3'>{t('addProperty.pricing.priceSummary')}</h3>
           <div className='space-y-1 md:space-y-2 text-green-800'>
             <p className='text-xs md:text-sm'>
-              ðŸ“Œ <strong>Base Price:</strong>{' '}
+              ðŸ“Œ <strong>{t('addProperty.pricing.basePrice')}</strong>{' '}
               <RentDisplay
                 pricing={{
                   rent_amount_bdt: formData.rent_amount_bdt,
@@ -126,28 +132,30 @@ const Screen2Pricing = () => {
               />
             </p>
             <p className='text-xs'>
-              This price will be displayed to potential tenants.
+              {t('addProperty.pricing.displayedToTenants')}
             </p>
           </div>
         </div>
       )}
       {formData.rent_amount_bdt && formData.rent_period && (
         <div className='bg-green-50 border border-green-200 rounded-lg p-3 md:p-4'>
-          <h3 className='font-semibold text-sm md:text-base text-green-900 mb-2 md:mb-3'>Price Summary</h3>
+          <h3 className='font-semibold text-sm md:text-base text-green-900 mb-2 md:mb-3'>{t('addProperty.pricing.priceSummary')}</h3>
           <div className='space-y-1 md:space-y-2 text-green-800'>
             <p className='text-xs md:text-sm'>
-              📌 <strong>Base Price:</strong>{' '}
+              📌 <strong>{t('addProperty.pricing.basePrice')}</strong>{' '}
               <RentDisplay
                 pricing={{
                   rent_amount_bdt: formData.rent_amount_bdt,
                   is_rent_negotiable: formData.is_rent_negotiable,
                 }}
                 prefix='৳ '
-                suffix={`per ${formData.rent_period.toLowerCase()}`}
+                suffix={t('addProperty.pricing.perPeriod', {
+                  period: tv('rentPeriods', formData.rent_period).toLowerCase(),
+                })}
               />
             </p>
             <p className='text-xs'>
-              This price will be displayed to potential tenants.
+              {t('addProperty.pricing.displayedToTenants')}
             </p>
           </div>
         </div>
@@ -157,18 +165,16 @@ const Screen2Pricing = () => {
       <div className='bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4'>
         <div className='text-xs md:text-sm text-blue-800 space-y-1.5 md:space-y-2'>
           <div>
-            💡 <strong>Tip:</strong> Research similar properties in your area to
-            set competitive pricing.
+            💡 <strong>{t('addProperty.tips.label')}</strong> {t('addProperty.pricing.tipResearch')}
           </div>
-          <div>📍 Higher prices in premium locations attract serious buyers.</div>
+          <div>{t('addProperty.pricing.tipPremium')}</div>
         </div>
       </div>
 
       {/* Info Box */}
       <div className='bg-amber-50 border border-amber-200 rounded-lg p-3 md:p-4'>
         <p className='text-xs md:text-sm text-amber-800'>
-          ⚠️ <strong>Note:</strong> You can edit pricing details later in your
-          property dashboard.
+          ⚠️ <strong>{t('addProperty.tips.noteLabel')}</strong> {t('addProperty.pricing.noteEditLater')}
         </p>
       </div>
     </div>

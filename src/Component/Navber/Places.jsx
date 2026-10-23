@@ -1,7 +1,9 @@
 import React, { useState, useCallback, memo, useMemo } from 'react';
 import locationData from '../../thetolet_locations_bundle.json';
+import { useLanguage } from '../../i18n/useLanguage';
 
 const Places = ({ onLocationSelect }) => {
+    const { t, tv } = useLanguage();
     // Transform hierarchical data to flat structures for compatibility
     const { divisions, districts, areas, subAreas } = useMemo(() => {
         const nextDivisions = locationData.divisions.map(d => d.name);
@@ -157,11 +159,11 @@ const Places = ({ onLocationSelect }) => {
 
     // Get current level label
     const getLevelLabel = () => {
-        if (level === 1) return 'Division';
-        if (level === 2) return `District - ${selectedDivision}`;
-        if (level === 3) return `Upazilla - ${selectedDistrict}`;
-        if (level === 4) return `Sub Area - ${selectedUpazilla}`;
-        if (level === 5) return `Area - ${selectedSubArea}`;
+        if (level === 1) return t('listing.places.division');
+        if (level === 2) return t('listing.places.district', { name: tv('divisions', selectedDivision) });
+        if (level === 3) return t('listing.places.upazilla', { name: selectedDistrict });
+        if (level === 4) return t('listing.places.subArea', { name: selectedUpazilla });
+        if (level === 5) return t('listing.places.area', { name: selectedSubArea });
         return '';
     };
 
@@ -173,18 +175,18 @@ const Places = ({ onLocationSelect }) => {
             <div className='flex items-center gap-2 mb-4 px-4 md:px-0 flex-wrap'>
                 <button
                     onClick={handleReset}
-                    className='text-sm text-[#1E73B8] hover:text-[#1665a0] font-medium'
+                    className='text-sm text-brand hover:text-brand-hover font-medium'
                 >
-                    All Locations
+                    {t('listing.places.allLocations')}
                 </button>
                 {selectedDivision && (
                     <>
                         <span className='text-gray-400'>/</span>
                         <button
                             onClick={() => setLevel(1)}
-                            className={`text-sm font-medium ${level === 1 ? 'text-[#1E73B8]' : 'text-gray-600 hover:text-[#1E73B8]'}`}
+                            className={`text-sm font-medium ${level === 1 ? 'text-brand' : 'text-gray-600 hover:text-brand'}`}
                         >
-                            {selectedDivision}
+                            {tv('divisions', selectedDivision)}
                         </button>
                     </>
                 )}
@@ -193,7 +195,7 @@ const Places = ({ onLocationSelect }) => {
                         <span className='text-gray-400'>/</span>
                         <button
                             onClick={() => setLevel(2)}
-                            className={`text-sm font-medium ${level === 2 ? 'text-[#1E73B8]' : 'text-gray-600 hover:text-[#1E73B8]'}`}
+                            className={`text-sm font-medium ${level === 2 ? 'text-brand' : 'text-gray-600 hover:text-brand'}`}
                         >
                             {selectedDistrict}
                         </button>
@@ -204,7 +206,7 @@ const Places = ({ onLocationSelect }) => {
                         <span className='text-gray-400'>/</span>
                         <button
                             onClick={() => setLevel(3)}
-                            className={`text-sm font-medium ${level === 3 ? 'text-[#1E73B8]' : 'text-gray-600 hover:text-[#1E73B8]'}`}
+                            className={`text-sm font-medium ${level === 3 ? 'text-brand' : 'text-gray-600 hover:text-brand'}`}
                         >
                             {selectedUpazilla}
                         </button>
@@ -245,11 +247,11 @@ const Places = ({ onLocationSelect }) => {
                             }}
                             className={`px-5 py-2 rounded-full font-medium transition-all duration-300 ${
                                 isSelected
-                                    ? 'bg-[#1E73B8] text-white shadow-md'
-                                    : 'bg-white text-gray-600 border border-gray-200 hover:border-[#1E73B8] hover:text-[#1E73B8]'
+                                    ? 'bg-brand text-white shadow-md'
+                                    : 'bg-white text-gray-600 border border-gray-200 hover:border-brand hover:text-brand'
                             }`}
                         >
-                            {item}
+                            {level === 1 ? tv('divisions', item) : item}
                         </button>
                     );
                 })}
@@ -275,11 +277,11 @@ const Places = ({ onLocationSelect }) => {
                             }}
                             className={`px-5 py-2 rounded-full font-medium transition-all duration-300 flex-shrink-0 whitespace-nowrap ${
                                 isSelected
-                                    ? 'bg-[#1E73B8] text-white shadow-md'
-                                    : 'bg-white text-gray-600 border border-gray-200 hover:border-[#1E73B8] hover:text-[#1E73B8]'
+                                    ? 'bg-brand text-white shadow-md'
+                                    : 'bg-white text-gray-600 border border-gray-200 hover:border-brand hover:text-brand'
                             }`}
                         >
-                            {item}
+                            {level === 1 ? tv('divisions', item) : item}
                         </button>
                     );
                 })}

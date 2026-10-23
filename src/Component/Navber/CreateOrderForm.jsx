@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useId } from 'react'
 import { Link } from 'react-router-dom'
 import {
   FiAlertCircle,
   FiCheck,
-  FiChevronDown,
   FiMapPin,
   FiPlus,
   FiTrash2,
@@ -23,6 +22,7 @@ import {
   getDistrictsByDivision,
   roomOptions,
 } from '../../utils/bangladeshLocations'
+import { useLanguage } from '../../i18n/useLanguage'
 
 const EMPTY_LOCATION = {
   division: '',
@@ -69,6 +69,29 @@ const FLOOR_OPTIONS = [
   'No Preference',
 ]
 
+// Maps validateOrderData() error fields to dictionary keys.
+const VALIDATION_MESSAGE_KEYS = {
+  division: 'orders.create.validation.division',
+  district: 'orders.create.validation.district',
+  area: 'orders.create.validation.area',
+  category: 'orders.create.validation.category',
+  gender: 'orders.create.validation.gender',
+  rooms: 'orders.create.validation.rooms',
+  propertyNeedFrom: 'orders.create.validation.propertyNeedFrom',
+  maxBudget: 'orders.create.validation.maxBudget',
+  agreedToTerms: 'orders.create.validation.agreedToTerms',
+}
+
+// Replaces `{token}` placeholders in a translated sentence with React nodes.
+const renderTemplate = (template, nodes) =>
+  template.split(/(\{\w+\})/g).map((part, index) => {
+    const match = part.match(/^\{(\w+)\}$/)
+    if (match && nodes[match[1]] !== undefined) {
+      return <React.Fragment key={index}>{nodes[match[1]]}</React.Fragment>
+    }
+    return part
+  })
+
 const SectionCard = ({ title, subtitle, children }) => (
   <section className="rounded-3xl border border-gray-200 bg-white shadow-sm">
     <div className="border-b border-gray-100 px-6 py-4">
@@ -79,38 +102,53 @@ const SectionCard = ({ title, subtitle, children }) => (
   </section>
 )
 
-const FieldShell = ({ label, required = false, error, children }) => (
-  <div className="space-y-2">
-    <label className="block text-sm font-semibold text-gray-700">
+const FieldShell = ({ id, label, required = false, error, errorId, children }) => (
+  <div>
+    <label htmlFor={id} className="ui-label">
       {label}
-      {required ? <span className="text-red-500"> *</span> : null}
+      {required ? <span className="ui-required" aria-hidden="true">*</span> : null}
     </label>
     {children}
-    {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    {error ? <p id={errorId} className="ui-error">{error}</p> : null}
   </div>
 )
 
-const SelectField = ({ label, value, options, onChange, required = false, error, placeholder }) => (
-  <FieldShell label={label} required={required} error={error}>
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className={`w-full appearance-none rounded-2xl border bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/15 ${
-          error ? 'border-red-300' : 'border-gray-200'
-        }`}
-      >
-        <option value="">{placeholder || 'Select an option'}</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-      <FiChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" />
-    </div>
-  </FieldShell>
-)
+const SelectField = ({
+  label,
+  value,
+  options,
+  onChange,
+  required = false,
+  error,
+  placeholder,
+  optionNamespace,
+}) => {
+  const { t, tv } = useLanguage()
+  const id = useId()
+  const errorId = `${id}-error`
+
+  return (
+    <FieldShell id={id} label={label} required={required} error={error} errorId={errorId}>
+      <div className="relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={error ? errorId : undefined}
+          className="ui-field"
+        >
+          <option value="">{placeholder || t('orders.create.selectOption')}</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {optionNamespace ? tv(optionNamespace, option) : option}
+            </option>
+          ))}
+        </select>
+      </div>
+    </FieldShell>
+  )
+}
 
 const InputField = ({
   label,
@@ -121,29 +159,36 @@ const InputField = ({
   error,
   placeholder,
   min,
-}) => (
-  <FieldShell label={label} required={required} error={error}>
-    <input
-      type={type}
-      min={min}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={placeholder}
-      className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1E73B8] focus:ring-2 focus:ring-[#1E73B8]/15 ${
-        error ? 'border-red-300' : 'border-gray-200'
-      }`}
-    />
-  </FieldShell>
-)
+}) => {
+  const id = useId()
+  const errorId = `${id}-error`
+
+  return (
+    <FieldShell id={id} label={label} required={required} error={error} errorId={errorId}>
+      <input
+        id={id}
+        type={type}
+        min={min}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className="ui-field"
+      />
+    </FieldShell>
+  )
+}
 
 const RequirementBadge = ({ title, value }) => (
-  <div className="rounded-2xl border border-[#1E73B8]/10 bg-[#1E73B8]/5 px-4 py-3">
-    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1E73B8]">{title}</p>
+  <div className="rounded-2xl border border-brand/10 bg-brand/5 px-4 py-3">
+    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">{title}</p>
     <p className="mt-2 text-sm font-semibold text-gray-900">{value}</p>
   </div>
 )
 
 export default function CreateOrderForm() {
+  const { t } = useLanguage()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -270,12 +315,19 @@ export default function CreateOrderForm() {
 
     const validation = validateOrderData(formData)
     if (!validation.isValid) {
-      setErrors(validation.errors)
+      setErrors(
+        Object.fromEntries(
+          Object.entries(validation.errors).map(([field, message]) => [
+            field,
+            VALIDATION_MESSAGE_KEYS[field] ? t(VALIDATION_MESSAGE_KEYS[field]) : message,
+          ])
+        )
+      )
       return
     }
 
     if (!user) {
-      setErrors({ submit: 'Please login to create an order.' })
+      setErrors({ submit: t('orders.create.errors.loginRequired') })
       return
     }
 
@@ -316,7 +368,7 @@ export default function CreateOrderForm() {
       setErrors({})
     } catch (error) {
       console.error('Error creating order:', error)
-      setErrors({ submit: 'Failed to create order. Please try again.' })
+      setErrors({ submit: t('orders.create.errors.createFailed') })
     } finally {
       setSubmitting(false)
     }
@@ -326,12 +378,12 @@ export default function CreateOrderForm() {
     try {
       await updateOrderStatus(currentOrderId, 'confirmed')
       setShowPaymentModal(false)
-      setSuccessMessage('Order placed successfully. We will contact you soon.')
+      setSuccessMessage(t('orders.create.success'))
       resetForm()
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
       console.error('Error completing payment:', error)
-      setErrors({ submit: 'Payment processing failed. Please contact support.' })
+      setErrors({ submit: t('orders.create.errors.paymentFailed') })
     }
   }
 
@@ -355,18 +407,18 @@ export default function CreateOrderForm() {
     return (
       <div className="min-h-screen bg-gray-50 px-4 py-12">
         <div className="mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white p-10 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#1E73B8]/10 text-[#1E73B8]">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-brand/10 text-brand">
             <FiMapPin className="text-2xl" />
           </div>
-          <h1 className="mt-6 text-3xl font-bold text-gray-900">Create Order</h1>
+          <h1 className="mt-6 text-3xl font-bold text-gray-900">{t('orders.create.title')}</h1>
           <p className="mt-3 text-gray-600">
-            Please login first to create a property requirement and continue to payment.
+            {t('orders.create.loginPrompt')}
           </p>
           <Link
             to="/login"
-            className="mt-8 inline-flex rounded-2xl bg-[#1E73B8] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#1665a0]"
+            className="mt-8 inline-flex rounded-2xl bg-brand px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
           >
-            Login Now
+            {t('orders.create.loginNow')}
           </Link>
         </div>
       </div>
@@ -377,18 +429,17 @@ export default function CreateOrderForm() {
     <div className="min-h-screen bg-gray-50 px-4 py-8 md:py-10">
       <div className="mx-auto max-w-6xl space-y-6">
         <nav className="text-sm text-gray-500">
-          <Link to="/" className="font-medium text-[#1E73B8] hover:text-[#1665a0]">
-            Home
+          <Link to="/" className="font-medium text-brand hover:text-brand-hover">
+            {t('common.home')}
           </Link>
           <span className="mx-2 text-gray-300">/</span>
-          <span>Create Order</span>
+          <span>{t('orders.create.title')}</span>
         </nav>
 
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Create Order</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">{t('orders.create.title')}</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-            Share your preferred location and requirements. We will use this order to match
-            you with suitable homes and confirm the request after payment.
+            {t('orders.create.description')}
           </p>
         </div>
 
@@ -406,17 +457,16 @@ export default function CreateOrderForm() {
           </div>
         ) : null}
 
-        <div className="rounded-3xl border border-[#1E73B8]/10 bg-[#1E73B8]/5 px-5 py-4">
+        <div className="rounded-3xl border border-brand/10 bg-brand/5 px-5 py-4">
           <p className="text-sm leading-6 text-[#16395f]">
-            If your exact location is not listed, choose the nearest area and add another
-            location row. We will review all selected locations when processing the order.
+            {t('orders.create.locationHint')}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <SectionCard
-            title="Location"
-            subtitle="If you cannot find your exact location, choose the nearest match and add another row."
+            title={t('orders.create.location.title')}
+            subtitle={t('orders.create.location.subtitle')}
           >
             <div className="space-y-4">
               {normalizedLocations.map((location, index) => {
@@ -433,12 +483,14 @@ export default function CreateOrderForm() {
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
-                          {index === 0 ? 'Primary Location' : `Additional Location ${index}`}
+                          {index === 0
+                            ? t('orders.create.location.primary')
+                            : t('orders.create.location.additional', { number: index })}
                         </p>
                         <p className="text-xs text-gray-500">
                           {index === 0
-                            ? 'This location will be used as the main order address.'
-                            : 'Optional extra location preference.'}
+                            ? t('orders.create.location.primaryHint')
+                            : t('orders.create.location.additionalHint')}
                         </p>
                       </div>
                       {normalizedLocations.length > 1 ? (
@@ -448,22 +500,23 @@ export default function CreateOrderForm() {
                           className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                         >
                           <FiTrash2 />
-                          Remove
+                          {t('orders.create.location.remove')}
                         </button>
                       ) : null}
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-3">
                       <SelectField
-                        label="Division"
+                        label={t('orders.create.location.division')}
                         value={location.division}
                         options={divisions}
+                        optionNamespace="divisions"
                         onChange={(value) => updateLocationField(index, 'division', value)}
                         required={index === 0}
                         error={index === 0 ? errors.division : ''}
                       />
                       <SelectField
-                        label="District"
+                        label={t('orders.create.location.district')}
                         value={location.district}
                         options={districtOptions}
                         onChange={(value) => updateLocationField(index, 'district', value)}
@@ -471,7 +524,7 @@ export default function CreateOrderForm() {
                         error={index === 0 ? errors.district : ''}
                       />
                       <SelectField
-                        label="Area"
+                        label={t('orders.create.location.area')}
                         value={location.area}
                         options={areaOptions}
                         onChange={(value) => updateLocationField(index, 'area', value)}
@@ -486,34 +539,36 @@ export default function CreateOrderForm() {
               <button
                 type="button"
                 onClick={addLocationRow}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#1E73B8]/20 bg-white px-4 py-2.5 text-sm font-semibold text-[#1E73B8] transition hover:bg-[#1E73B8]/5"
+                className="inline-flex items-center gap-2 rounded-2xl border border-brand/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-brand/5"
               >
                 <FiPlus />
-                Add More Location
+                {t('orders.create.location.addMore')}
               </button>
             </div>
           </SectionCard>
 
-          <SectionCard title="Primary Requirements">
+          <SectionCard title={t('orders.create.primary.title')}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <SelectField
-                label="Category"
+                label={t('orders.create.primary.category')}
                 value={formData.category}
                 options={categories}
+                optionNamespace="categories"
                 onChange={(value) => updateField('category', value)}
                 required
                 error={errors.category}
               />
               <SelectField
-                label="Gender"
+                label={t('orders.create.primary.gender')}
                 value={formData.gender}
                 options={GENDER_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('gender', value)}
                 required
                 error={errors.gender}
               />
               <SelectField
-                label="Room"
+                label={t('orders.create.primary.room')}
                 value={formData.rooms}
                 options={roomOptions}
                 onChange={(value) => updateField('rooms', value)}
@@ -521,13 +576,13 @@ export default function CreateOrderForm() {
                 error={errors.rooms}
               />
               <SelectField
-                label="Bath Room"
+                label={t('orders.create.primary.bathRoom')}
                 value={formData.bathRoom}
                 options={BATH_ROOM_OPTIONS}
                 onChange={(value) => updateField('bathRoom', value)}
               />
               <InputField
-                label="Need From"
+                label={t('orders.create.primary.needFrom')}
                 type="date"
                 value={formData.propertyNeedFrom}
                 onChange={(value) => updateField('propertyNeedFrom', value)}
@@ -535,70 +590,83 @@ export default function CreateOrderForm() {
                 error={errors.propertyNeedFrom}
               />
               <InputField
-                label="Maximum Total Budget"
+                label={t('orders.create.primary.maxBudget')}
                 type="number"
                 min="0"
                 value={formData.maxBudget}
                 onChange={(value) => updateField('maxBudget', value)}
-                placeholder="BDT"
+                placeholder={t('orders.create.primary.budgetPlaceholder')}
                 required
                 error={errors.maxBudget}
               />
             </div>
           </SectionCard>
 
-          <SectionCard title="Additional Requirements">
+          <SectionCard title={t('orders.create.additional.title')}>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <SelectField
-                label="Kitchen Facility"
+                label={t('orders.create.additional.kitchen')}
                 value={formData.kitchenFacility}
                 options={KITCHEN_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('kitchenFacility', value)}
               />
               <SelectField
-                label="Gas Facility"
+                label={t('orders.create.additional.gas')}
                 value={formData.gasFacility}
                 options={GAS_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('gasFacility', value)}
               />
               <SelectField
-                label="Living Space"
+                label={t('orders.create.additional.livingSpace')}
                 value={formData.livingSpace}
                 options={LIVING_SPACE_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('livingSpace', value)}
               />
               <SelectField
-                label="Room Sharing"
+                label={t('orders.create.additional.roomSharing')}
                 value={formData.roomSharing}
                 options={SHARING_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('roomSharing', value)}
               />
               <SelectField
-                label="Floor Preference"
+                label={t('orders.create.additional.floor')}
                 value={formData.floorPreference}
                 options={FLOOR_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('floorPreference', value)}
               />
               <SelectField
-                label="Lift Facility"
+                label={t('orders.create.additional.lift')}
                 value={formData.liftFacility}
                 options={BINARY_PREFERENCE_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('liftFacility', value)}
               />
               <SelectField
-                label="Parking Facility"
+                label={t('orders.create.additional.parking')}
                 value={formData.parkingFacility}
                 options={BINARY_PREFERENCE_OPTIONS}
+                optionNamespace="orderPreferences"
                 onChange={(value) => updateField('parkingFacility', value)}
               />
             </div>
           </SectionCard>
 
-          <SectionCard title="Package">
+          <SectionCard title={t('orders.create.package.title')}>
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
               <div className="grid gap-4 sm:grid-cols-2">
-                <RequirementBadge title="Package" value="7 Days" />
-                <RequirementBadge title="Price" value={`${getOrderCost()} BDT`} />
+                <RequirementBadge
+                  title={t('orders.create.package.packageLabel')}
+                  value={t('orders.create.package.duration')}
+                />
+                <RequirementBadge
+                  title={t('orders.create.package.price')}
+                  value={t('orders.create.package.priceValue', { price: getOrderCost() })}
+                />
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -607,22 +675,26 @@ export default function CreateOrderForm() {
                     type="checkbox"
                     checked={formData.agreedToTerms}
                     onChange={(event) => updateField('agreedToTerms', event.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-[#1E73B8] focus:ring-[#1E73B8]"
+                    className="mt-1 h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand"
                   />
                   <span>
-                    I agree to the{' '}
-                    <Link to="/terms" className="font-medium text-[#1E73B8] hover:underline">
-                      Terms & Conditions
-                    </Link>
-                    ,{' '}
-                    <Link to="/privacy" className="font-medium text-[#1E73B8] hover:underline">
-                      Privacy Policy
-                    </Link>
-                    , and{' '}
-                    <Link to="/refund" className="font-medium text-[#1E73B8] hover:underline">
-                      Refund Policy
-                    </Link>
-                    .
+                    {renderTemplate(t('orders.create.package.agree'), {
+                      terms: (
+                        <Link to="/terms" className="font-medium text-brand hover:underline">
+                          {t('orders.create.package.terms')}
+                        </Link>
+                      ),
+                      privacy: (
+                        <Link to="/privacy" className="font-medium text-brand hover:underline">
+                          {t('orders.create.package.privacy')}
+                        </Link>
+                      ),
+                      refund: (
+                        <Link to="/refund" className="font-medium text-brand hover:underline">
+                          {t('orders.create.package.refund')}
+                        </Link>
+                      ),
+                    })}
                   </span>
                 </label>
                 {errors.agreedToTerms ? (
@@ -636,15 +708,15 @@ export default function CreateOrderForm() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex min-w-[180px] justify-center rounded-2xl bg-[#1E73B8] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#1665a0] disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-w-[180px] justify-center rounded-2xl bg-brand px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? 'Processing...' : 'Create'}
+              {submitting ? t('orders.create.processing') : t('orders.create.create')}
             </button>
             <Link
               to="/dashboard?tab=orders"
-              className="inline-flex rounded-2xl border border-gray-200 bg-white px-6 py-3.5 text-sm font-semibold text-gray-700 transition hover:border-[#1E73B8] hover:text-[#1E73B8]"
+              className="inline-flex rounded-2xl border border-gray-200 bg-white px-6 py-3.5 text-sm font-semibold text-gray-700 transition hover:border-brand hover:text-brand"
             >
-              Cancel
+              {t('common.cancel')}
             </Link>
           </div>
         </form>
@@ -653,7 +725,7 @@ export default function CreateOrderForm() {
       {showPaymentModal ? (
         <PaymentMethodSelector
           package_={{
-            name: '7 Days Property Order',
+            name: t('orders.create.package.orderName'),
             price: getOrderCost(),
             credits: 0,
           }}

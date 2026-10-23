@@ -1,3 +1,7 @@
+import { DEFAULT_LANGUAGE } from '../i18n/config'
+import { formatDate } from '../i18n/format'
+import { translate, translateValue } from '../i18n/translate'
+
 const ORDER_PREFERENCES_VERSION = 'order_preferences_v1'
 
 const isNonEmpty = (value) => typeof value === 'string' && value.trim() !== ''
@@ -102,7 +106,11 @@ export const parseOrderPreferences = (rawPreferences) => {
   }
 }
 
-export const formatOrderNeedFrom = (value) => {
+/**
+ * Format the "need from" date. `language` defaults to English so existing
+ * callers (admin panel, services) keep their current output.
+ */
+export const formatOrderNeedFrom = (value, language = DEFAULT_LANGUAGE) => {
   if (!value) {
     return ''
   }
@@ -112,14 +120,28 @@ export const formatOrderNeedFrom = (value) => {
     return String(value)
   }
 
-  return date.toLocaleDateString('en-US', {
+  return formatDate(date, language, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
   })
 }
 
-export const formatOrderPreferencesSummary = (rawPreferences) => {
+const REQUIREMENT_KEYS = [
+  'kitchenFacility',
+  'gasFacility',
+  'livingSpace',
+  'roomSharing',
+  'floorPreference',
+  'liftFacility',
+  'parkingFacility',
+]
+
+/**
+ * Build a one-line summary of stored order preferences. `language` defaults
+ * to English so existing callers keep their current output.
+ */
+export const formatOrderPreferencesSummary = (rawPreferences, language = DEFAULT_LANGUAGE) => {
   const parsed = parseOrderPreferences(rawPreferences)
 
   if (!parsed) {
@@ -134,42 +156,46 @@ export const formatOrderPreferencesSummary = (rawPreferences) => {
 
   if (Array.isArray(parsed.extraLocations) && parsed.extraLocations.length > 0) {
     summary.push(
-      `Extra locations: ${parsed.extraLocations
-        .map((location) => formatLocation(location))
-        .filter(Boolean)
-        .join(' | ')}`
+      translate(language, 'orders.preferences.extraLocations', {
+        locations: parsed.extraLocations
+          .map((location) => formatLocation(location))
+          .filter(Boolean)
+          .join(' | '),
+      })
     )
   }
 
   const gender = parsed.primaryRequirements?.gender
   if (isNonEmpty(gender)) {
-    summary.push(`Gender: ${gender}`)
+    summary.push(
+      translate(language, 'orders.preferences.gender', {
+        value: translateValue(language, 'orderPreferences', gender),
+      })
+    )
   }
 
   const bathRoom = parsed.primaryRequirements?.bathRoom
   if (isNonEmpty(bathRoom)) {
-    summary.push(`Bath room: ${bathRoom}`)
+    summary.push(
+      translate(language, 'orders.preferences.bathRoom', {
+        value: translateValue(language, 'orderPreferences', bathRoom),
+      })
+    )
   }
 
-  const requirementLabels = {
-    kitchenFacility: 'Kitchen',
-    gasFacility: 'Gas',
-    livingSpace: 'Living space',
-    roomSharing: 'Room sharing',
-    floorPreference: 'Floor',
-    liftFacility: 'Lift',
-    parkingFacility: 'Parking',
-  }
-
-  Object.entries(requirementLabels).forEach(([key, label]) => {
+  REQUIREMENT_KEYS.forEach((key) => {
     const value = parsed.additionalRequirements?.[key]
     if (isNonEmpty(value)) {
-      summary.push(`${label}: ${value}`)
+      summary.push(
+        translate(language, `orders.preferences.${key}`, {
+          value: translateValue(language, 'orderPreferences', value),
+        })
+      )
     }
   })
 
   if (isNonEmpty(parsed.notes)) {
-    summary.push(`Notes: ${parsed.notes}`)
+    summary.push(translate(language, 'orders.preferences.notes', { value: parsed.notes }))
   }
 
   return summary.join(' | ')

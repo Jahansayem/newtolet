@@ -166,7 +166,7 @@ const ReferralManagement = () => {
                     referral_commission_type: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-brand"
               >
                 <option value="percentage">Percentage</option>
                 <option value="fixed">Fixed Amount</option>
@@ -186,7 +186,7 @@ const ReferralManagement = () => {
                     referral_commission_value: Number(event.target.value),
                   }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
             </div>
 
@@ -201,7 +201,7 @@ const ReferralManagement = () => {
                     referral_bonus_percent: Number(event.target.value),
                   }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
             </div>
 
@@ -217,7 +217,7 @@ const ReferralManagement = () => {
                     referral_bonus_frequency: event.target.value,
                   }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-brand"
               >
                 <option value="every_purchase">Every Purchase</option>
                 <option value="first_purchase">First Purchase Only</option>
@@ -237,7 +237,7 @@ const ReferralManagement = () => {
                     min_withdrawal_amount: Number(event.target.value),
                   }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#1E73B8]"
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-brand"
               />
             </div>
           </div>
@@ -245,7 +245,7 @@ const ReferralManagement = () => {
           <button
             type="submit"
             disabled={saving}
-            className="mt-5 rounded-lg bg-[#1E73B8] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1665a0] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save Referral Settings'}
           </button>

@@ -9,6 +9,9 @@
 export const MAX_IMAGES = 10;
 export const MAX_AMENITIES = 30;
 export const MAX_IMAGE_URL_LENGTH = 2048;
+/** Base64 characters for a 4 MiB image (4 MiB * 4/3, rounded up with padding). */
+export const MAX_IMAGE_BASE64_LENGTH = 5_700_000;
+export const IMAGE_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export const MAX_DESCRIPTION_LENGTH = 2000;
 export const MIN_DESCRIPTION_LENGTH = 10;
 export const MAX_SHORT_TEXT_LENGTH = 120;
@@ -160,17 +163,28 @@ export class ValidationError extends Error {
   }
 }
 
-export type ImageInput = {
+/** A `property_images` row as inserted (without property_id). */
+export type ImageRow = {
   image_url: string;
   is_thumbnail: boolean;
   display_order: number;
 };
 
+/**
+ * One requested image, in final display order, before it is fetched/decoded and
+ * copied into storage. `index` is the position in the request array (for error
+ * reporting); `is_thumbnail` is true for exactly one entry when the list is not empty.
+ */
+export type ImageSource = { index: number; is_thumbnail: boolean } & (
+  | { kind: "url"; url: string }
+  | { kind: "base64"; data: string; content_type: string | null }
+);
+
 export type ValidatedListing = {
   /** Column values for the `properties` table. */
   fields: Record<string, unknown>;
   /** `undefined` on PATCH when the key was omitted (do not replace). */
-  images?: ImageInput[];
+  images?: ImageSource[];
   /** `undefined` on PATCH when the key was omitted (do not replace). */
   amenities?: string[];
   /** Normalised phone, or `undefined` when the agent did not send one. */
@@ -369,7 +383,27 @@ const isValidImageUrl = (value: string) => {
   }
 };
 
-export const normalizeImages = (raw: unknown, errors: string[]): ImageInput[] | undefined => {
+const DATA_URI_REGEX = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)?(?:;[a-z0-9=-]+)*;base64,/i;
+
+/**
+ * Split an `image_base64` value into its payload and the content type carried by an
+ * optional `data:<type>;base64,` prefix. Whitespace (line wrapping) is removed.
+ */
+const readBase64Source = (value: string, declaredType: unknown) => {
+  let data = value.trim();
+  let contentType: string | null = null;
+  const match = DATA_URI_REGEX.exec(data);
+  if (match) {
+    contentType = match[1]?.toLowerCase() ?? null;
+    data = data.slice(match[0].length);
+  }
+  if (typeof declaredType === "string" && declaredType.trim()) {
+    contentType = declaredType.trim().toLowerCase().split(";")[0];
+  }
+  return { data: data.replace(/\s+/g, ""), contentType };
+};
+
+export const normalizeImages = (raw: unknown, errors: string[]): ImageSource[] | undefined => {
   if (raw === undefined) return undefined;
   if (raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -382,20 +416,73 @@ export const normalizeImages = (raw: unknown, errors: string[]): ImageInput[] | 
   }
 
   const seen = new Set<string>();
-  const entries: { url: string; thumbnail: boolean; order: number | null; index: number }[] = [];
+  type Entry = {
+    source: { kind: "url"; url: string } | { kind: "base64"; data: string; content_type: string | null };
+    thumbnail: boolean;
+    order: number | null;
+    index: number;
+  };
+  const entries: Entry[] = [];
   for (const [index, entry] of raw.entries()) {
     const item = typeof entry === "string" ? { image_url: entry } : entry;
-    if (!isPlainObject(item) || typeof item.image_url !== "string") {
-      errors.push(`images[${index}] must be an object with an image_url string`);
+    if (!isPlainObject(item)) {
+      errors.push(`images[${index}] must be an object with image_url or image_base64`);
       return undefined;
     }
-    const url = item.image_url.trim();
-    if (!isValidImageUrl(url)) {
-      errors.push(`images[${index}].image_url must be a valid http(s) URL`);
+    const hasUrl = item.image_url !== undefined && item.image_url !== null;
+    const hasBase64 = item.image_base64 !== undefined && item.image_base64 !== null;
+    if (hasUrl === hasBase64) {
+      errors.push(`images[${index}] must have exactly one of image_url or image_base64`);
       return undefined;
     }
-    if (seen.has(url)) continue;
-    seen.add(url);
+
+    let source: Entry["source"];
+    if (hasUrl) {
+      if (typeof item.image_url !== "string") {
+        errors.push(`images[${index}].image_url must be a string`);
+        return undefined;
+      }
+      const url = item.image_url.trim();
+      if (!isValidImageUrl(url)) {
+        errors.push(`images[${index}].image_url must be a valid http(s) URL`);
+        return undefined;
+      }
+      if (seen.has(url)) continue;
+      seen.add(url);
+      source = { kind: "url", url };
+    } else {
+      if (typeof item.image_base64 !== "string" || !item.image_base64.trim()) {
+        errors.push(`images[${index}].image_base64 must be a non-empty base64 string`);
+        return undefined;
+      }
+      if (item.image_base64.length > MAX_IMAGE_BASE64_LENGTH + 64) {
+        errors.push(`images[${index}].image_base64 must decode to at most 4 MB`);
+        return undefined;
+      }
+      if (
+        item.content_type !== undefined && item.content_type !== null &&
+        typeof item.content_type !== "string"
+      ) {
+        errors.push(`images[${index}].content_type must be a string`);
+        return undefined;
+      }
+      const { data, contentType } = readBase64Source(item.image_base64, item.content_type);
+      if (!data) {
+        errors.push(`images[${index}].image_base64 must be a non-empty base64 string`);
+        return undefined;
+      }
+      if (contentType && !IMAGE_CONTENT_TYPES.includes(contentType)) {
+        errors.push(
+          `images[${index}].content_type must be one of ${IMAGE_CONTENT_TYPES.join(", ")}`,
+        );
+        return undefined;
+      }
+      // Cheap duplicate guard; byte-identical uploads are also de-duplicated by hash later.
+      const key = `base64:${data.length}:${data.slice(0, 64)}:${data.slice(-64)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      source = { kind: "base64", data, content_type: contentType };
+    }
 
     let order: number | null = null;
     if (item.display_order !== undefined && item.display_order !== null) {
@@ -410,17 +497,18 @@ export const normalizeImages = (raw: unknown, errors: string[]): ImageInput[] | 
       errors.push(`images[${index}].is_thumbnail must be true or false`);
       return undefined;
     }
-    entries.push({ url, thumbnail: item.is_thumbnail === true, order, index });
+    entries.push({ source, thumbnail: item.is_thumbnail === true, order, index });
   }
 
-  // Stable sort by requested display_order (unspecified entries keep array position),
-  // then re-sequence from 0 the way the frontend does.
+  // Stable sort by requested display_order (unspecified entries keep array position).
+  // Final display_order values are assigned after the images are fetched, because an
+  // image that cannot be retrieved is dropped and the rest close the gap.
   entries.sort((a, b) => (a.order ?? a.index) - (b.order ?? b.index) || a.index - b.index);
   const thumbnailIndex = Math.max(0, entries.findIndex((entry) => entry.thumbnail));
   return entries.map((entry, position) => ({
-    image_url: entry.url,
+    ...entry.source,
+    index: entry.index,
     is_thumbnail: position === thumbnailIndex,
-    display_order: position,
   }));
 };
 

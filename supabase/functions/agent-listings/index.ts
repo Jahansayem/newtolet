@@ -10,12 +10,23 @@
 // Authentication is a shared secret (LISTINGS_AGENT_API_KEY) sent as
 // `Authorization: Bearer <key>` or `X-Agent-API-Key: <key>`. The service-role
 // client bypasses RLS, so every write is scoped to the agent owner in code.
+//
+// Images sent as `image_url` or `image_base64` are copied into the
+// `property-images` bucket (see images.ts); `images_skipped` in the POST/PATCH
+// response lists the ones that could not be stored. SUPABASE_PUBLIC_URL must be
+// the public Supabase URL so the stored URLs work in the browser.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-import { createAdminClient, getSiteUrl } from "../_shared/paymently.ts";
+import { createAdminClient, getSiteUrl, getSupabasePublicUrl } from "../_shared/paymently.ts";
 import {
-  type ImageInput,
+  materializeImages,
+  removeObjects,
+  removeUnreferencedAgentObjects,
+  type SkippedImage,
+} from "./images.ts";
+import {
+  type ImageRow,
   normalizeContactNumber,
   validateCreateBody,
   validatePatchBody,
@@ -23,6 +34,9 @@ import {
 } from "./validation.ts";
 
 const FUNCTION_SLUG = "agent-listings";
+/** Wall-clock budget for fetching and storing images in one request (gateway timeout is 60 s). */
+const IMAGE_BUDGET_MS = 40_000;
+const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const MAX_SEARCH_LENGTH = 100;
@@ -155,6 +169,32 @@ const getAgentUserId = () => {
   return value.toLowerCase();
 };
 
+/**
+ * Public base for stored image URLs. Inside the container SUPABASE_URL is the
+ * internal gateway (http://kong:8000), which browsers cannot reach, so the public
+ * URL has to be configured explicitly.
+ */
+const getStoragePublicBase = () => {
+  let base: string;
+  try {
+    base = getSupabasePublicUrl();
+  } catch (error) {
+    throw new ConfigError((error as Error).message);
+  }
+  let host = "";
+  try {
+    host = new URL(base).hostname.toLowerCase();
+  } catch {
+    throw new ConfigError(`SUPABASE_PUBLIC_URL is not a valid URL: ${base}`);
+  }
+  if (!host || host === "localhost" || !host.includes(".")) {
+    throw new ConfigError(
+      "SUPABASE_PUBLIC_URL must be set to the public Supabase URL in the functions environment",
+    );
+  }
+  return base;
+};
+
 const digest = async (value: string) =>
   new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 
@@ -281,7 +321,7 @@ const insertAmenities = async (supabase: AdminClient, propertyId: string, amenit
   if (error) throw error;
 };
 
-const insertImages = async (supabase: AdminClient, propertyId: string, images: ImageInput[]) => {
+const insertImages = async (supabase: AdminClient, propertyId: string, images: ImageRow[]) => {
   if (!images.length) return;
   const { error } = await supabase
     .from("property_images")
@@ -463,6 +503,10 @@ const getListing = async (identifier: string, supabase: AdminClient, agentUserId
 };
 
 const readJsonBody = async (request: Request) => {
+  const declared = Number(request.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    throw new HttpError(413, `Request body must be at most ${MAX_BODY_BYTES / (1024 * 1024)} MB`);
+  }
   try {
     return await request.json();
   } catch {
@@ -474,6 +518,8 @@ const createListing = async (request: Request, supabase: AdminClient, agentUserI
   const body = await readJsonBody(request);
   const { fields, images = [], amenities = [], contactNumber } = validateCreateBody(body);
   const contact_number = await resolveContactNumber(supabase, agentUserId, contactNumber);
+  // Resolve configuration before writing anything so a misconfigured server leaves no orphan.
+  const publicBase = images.length ? getStoragePublicBase() : null;
 
   const { data: created, error: insertError } = await supabase
     .from("properties")
@@ -495,11 +541,28 @@ const createListing = async (request: Request, supabase: AdminClient, agentUserI
   if (insertError) throw insertError;
 
   const propertyId = (created as Row).id as string;
+  const uploadedPaths: string[] = [];
+  let imagesSkipped: SkippedImage[] = [];
   try {
+    let imageRows: ImageRow[] = [];
+    if (publicBase) {
+      const media = await materializeImages(
+        supabase,
+        propertyId,
+        images,
+        publicBase,
+        Date.now() + IMAGE_BUDGET_MS,
+        uploadedPaths,
+      );
+      imageRows = media.rows;
+      imagesSkipped = media.skipped;
+    }
     await insertAmenities(supabase, propertyId, amenities);
-    await insertImages(supabase, propertyId, images);
+    await insertImages(supabase, propertyId, imageRows);
   } catch (childError) {
-    // Remove the half-created listing (children cascade) so no orphan is left behind.
+    // Remove the stored copies and the half-created listing (children cascade) so no
+    // orphan is left behind.
+    await removeObjects(supabase, uploadedPaths);
     const { error: cleanupError } = await supabase
       .from("properties")
       .delete()
@@ -510,7 +573,7 @@ const createListing = async (request: Request, supabase: AdminClient, agentUserI
   }
 
   const [listing] = await enrichListings(supabase, [created as Row], true);
-  return json({ data: listing }, 201);
+  return json({ data: listing, images_skipped: imagesSkipped }, 201);
 };
 
 const updateListing = async (
@@ -522,6 +585,7 @@ const updateListing = async (
   const body = await readJsonBody(request);
   const { fields, images, amenities, contactNumber } = validatePatchBody(body);
   const propertyId = await requireOwnedListing(supabase, identifier, agentUserId);
+  const publicBase = images?.length ? getStoragePublicBase() : null;
 
   const update: Row = {
     ...fields,
@@ -549,18 +613,46 @@ const updateListing = async (
       amenities.map((amenity_type) => ({ amenity_type })),
     );
   }
+  let imagesSkipped: SkippedImage[] = [];
   if (images !== undefined) {
-    await replaceChildRows(
-      supabase,
-      "property_images",
-      propertyId,
-      "property_id, image_url, is_thumbnail, display_order",
-      images,
-    );
+    const uploadedPaths: string[] = [];
+    try {
+      let imageRows: ImageRow[] = [];
+      if (publicBase) {
+        const media = await materializeImages(
+          supabase,
+          propertyId,
+          images,
+          publicBase,
+          Date.now() + IMAGE_BUDGET_MS,
+          uploadedPaths,
+        );
+        imageRows = media.rows;
+        imagesSkipped = media.skipped;
+      }
+      await replaceChildRows(
+        supabase,
+        "property_images",
+        propertyId,
+        "property_id, image_url, is_thumbnail, display_order",
+        imageRows,
+      );
+      // The old rows are gone; drop the agent-uploaded copies they pointed at.
+      await removeUnreferencedAgentObjects(
+        supabase,
+        propertyId,
+        imageRows.map((row) => row.image_url),
+        publicBase,
+      );
+    } catch (error) {
+      // replaceChildRows restored the previous rows; the copies made in this call are unused.
+      await removeObjects(supabase, uploadedPaths);
+      throw error;
+    }
   }
 
   const [listing] = await enrichListings(supabase, [updated as Row], true);
-  return json({ data: listing });
+  return json({ data: listing, images_skipped: imagesSkipped });
 };
 
 const deleteListing = async (identifier: string, supabase: AdminClient, agentUserId: string) => {

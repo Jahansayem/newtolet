@@ -156,6 +156,19 @@ export const listDuplicatePhoneGroups = async ({ page = 1, pageSize = 20, status
   return ok(items, { page: Math.max(Number(page) || 1, 1), pageSize: limit, totalCount, hasMore: offset + items.length < totalCount })
 }
 
+/** Listings by id, in the order given (used by the featured-listings editor). */
+export const listPropertiesByIds = async (ids = [], { signal } = {}) => {
+  const unique = Array.from(new Set((ids || []).filter(Boolean)))
+  if (unique.length === 0) return ok([])
+  let query = supabase.from('properties').select(PROPERTY_LIST_COLUMNS).in('id', unique.slice(0, 100))
+  if (signal && typeof query.abortSignal === 'function') query = query.abortSignal(signal)
+  const { data, error } = await query
+  if (error) return fail(error)
+  const rows = await annotateDuplicates(await attachSubmitters(data || []))
+  const byId = Object.fromEntries(rows.map((row) => [row.id, row]))
+  return ok(unique.map((id) => byId[id]).filter(Boolean))
+}
+
 export const getPropertyCounts = async () => {
   const [total, approved, pending, rejected, duplicates] = await Promise.all([
     headCount('properties', (q) => q.is('deleted_at', null)),
@@ -196,20 +209,3 @@ export const setPropertyFeatured = async (propertyId, isFeatured) =>
 
 export const softDeleteProperty = async (propertyId, reason) =>
   after(await callAdminRpc('admin_soft_delete_property', { p_property_id: propertyId, p_reason: reason }))
-
-// ---- compatibility wrappers for the old adminService exports ----
-export const getAdminPropertiesPage = ({ page = 1, pageSize = 20, status = 'all', sort, search } = {}) =>
-  listProperties({ page, pageSize, sort, search, filters: { status: status === 'all' ? '' : status } })
-export const getAdminPropertiesByPhoneGroup = ({ phoneKey, page = 1, pageSize = 20 } = {}) =>
-  listProperties({ page, pageSize, filters: { phoneKey } })
-export const getAdminDuplicatePhoneGroupsPage = ({ page = 1, pageSize = 20 } = {}) => listDuplicatePhoneGroups({ page, pageSize, status: 'pending' })
-export const getAdminPropertyCounts = getPropertyCounts
-export const updatePropertyStatus = (propertyId, status) => setPropertyStatus({ ids: [propertyId], status })
-export const updatePropertiesStatus = (propertyIds, status) => setPropertyStatus({ ids: propertyIds, status })
-export const approveAllPendingProperties = async () => {
-  const result = await approveAllPending()
-  return result.error ? result : { ...result, data: { approvedCount: result.count ?? (result.data || []).length } }
-}
-/** @deprecated listings are soft-deleted, never hard-deleted */
-export const deleteProperty = (propertyId) => softDeleteProperty(propertyId, 'Removed from the admin panel')
-export const togglePropertyFeatured = (propertyId, isFeatured) => setPropertyFeatured(propertyId, isFeatured)

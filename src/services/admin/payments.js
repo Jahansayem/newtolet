@@ -87,16 +87,3 @@ export const exportPaymentsCsv = async (params = {}) => {
   downloadCsv(csvFilename(`payments-${params.filters?.status || 'all'}`), csv)
   return { ...ok({ rows: result.data.length, truncated: Boolean(result.truncated) }), error: result.error || null }
 }
-
-// ---- compatibility wrappers ----
-export const approvePaymentTransaction = approvePayment
-/** @deprecated use listPayments */
-export const getAllPaymentTransactions = async () => {
-  const result = await listPayments({ pageSize: 100 })
-  return { data: result.data || [], error: result.error }
-}
-/** @deprecated use listPayments({ filters: { status } }) */
-export const getPaymentTransactionsByStatus = async (status) => {
-  const result = await listPayments({ pageSize: 100, filters: { status } })
-  return { data: result.data || [], error: result.error }
-}

@@ -138,15 +138,6 @@ export {
   approveAllPending,
   setPropertyFeatured,
   softDeleteProperty,
-  getAdminPropertiesPage,
-  getAdminPropertiesByPhoneGroup,
-  getAdminDuplicatePhoneGroupsPage,
-  getAdminPropertyCounts,
-  updatePropertyStatus,
-  updatePropertiesStatus,
-  approveAllPendingProperties,
-  deleteProperty,
-  togglePropertyFeatured,
 } from './admin/properties'
 
 // ==================== FEEDBACK / ORDERS / INQUIRIES / PAYMENTS ====================
@@ -157,11 +148,6 @@ export {
   listFeedback,
   reviewFeedback,
   archiveFeedback,
-  getAllFeedback,
-  deleteFeedback,
-  updateFeedbackStatus,
-  approveFeedback,
-  rejectFeedback,
 } from './admin/feedback'
 export {
   listOrders,
@@ -169,18 +155,11 @@ export {
   setOrderJobFeed,
   setOrderAssignee,
   archiveOrder,
-  getAllOrders,
-  updateOrderStatus,
-  updateOrderJobFeed,
-  deleteOrder,
 } from './admin/orders'
 export {
   listInquiries,
   updateInquiry,
   archiveInquiry,
-  getAllPropertyInquiries,
-  updateInquiryStatus,
-  deleteInquiry,
 } from './admin/inquiries'
 export {
   listPayments,
@@ -189,9 +168,6 @@ export {
   reviewPayment,
   refundPayment,
   exportPaymentsCsv,
-  approvePaymentTransaction,
-  getAllPaymentTransactions,
-  getPaymentTransactionsByStatus,
 } from './admin/payments'
 
 // ==================== ANALYTICS ====================
@@ -424,27 +400,6 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
   } catch (error) {
     console.error('Error fetching daily submitter-wise listing report:', error)
     return { data: emptyReport, error }
-  }
-}
-
-// Get recent activities
-export const getRecentActivities = async (limit = 10) => {
-  try {
-    const { data, error } = await supabase
-      .from('activities')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit)
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'activities')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching recent activities:', error)
-    return { data: [], error: null }
   }
 }
 
@@ -1219,67 +1174,3 @@ export const toggleAutoApproveProperties = async (enabled) => {
   }
 }
 
-const normalizeContactUnlockRefundRequest = (record) => ({
-  ...record,
-  credits_restored: Number(record?.credits_restored || 0),
-  contact_view: record?.contact_view || null,
-  user: record?.user || null,
-  property: record?.property || null,
-})
-
-export const getAdminContactUnlockRefundRequests = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('contact_unlock_refund_requests')
-      .select(`
-        *,
-        contact_view:contact_views(id, viewed_at, credits_spent),
-        user:users(id, name, email, phone),
-        property:properties(id, property_id_number, category, area, state_district)
-      `)
-      .order('requested_at', { ascending: false })
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'contact_unlock_refund_requests')
-      if (handled.data !== null) {
-        return []
-      }
-      throw error
-    }
-
-    return (data || []).map(normalizeContactUnlockRefundRequest)
-  } catch (error) {
-    console.error('Error fetching contact unlock refund requests:', error)
-    return []
-  }
-}
-
-export const reviewContactUnlockRefundRequest = async (
-  requestId,
-  status,
-  adminNote = ''
-) => {
-  if (!requestId || !status) {
-    return { data: null, error: new Error('Refund request and status are required.') }
-  }
-
-  try {
-    const { data, error } = await supabase.rpc('review_contact_unlock_refund_request', {
-      p_request_id: requestId,
-      p_status: status,
-      p_admin_note: adminNote || null,
-    })
-
-    if (error) {
-      throw error
-    }
-
-    return {
-      data: normalizeContactUnlockRefundRequest(Array.isArray(data) ? data[0] : data),
-      error: null,
-    }
-  } catch (error) {
-    console.error('Error reviewing contact unlock refund request:', error)
-    return { data: null, error }
-  }
-}

@@ -7,7 +7,6 @@ import { useAdminPermissions } from '../../contexts/AdminAccessContext'
 import { formatRoleLabels } from '../../lib/adminPermissions'
 import { ToastProvider } from '../ui/ToastProvider'
 import InlineAlert from '../ui/InlineAlert'
-import CoverPhotoManagement from '../../Component/Admin/CoverPhotoManagement.jsx'
 import PaymentMonitoring from '../../Component/Admin/PaymentMonitoring.jsx'
 import ReferralManagement from '../../Component/Admin/ReferralManagement.jsx'
 import SearchHistoryManagement from '../../Component/Admin/SearchHistoryManagement.jsx'
@@ -16,12 +15,16 @@ import ContactUnlockRefundReview from '../../Component/Admin/ContactUnlockRefund
 import AdminShell from './AdminShell.jsx'
 import { ADMIN_NAV_ITEMS, getAdminNavItem, getAdminPanelTitle, resolveAdminTab } from './adminPanelConfig.js'
 import { useAdminQueueCounts } from './hooks/useAdminQueueCounts'
+import AdminAnalyticsSection from './sections/AdminAnalyticsSection.jsx'
+import AdminAuditLogSection from './sections/AdminAuditLogSection.jsx'
+import AdminContentSection from './sections/AdminContentSection.jsx'
 import AdminDashboardSection from './sections/AdminDashboardSection.jsx'
 import AdminFeedbackSection from './sections/AdminFeedbackSection.jsx'
 import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
 import AdminOrdersSection from './sections/AdminOrdersSection.jsx'
 import AdminPricingSection from './sections/AdminPricingSection.jsx'
 import AdminPropertiesSection from './sections/AdminPropertiesSection.jsx'
+import AdminSettingsSection from './sections/AdminSettingsSection.jsx'
 
 const AdminPanelApp = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -80,7 +83,13 @@ const AdminPanelApp = () => {
       case 'credits':
         return <AdminPricingSection />
       case 'content':
-        return <CoverPhotoManagement />
+        return <AdminContentSection />
+      case 'analytics':
+        return <AdminAnalyticsSection />
+      case 'settings':
+        return <AdminSettingsSection />
+      case 'audit':
+        return <AdminAuditLogSection />
       case 'users':
         return <UserManagement />
       case 'properties':

@@ -51,19 +51,3 @@ export const setOrderAssignee = async (orderId, assignedTo) =>
 
 export const archiveOrder = async (orderId, reason = null) =>
   after(await callAdminRpc('admin_archive_order', { p_order_id: orderId, p_reason: reason }))
-
-// ---- compatibility wrappers for the old adminService exports ----
-export const updateOrderStatus = (orderId, status) => setOrderStatus(orderId, status)
-export const updateOrderJobFeed = (orderId, updates = {}) =>
-  setOrderJobFeed(orderId, {
-    title: updates.job_feed_title ?? null,
-    description: updates.job_feed_description ?? null,
-    isPosted: Boolean(updates.is_job_feed_posted),
-  })
-/** @deprecated orders are archived, never hard-deleted */
-export const deleteOrder = (orderId) => archiveOrder(orderId, 'Removed from the admin panel')
-/** @deprecated use listOrders */
-export const getAllOrders = async () => {
-  const result = await listOrders({ pageSize: 100 })
-  return { data: result.data, error: result.error }
-}

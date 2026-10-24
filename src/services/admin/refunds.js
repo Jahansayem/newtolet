@@ -44,11 +44,3 @@ export const reviewRefundRequest = async (requestId, status, adminNote = null) =
   if (!result.error) invalidateAdminSnapshots('refunds')
   return result
 }
-
-// ---- compatibility wrappers ----
-export const reviewContactUnlockRefundRequest = reviewRefundRequest
-/** @deprecated use listRefundRequests */
-export const getAdminContactUnlockRefundRequests = async () => {
-  const result = await listRefundRequests({ pageSize: 100 })
-  return result.data || []
-}

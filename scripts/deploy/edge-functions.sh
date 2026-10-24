@@ -12,7 +12,7 @@
 #   AGENT_API_KEY  value for LISTINGS_AGENT_API_KEY; generated with openssl if absent
 #   SITE_URL       value for NEXT_PUBLIC_SITE_URL inside the functions container
 #   PUBLIC_URL     value for SUPABASE_PUBLIC_URL inside the functions container (the
-#                  browser-reachable Supabase URL, e.g. http://138.252.125.198:8000);
+#                  browser-reachable Supabase URL, e.g. https://api.newtolet.com);
 #                  defaults to SUPABASE_PUBLIC_URL or API_EXTERNAL_URL from the server .env
 #   SMOKE_IMAGE_URL optional public JPEG/PNG URL; when set, the smoke test creates a
 #                  listing with that image, checks the stored copy, and soft-deletes it

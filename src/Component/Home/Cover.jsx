@@ -8,10 +8,10 @@ import 'swiper/css/pagination';
 import { getActiveCoverPhotos, getActiveCoverPhotosCacheKey } from '../../services/coverPhotoService';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
 import { useLanguage } from '../../i18n/useLanguage';
+import { COVER_FRAME_CLASSES } from './coverFrame';
 import './Cover.css';
 
 const COVER_PHOTO_LIMIT = 6;
-const FRAME_CLASS = 'h-[200px] w-full md:h-[300px] xl:h-[340px]';
 
 const mapSlides = (photos = []) =>
     photos
@@ -125,7 +125,7 @@ const Cover = () => {
             <div
                 role='status'
                 aria-label={t('home.cover.loading')}
-                className={`${FRAME_CLASS} animate-pulse rounded-2xl bg-slate-200`}
+                className={`${COVER_FRAME_CLASSES} animate-pulse rounded-2xl bg-slate-200`}
             />
         );
     }
@@ -157,7 +157,7 @@ const Cover = () => {
                 autoplay={autoplayEnabled ? { delay: 5000, disableOnInteraction: false, pauseOnMouseEnter: true } : false}
                 speed={reduceMotion ? 0 : 300}
                 loop={slides.length > 1}
-                className={`cover-swiper relative ${FRAME_CLASS} overflow-hidden rounded-2xl border border-line bg-slate-100 shadow-card group`}
+                className={`cover-swiper relative ${COVER_FRAME_CLASSES} overflow-hidden rounded-2xl border border-line bg-slate-100 shadow-card group`}
             >
                 {slides.map((slide, index) => (
                     <SwiperSlide key={slide.id}>

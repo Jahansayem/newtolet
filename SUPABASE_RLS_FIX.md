@@ -1,79 +1,54 @@
 # Supabase Storage RLS Fix
 
 ## Problem
-You're getting the error: `new row violates row-level security policy` when uploading images to Storage.
 
-This happens because the Storage buckets (`property-images` and `id-documents`) have RLS (Row-Level Security) enabled but no proper policies configured to allow uploads.
+Uploads from the browser fail with `new row violates row-level security policy`
+(the admin cover-photo upload shows it as `Upload failed: ...`).
 
-## Solution - Apply These RLS Policies
+Supabase Storage stores every file as a row in `storage.objects`, inserted as the
+caller's JWT role (`authenticated` for signed-in users). With RLS enabled and no
+policy for the bucket, the insert is rejected. Service-role callers (the
+`agent-listings` Edge Function, migration scripts) bypass RLS, so they keep
+working even when browser uploads do not.
 
-### Step 1: Go to Supabase Dashboard
-1. Visit https://app.supabase.com
-2. Select your "Rental App" project
-3. Go to **Storage** (left sidebar)
-4. Click on **Policies** tab
+On the self-hosted VPS stack this happened because the migration restored
+`storage.buckets` / `storage.objects` with `pg_restore --data-only`, which
+carries rows but not policies.
 
-### Step 2: Create Policies for `property-images` Bucket
+## Fix
 
-**Policy 1 - Allow Public Uploads:**
-```sql
-CREATE POLICY "Allow public uploads"
-ON storage.objects
-FOR INSERT
-WITH CHECK (bucket_id = 'property-images');
+The buckets and policies are versioned in
+`supabase/migrations/20261024120000_storage_bucket_policies.sql`:
+
+| Bucket | Read | Write (insert / update / delete) |
+|---|---|---|
+| `cover-photos` | public | admins only (`public.is_current_user_admin()`) |
+| `property-images` | public | any signed-in user |
+| `id-documents` | owner folder or admin | owner folder (admins may delete) |
+
+Apply it to the VPS with:
+
+```bash
+bash scripts/deploy/supabase-selfhost/apply-storage-policies.sh 138.252.125.198
 ```
 
-**Policy 2 - Allow Public Downloads:**
-```sql
-CREATE POLICY "Allow public downloads"
-ON storage.objects
-FOR SELECT
-USING (bucket_id = 'property-images');
-```
+The script prints the bucket and policy state before and after, streams the
+migration into `psql`, and fails if any of the 12 expected policies is missing.
+It is idempotent. From Claude Code, run it with the `!` prefix because remote DB
+writes are blocked by the auto-mode classifier.
 
-**Policy 3 - Allow Updates:**
-```sql
-CREATE POLICY "Allow public updates"
-ON storage.objects
-FOR UPDATE
-WITH CHECK (bucket_id = 'property-images');
-```
+Do **not** disable RLS on `storage.objects` as a shortcut: that lets any holder
+of the anon key upload or delete files in every bucket.
 
-**Policy 4 - Allow Deletes:**
-```sql
-CREATE POLICY "Allow public deletes"
-ON storage.objects
-FOR DELETE
-USING (bucket_id = 'property-images');
-```
+## Files involved
 
-### Step 3: Create Policies for `id-documents` Bucket
-
-Repeat the same 4 policies above, but replace `property-images` with `id-documents`
-
-### Alternative (Simpler): Disable RLS on Storage Objects
-
-If you want a quicker solution without policies:
-1. Go to **SQL Editor** in Supabase
-2. Run this command:
-```sql
-ALTER TABLE storage.objects DISABLE ROW LEVEL SECURITY;
-```
-
-This disables RLS on storage.objects table, allowing all uploads/downloads.
-
-## Why This Happens
-- Supabase Storage uses the `storage.objects` table in the public schema
-- When RLS is enabled, you must define policies for each bucket
-- The policies specify who can INSERT (upload), SELECT (download), UPDATE, and DELETE objects
-- Without policies, all operations are blocked by default
-
-## Files Affected
-- `src/services/imageUploadService.js` - Uploads to both buckets
-- `src/services/propertyService.js` - Calls the upload functions
+- `src/services/coverPhotoService.js` - uploads to `cover-photos`
+- `src/services/imageUploadService.js` - uploads to `property-images` and `id-documents`
+- `supabase/functions/agent-listings/images.ts` - service-role uploads (unaffected)
 
 ## Testing
-After applying the fix:
-1. Try uploading a property with images again
-2. Check browser console - errors should be gone
-3. Images should upload successfully
+
+1. Admin panel -> Cover Photos -> upload a file: expect "Cover photo added successfully".
+2. As a normal user, add a property with photos and upload an ID document.
+3. A `POST` to `/storage/v1/object/cover-photos/...` with only the anon key
+   (no user session) must still be rejected.

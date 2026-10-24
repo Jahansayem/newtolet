@@ -28,7 +28,7 @@ const ForgotPassword = () => {
             const result = await requestPasswordReset(data.email);
 
             if (result.success) {
-                setSuccessMessage(result.message);
+                setSuccessMessage(t('auth.forgot.linkSent'));
                 reset();
             } else {
                 setErrorMessage(result.error);

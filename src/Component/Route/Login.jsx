@@ -81,7 +81,6 @@ const Login = () => {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [allowRenderWhileAuthPending, setAllowRenderWhileAuthPending] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
     const [hasAttemptedLogin, setHasAttemptedLogin] = useState(false);
     const redirectTarget = useMemo(
         () => resolveRedirectTarget(location.state, location.search),
@@ -90,22 +89,14 @@ const Login = () => {
     const isMountedRef = useRef(true);
     const hasNavigatedRef = useRef(false);
 
-    // Check for password reset success in URL params
+    // Surface OAuth errors passed back in the URL
     useEffect(() => {
         if (typeof window === 'undefined') return;
 
-        const params = new URLSearchParams(location.search);
         const oauthError = getOAuthErrorMessage(location.search, location.hash, t);
 
         if (oauthError) {
             setErrorMessage(oauthError);
-            window.history.replaceState({}, '', buildPageHref('login'));
-            return;
-        }
-
-        if (params.get('reset') === 'success') {
-            setSuccessMessage(t('auth.login.resetSuccess'));
-            // Clear the URL parameter
             window.history.replaceState({}, '', buildPageHref('login'));
         }
     }, [location.search, location.hash, t]);
@@ -166,7 +157,6 @@ const Login = () => {
     const onSubmit = async (data) => {
         setIsLoading(true);
         setErrorMessage('');
-        setSuccessMessage('');
         setHasAttemptedLogin(true);
 
         try {
@@ -191,7 +181,6 @@ const Login = () => {
     const handleGoogleSignIn = async () => {
         setIsGoogleLoading(true);
         setErrorMessage('');
-        setSuccessMessage('');
 
         const redirectUrl = new URL(buildPageHref('login'), window.location.origin);
         redirectUrl.searchParams.set('oauth', 'google');
@@ -249,12 +238,6 @@ const Login = () => {
                 </div>
                 <h1 className='auth-title'>{t('auth.login.title')}</h1>
                 <p className='auth-subtitle'>{t('auth.login.subtitle')}</p>
-
-                {successMessage && (
-                    <div role='status' className='auth-message auth-message-success'>
-                        {successMessage}
-                    </div>
-                )}
 
                 {errorMessage && (
                     <div role='alert' className='auth-message auth-message-error'>

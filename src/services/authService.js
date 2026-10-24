@@ -427,22 +427,18 @@ export const resetPassword = async (password) => {
             throw new Error('Password must be at least 6 characters');
         }
 
-        const storedUser = getStoredUser();
-
+        // The recovery link already signed the user in; updating the password keeps
+        // that session, so the stored user/token stay valid and the app can continue
+        // straight to the dashboard.
         const { error } = await supabase.auth.updateUser({ password });
 
         if (error) {
             throw new Error(error.message || 'Failed to reset password');
         }
 
-        // Clear localStorage after password reset
-        localStorage.removeItem('user');
-        localStorage.removeItem('authToken');
-        clearUserPanelCache(storedUser?.id);
-
         return {
             success: true,
-            message: 'Password reset successful! Please login with your new password.'
+            message: 'Password reset successful.'
         };
 
     } catch (error) {

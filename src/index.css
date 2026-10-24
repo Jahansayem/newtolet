@@ -159,7 +159,11 @@ body {
   background-color: var(--site-bg);
   color: var(--site-text);
   min-width: 320px;
+  /* clip, not hidden: hidden on both html and body turns body into its own scroll container,
+     which silently disables every position: sticky header/sidebar inside it. clip only cuts
+     sideways overflow. The hidden line is the fallback for browsers without clip support. */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {

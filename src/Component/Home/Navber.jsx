@@ -18,6 +18,7 @@ import {
   FiUser,
 } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
+import { useAdminPermissions } from '../../contexts/AdminAccessContext'
 import { useLanguage } from '../../i18n/useLanguage'
 import LanguageToggle from '../../components/LanguageToggle'
 import { buildDashboardHref, getRoutePage } from '../../lib/routePaths'
@@ -122,7 +123,8 @@ const Navber = () => {
   const isMountedRef = useRef(true)
   const isSearchOverlayOpen = searchOpen || mobileSearchOpen
 
-  const isAdmin = user?.is_admin === true || hasStoredAdminRole
+  const adminAccess = useAdminPermissions()
+  const isAdmin = user?.is_admin === true || hasStoredAdminRole || adminAccess.isAdmin
 
   const propertyDropdownItems = useMemo(
     () => [

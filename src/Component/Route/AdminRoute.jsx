@@ -1,66 +1,56 @@
-'use client';
+'use client'
 
-import React, { useEffect, useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
-import { buildPageHref } from '../../lib/routePaths.js';
+import React from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
+import { useAdminPermissions } from '../../contexts/AdminAccessContext'
+import { AdminAccessDenied, AdminLoadingState } from './AdminAccessStates'
 
-const AdminRoute = ({ children }) => {
-    const location = useLocation();
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [hasUser, setHasUser] = useState(false);
-    const [checked, setChecked] = useState(false);
+/**
+ * Guards admin pages with the real session (AuthContext) and the server-side
+ * admin profile (AdminAccessContext). localStorage is never treated as
+ * authorization on its own.
+ *
+ * @param {string} [requiredPermission] optional fine-grained permission key
+ */
+const AdminRoute = ({ children, requiredPermission = null }) => {
+  const location = useLocation()
+  const { user, isLoading } = useAuth()
+  const access = useAdminPermissions()
 
-    useEffect(() => {
-        try {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                const parsedUser = JSON.parse(storedUser);
-                setHasUser(true);
-                setIsAdmin(parsedUser.is_admin === true);
-            }
-        } catch (e) {
-            console.error('Error parsing stored user:', e);
-        }
-        setChecked(true);
-    }, []);
+  if (isLoading || (user && !access.isReady)) {
+    return <AdminLoadingState />
+  }
 
-    if (!checked) {
-        return null;
-    }
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />
+  }
 
-    // Not logged in - redirect to login
-    if (!hasUser) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
+  if (access.status === 'error' && !access.isAdmin) {
+    return (
+      <AdminAccessDenied
+        title="Could not verify your access"
+        description="The server did not confirm your admin role. Check your connection and try again."
+        error={access.error}
+        onRetry={access.refresh}
+      />
+    )
+  }
 
-    // Not logged in - redirect to login
-    if (!hasUser) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
+  if (!access.isAdmin) {
+    return <AdminAccessDenied />
+  }
 
-    // Not admin - show access denied
-    if (!isAdmin) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-                <div className="bg-white p-8 rounded-lg shadow-lg max-w-md text-center">
-                    <div className="text-red-500 text-6xl mb-4">🚫</div>
-                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h1>
-                    <p className="text-gray-600 mb-6">
-                        You don't have permission to access the admin panel. Only administrators can view this page.
-                    </p>
-                    <button
-                        onClick={() => { window.location.href = buildPageHref() }}
-                        className="bg-brand text-white px-6 py-2 rounded-lg hover:bg-brand-hover transition-colors"
-                    >
-                        Go to Homepage
-                    </button>
-                </div>
-            </div>
-        );
-    }
+  if (requiredPermission && !access.hasPermission(requiredPermission)) {
+    return (
+      <AdminAccessDenied
+        title="Permission required"
+        description="Your admin role does not include access to this area. Ask a super admin to extend your role."
+      />
+    )
+  }
 
-    // Admin user - show content immediately
-    return children;
-};
+  return children
+}
 
-export default AdminRoute;
+export default AdminRoute

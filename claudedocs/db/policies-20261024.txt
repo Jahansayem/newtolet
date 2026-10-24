@@ -1,0 +1,156 @@
+public.bonuses | Users can view their own bonuses | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.contact_views | Users can manage own contact views | ALL | {authenticated} | USING: (auth.uid() = user_id) | CHECK: (auth.uid() = user_id)
+public.cover_photos | Anyone can view cover photos | SELECT | {public} | USING: true | CHECK: -
+public.cover_photos | Authenticated users can manage cover photos | ALL | {authenticated} | USING: true | CHECK: true
+public.credit_packages | Admins can manage credit packages | ALL | {public} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true))))
+public.credit_packages | Public can read credit packages | SELECT | {public} | USING: ((active = true) OR (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true))))) | CHECK: -
+public.credit_settings | Admins can manage credit settings | ALL | {authenticated} | USING: is_current_user_admin() | CHECK: is_current_user_admin()
+public.credit_settings | Anyone can read credit settings | SELECT | {anon,authenticated} | USING: true | CHECK: -
+public.credit_topups | Users can insert their own credit topups | INSERT | {authenticated} | USING: - | CHECK: (user_id = auth.uid())
+public.credit_topups | Users can read their own credit topups | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.credit_topups | Users can update their own pending credit topups | UPDATE | {authenticated} | USING: ((user_id = auth.uid()) AND (status = ANY (ARRAY['created'::text, 'pending'::text]))) | CHECK: (user_id = auth.uid())
+public.customer_search_history | Authenticated users can view customer search history | SELECT | {authenticated} | USING: true | CHECK: -
+public.customer_search_history | Public can insert customer search history | INSERT | {anon,authenticated} | USING: - | CHECK: ((user_id IS NULL) OR (( SELECT auth.uid() AS uid) = user_id))
+public.employee_listing_streak_days | Users can read own listing streak days | SELECT | {authenticated} | USING: ((user_id = auth.uid()) OR ( SELECT is_current_user_admin() AS is_current_user_admin)) | CHECK: -
+public.employee_listing_streak_events | Users can read own listing streak events | SELECT | {authenticated} | USING: ((user_id = auth.uid()) OR ( SELECT is_current_user_admin() AS is_current_user_admin)) | CHECK: -
+public.employee_listing_streak_settings | Admins can update listing streak settings | UPDATE | {authenticated} | USING: ( SELECT is_current_user_admin() AS is_current_user_admin) | CHECK: ( SELECT is_current_user_admin() AS is_current_user_admin)
+public.employee_listing_streak_settings | Authenticated users can read listing streak settings | SELECT | {authenticated} | USING: true | CHECK: -
+public.employee_listing_streaks | Users can read own listing streak summary | SELECT | {authenticated} | USING: ((user_id = auth.uid()) OR ( SELECT is_current_user_admin() AS is_current_user_admin)) | CHECK: -
+public.exchange_rates | Anyone can view exchange rates | SELECT | {public} | USING: true | CHECK: -
+public.favorites | Users can add favorites | INSERT | {authenticated} | USING: - | CHECK: (user_id = auth.uid())
+public.favorites | Users can remove favorites | DELETE | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.favorites | Users can view their own favorites | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.feedback | Anyone can delete feedback | DELETE | {public} | USING: true | CHECK: -
+public.feedback | Anyone can update feedback | UPDATE | {public} | USING: true | CHECK: -
+public.feedback | Anyone can view feedback | SELECT | {public} | USING: true | CHECK: -
+public.feedback | Public can submit feedback | INSERT | {anon,authenticated} | USING: - | CHECK: ((user_id IS NULL) OR (( SELECT auth.uid() AS uid) = user_id))
+public.invites | Users can create invites | INSERT | {authenticated} | USING: - | CHECK: (inviter_id = auth.uid())
+public.invites | Users can view their own invites | SELECT | {authenticated} | USING: (inviter_id = auth.uid()) | CHECK: -
+public.job_participations | Users can manage own job participations | ALL | {public} | USING: (auth.uid() = user_id) | CHECK: (auth.uid() = user_id)
+public.listing_roles | Admins can insert listing roles | INSERT | {authenticated} | USING: - | CHECK: ( SELECT is_current_user_admin() AS is_current_user_admin)
+public.listing_roles | Admins can read listing roles | SELECT | {authenticated} | USING: ( SELECT is_current_user_admin() AS is_current_user_admin) | CHECK: -
+public.listing_roles | Admins can update listing roles | UPDATE | {authenticated} | USING: ( SELECT is_current_user_admin() AS is_current_user_admin) | CHECK: ( SELECT is_current_user_admin() AS is_current_user_admin)
+public.listing_roles | Authenticated users can read active listing roles | SELECT | {authenticated} | USING: (is_active = true) | CHECK: -
+public.messages | Users can mark messages as read | UPDATE | {authenticated} | USING: (receiver_id = auth.uid()) | CHECK: (receiver_id = auth.uid())
+public.messages | Users can send messages | INSERT | {authenticated} | USING: - | CHECK: (sender_id = auth.uid())
+public.messages | Users can view their own messages | SELECT | {authenticated} | USING: ((sender_id = auth.uid()) OR (receiver_id = auth.uid())) | CHECK: -
+public.orders | Admins can delete orders | DELETE | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: -
+public.orders | Admins can update orders | UPDATE | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: -
+public.orders | Admins can view all orders | SELECT | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: -
+public.orders | Anyone can view posted job feed orders | SELECT | {anon,authenticated} | USING: (is_job_feed_posted = true) | CHECK: -
+public.orders | Users can create own orders | INSERT | {authenticated} | USING: - | CHECK: (( SELECT auth.uid() AS uid) = user_id)
+public.orders | Users can create their own orders | INSERT | {authenticated} | USING: - | CHECK: (auth.uid() = user_id)
+public.orders | Users can view their own orders | SELECT | {authenticated} | USING: (auth.uid() = user_id) | CHECK: -
+public.payment_transactions | Admins can read all payment transactions | SELECT | {authenticated} | USING: is_current_user_admin() | CHECK: -
+public.payment_transactions | Users can insert own payment transactions | INSERT | {authenticated} | USING: - | CHECK: ((auth.uid() = user_id) OR is_current_user_admin())
+public.payment_transactions | Users can read own payment transactions | SELECT | {authenticated} | USING: ((auth.uid() = user_id) OR is_current_user_admin()) | CHECK: -
+public.payment_transactions | Users can update own payment transactions | UPDATE | {authenticated} | USING: ((auth.uid() = user_id) OR is_current_user_admin()) | CHECK: ((auth.uid() = user_id) OR is_current_user_admin())
+public.points_ledger | Users can view their own points | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.properties | Admins can delete all properties | DELETE | {authenticated} | USING: true | CHECK: -
+public.properties | Admins can update all properties | UPDATE | {authenticated} | USING: true | CHECK: -
+public.properties | Admins can view all properties | SELECT | {authenticated} | USING: true | CHECK: -
+public.properties | Anyone can view approved properties | SELECT | {public} | USING: ((status = 'approved'::text) OR (status IS NULL)) | CHECK: -
+public.properties | Users can delete own properties or admin can delete all | DELETE | {authenticated} | USING: ((auth.uid() = user_id) OR is_current_user_admin()) | CHECK: -
+public.properties | Users can insert own properties | INSERT | {authenticated} | USING: - | CHECK: ((auth.uid() = user_id) OR is_current_user_admin())
+public.properties | Users can read own properties or admin can read all | SELECT | {authenticated} | USING: ((auth.uid() = user_id) OR is_current_user_admin()) | CHECK: -
+public.properties | Users can update own properties or admin can update all | UPDATE | {authenticated} | USING: ((auth.uid() = user_id) OR is_current_user_admin()) | CHECK: ((auth.uid() = user_id) OR is_current_user_admin())
+public.property_amenities | Public can read approved property amenities | SELECT | {anon,authenticated} | USING: ((EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_amenities.property_id) AND (p.status = 'approved'::text) AND (p.is_active IS NOT FALSE)))) OR (EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_amenities.property_id) AND ((p.user_id = ( SELECT auth.uid() AS uid)) OR is_current_user_admin()))))) | CHECK: -
+public.property_amenities | Users can manage amenities for own properties | ALL | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_amenities.property_id) AND ((p.user_id = ( SELECT auth.uid() AS uid)) OR is_current_user_admin())))) | CHECK: (EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_amenities.property_id) AND ((p.user_id = ( SELECT auth.uid() AS uid)) OR is_current_user_admin()))))
+public.property_favorites | Users can manage own property favorites | ALL | {public} | USING: (auth.uid() = user_id) | CHECK: (auth.uid() = user_id)
+public.property_images | Public can read approved property images | SELECT | {anon,authenticated} | USING: ((EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_images.property_id) AND (p.status = 'approved'::text) AND (p.is_active IS NOT FALSE)))) OR (EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_images.property_id) AND ((p.user_id = ( SELECT auth.uid() AS uid)) OR is_current_user_admin()))))) | CHECK: -
+public.property_images | Users can manage images for own properties | ALL | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_images.property_id) AND ((p.user_id = ( SELECT auth.uid() AS uid)) OR is_current_user_admin())))) | CHECK: (EXISTS ( SELECT 1
+   FROM properties p
+  WHERE ((p.id = property_images.property_id) AND ((p.user_id = ( SELECT auth.uid() AS uid)) OR is_current_user_admin()))))
+public.property_inquiries | Admins can delete property
+  inquiries | DELETE | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: -
+public.property_inquiries | Admins can update property
+  inquiries | UPDATE | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: -
+public.property_inquiries | Admins can view all
+  property inquiries | SELECT | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users
+  WHERE ((users.id = auth.uid()) AND (users.is_admin = true)))) | CHECK: -
+public.property_inquiries | Anyone can submit property
+  inquiries | INSERT | {anon,authenticated} | USING: - | CHECK: true
+public.property_inquiries | Property owners can view
+  their inquiries | SELECT | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM properties
+  WHERE ((properties.id = property_inquiries.property_id) AND (properties.user_id = auth.uid())))) | CHECK: -
+public.property_inquiries | Public can create property inquiries | INSERT | {anon,authenticated} | USING: - | CHECK: true
+public.property_reports | Admins can delete property reports | DELETE | {public} | USING: is_current_user_admin() | CHECK: -
+public.property_reports | Admins can update property reports | UPDATE | {public} | USING: is_current_user_admin() | CHECK: is_current_user_admin()
+public.property_reports | Admins can view property reports | SELECT | {public} | USING: is_current_user_admin() | CHECK: -
+public.property_reports | Public can submit property reports | INSERT | {anon,authenticated} | USING: - | CHECK: ((user_id IS NULL) OR (( SELECT auth.uid() AS uid) = user_id))
+public.property_view_history | Users can manage own property view history | ALL | {public} | USING: (auth.uid() = user_id) | CHECK: (auth.uid() = user_id)
+public.referral_earnings | Admins can manage referral earnings | ALL | {authenticated} | USING: is_current_user_admin() | CHECK: is_current_user_admin()
+public.referral_earnings | Users can read own referral earnings | SELECT | {authenticated} | USING: (referrer_user_id = auth.uid()) | CHECK: -
+public.referral_settings | Admins can read referral settings | SELECT | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = auth.uid()) AND (COALESCE(u.is_admin, false) = true)))) | CHECK: -
+public.referral_settings | Admins can update referral settings | UPDATE | {authenticated} | USING: (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = auth.uid()) AND (COALESCE(u.is_admin, false) = true)))) | CHECK: (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = auth.uid()) AND (COALESCE(u.is_admin, false) = true))))
+public.site_settings | Admins can manage site settings | ALL | {authenticated} | USING: is_current_user_admin() | CHECK: is_current_user_admin()
+public.site_settings | Anyone can read site settings | SELECT | {public} | USING: true | CHECK: -
+public.team_tree | Users can view their downline | SELECT | {authenticated} | USING: (sponsor_path <@ ( SELECT team_tree_1.sponsor_path
+   FROM team_tree team_tree_1
+  WHERE (team_tree_1.user_id = auth.uid()))) | CHECK: -
+public.team_tree | Users can view their own tree entry | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.user_blacklist | Admins can manage blacklist | ALL | {authenticated} | USING: is_current_user_admin() | CHECK: is_current_user_admin()
+public.user_blacklist | Users can read own blacklist status | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.user_verifications | Users can insert own verification documents | INSERT | {authenticated} | USING: - | CHECK: (( SELECT auth.uid() AS uid) = user_id)
+public.user_wallets | Users can manage own wallets | ALL | {authenticated} | USING: (user_id = auth.uid()) | CHECK: (user_id = auth.uid())
+public.users | Admins can update all users | UPDATE | {authenticated} | USING: true | CHECK: -
+public.users | Admins can view all users | SELECT | {authenticated} | USING: true | CHECK: -
+public.users | allow_delete_own | DELETE | {authenticated} | USING: (auth.uid() = id) | CHECK: -
+public.users | allow_insert_own | INSERT | {authenticated} | USING: - | CHECK: (auth.uid() = id)
+public.users | allow_read_all | SELECT | {authenticated} | USING: true | CHECK: -
+public.users | allow_update_own | UPDATE | {authenticated} | USING: (auth.uid() = id) | CHECK: -
+public.withdrawal_requests | Admins can update withdrawals | UPDATE | {authenticated} | USING: is_current_user_admin() | CHECK: is_current_user_admin()
+public.withdrawal_requests | Users can create own withdrawals | INSERT | {authenticated} | USING: - | CHECK: (user_id = auth.uid())
+public.withdrawal_requests | Users can read own withdrawals | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+public.withdrawals | Users can create their own withdrawals | INSERT | {authenticated} | USING: - | CHECK: (user_id = auth.uid())
+public.withdrawals | Users can view their own withdrawals | SELECT | {authenticated} | USING: (user_id = auth.uid()) | CHECK: -
+storage.objects | storage_cover_photos_delete | DELETE | {authenticated} | USING: ((bucket_id = 'cover-photos'::text) AND is_current_user_admin()) | CHECK: -
+storage.objects | storage_cover_photos_insert | INSERT | {authenticated} | USING: - | CHECK: ((bucket_id = 'cover-photos'::text) AND is_current_user_admin())
+storage.objects | storage_cover_photos_select | SELECT | {public} | USING: (bucket_id = 'cover-photos'::text) | CHECK: -
+storage.objects | storage_cover_photos_update | UPDATE | {authenticated} | USING: ((bucket_id = 'cover-photos'::text) AND is_current_user_admin()) | CHECK: ((bucket_id = 'cover-photos'::text) AND is_current_user_admin())
+storage.objects | storage_id_documents_delete | DELETE | {authenticated} | USING: ((bucket_id = 'id-documents'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR is_current_user_admin())) | CHECK: -
+storage.objects | storage_id_documents_insert | INSERT | {authenticated} | USING: - | CHECK: ((bucket_id = 'id-documents'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))
+storage.objects | storage_id_documents_select | SELECT | {authenticated} | USING: ((bucket_id = 'id-documents'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR is_current_user_admin())) | CHECK: -
+storage.objects | storage_id_documents_update | UPDATE | {authenticated} | USING: ((bucket_id = 'id-documents'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text)) | CHECK: ((bucket_id = 'id-documents'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))
+storage.objects | storage_property_images_delete | DELETE | {authenticated} | USING: (bucket_id = 'property-images'::text) | CHECK: -
+storage.objects | storage_property_images_insert | INSERT | {authenticated} | USING: - | CHECK: (bucket_id = 'property-images'::text)
+storage.objects | storage_property_images_select | SELECT | {public} | USING: (bucket_id = 'property-images'::text) | CHECK: -
+storage.objects | storage_property_images_update | UPDATE | {authenticated} | USING: (bucket_id = 'property-images'::text) | CHECK: (bucket_id = 'property-images'::text)

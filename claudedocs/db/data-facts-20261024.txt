@@ -1,0 +1,45 @@
+pg_version=PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit
+role anon super=false bypassrls=false
+role authenticated super=false bypassrls=false
+role authenticator super=false bypassrls=false
+role postgres super=false bypassrls=true
+role service_role super=false bypassrls=true
+role supabase_admin super=true bypassrls=true
+users_total=83
+users_is_admin=4
+users_is_admin_inactive=0
+psql:<stdin>:7: ERROR:  column "is_employee" does not exist
+LINE 1: ...s_is_employee='||count(*) from public.users where is_employe...
+                                                             ^
+users_columns=id:uuid, email:text, phone:text, name:text, credits:integer, verified:boolean, created_at:timestamp without time zone, updated_at:timestamp without time zone, is_admin:boolean, is_active:boolean, role:text, sponsor_id:uuid, placement_parent_id:uuid, referral_code:text, star_level:integer, ppv:integer, balance_usd:numeric, activity_status:text, profile_image_url:text, division:text, district:text, bkash_number:text, nagad_number:text, last_active_at:timestamp with time zone, first_listing_completed:boolean, placement_locked_at:timestamp with time zone, referral_username:text, referred_by:uuid, full_name:text, avatar_url:text, google_id:text, provider:text
+properties_columns=id:uuid, user_id:uuid, category:text, property_type:text, total_rooms:integer, total_bathrooms:integer, balcony:integer, floor_level:text, occupancy:text, room_size_sqft:integer, rent_amount_bdt:integer, rent_period:text, state_district:text, area:text, contact_number:text, short_description:text, sector:text, road:text, house_plot:text, lat:numeric, lng:numeric, available_from:date, deadline:date, status:text, views:integer, created_at:timestamp without time zone, updated_at:timestamp without time zone, reviewed_at:timestamp with time zone, is_featured:boolean, sub_area:text, total_kitchen:integer, listing_points_awarded:integer, listing_points_awarded_at:timestamp with time zone, property_id_number:text, dining_rooms:integer, living_rooms:integer, is_rent_negotiable:boolean, is_active:boolean, deactivated_at:timestamp with time zone, is_pinned:boolean, pinned_at:timestamp with time zone, submission_completed_at:timestamp with time zone, pinned_until:timestamp with time zone
+feedback_columns=id:uuid, user_id:uuid, name:text, feedback:text, status:text, created_at:timestamp with time zone, updated_at:timestamp with time zone, reviewed_at:timestamp with time zone, reviewed_by:uuid
+orders_columns=id:uuid, user_id:uuid, division:character varying, district:character varying, area:character varying, sub_area:character varying, category:character varying, rooms:integer, property_need_from:date, max_budget:integer, additional_preferences:text, package:character varying, cost:integer, status:character varying, created_at:timestamp with time zone, updated_at:timestamp with time zone, is_job_feed_posted:boolean, job_feed_posted_at:timestamp with time zone, job_feed_title:text, job_feed_description:text
+inquiries_columns=id:uuid, property_id:uuid, name:character varying, email:character varying, phone:character varying, message:text, status:character varying, created_at:timestamp with time zone, updated_at:timestamp with time zone
+payment_columns=id:uuid, user_id:uuid, order_id:uuid, package_id:uuid, transaction_id:text, amount:numeric, status:text, payment_method:text, description:text, credits_to_add:integer, provider:text, invoice_id:text, customer_phone:text, sender_number:text, gateway_payload:jsonb, reference:text, approved_at:timestamp with time zone, approved_by:uuid, credited_at:timestamp with time zone, credited_by:uuid, created_at:timestamp with time zone, updated_at:timestamp with time zone
+site_settings_columns=id:uuid, setting_key:text, setting_value:text, auto_approve_properties:boolean, property_listing:integer, contact_view:integer, photo_view:integer, created_at:timestamp with time zone, updated_at:timestamp with time zone, referral_enabled:boolean, referral_commission_type:text, referral_commission_value:numeric, referral_bonus_percent:numeric, referral_bonus_frequency:text, min_withdrawal_amount:numeric, site_theme:text
+user_blacklist_columns=id:uuid, user_id:uuid, reason:text, blacklisted_at:timestamp with time zone, blacklisted_by:uuid, notes:text, is_permanent:boolean, expires_at:timestamp with time zone
+credit_transactions_columns=id:uuid, user_id:uuid, credits_deducted:integer, transaction_type:text, property_id:uuid, created_at:timestamp without time zone, credits_amount:integer, balance_after:integer, reference_type:text, reference_id:uuid, provider:text, metadata:jsonb, payment_transaction_id:text
+
+properties_rows=3 status=pending active=false
+properties_rows=4408 status=approved active=true
+payment_status=cancelled rows=1
+payment_status=credited rows=3
+payment_status=pending rows=16
+payment_status=refunded rows=3
+order_status=confirmed rows=4
+order_status=pending_payment rows=9
+feedback_status=approved rows=2
+psql:<stdin>:23: ERROR:  relation "public.contact_unlock_refund_requests" does not exist
+LINE 1: ...|coalesce(status,'NULL')||' rows='||count(*) from public.con...
+                                                             ^
+psql:<stdin>:24: ERROR:  relation "public.activities" does not exist
+LINE 1: select 'activities_rows='||count(*) from public.activities;
+                                                 ^
+user_blacklist_rows=0
+credit_packages_rows=4 active=4
+site_settings_rows=1
+views=public_property_catalog(security_invoker=true)
+triggers=award_listing_points_on_approval on properties, award_referral_points_on_invite_completion on invites, on_property_status_change on properties, set_credit_topups_updated_at on credit_topups, set_employee_listing_streak_days_updated_at on employee_listing_streak_days, set_employee_listing_streak_events_updated_at on employee_listing_streak_events, set_employee_listing_streak_settings_updated_at on employee_listing_streak_settings, set_employee_listing_streaks_updated_at on employee_listing_streaks, set_listing_roles_updated_at on listing_roles, set_referral_settings_updated_at on referral_settings, trg_job_participations_set_updated_at on job_participations, trg_payment_transactions_set_updated_at on payment_transactions, trg_property_view_history_set_updated_at on property_view_history, trg_referral_earnings_set_updated_at on referral_earnings, trg_user_wallets_set_updated_at on user_wallets, trg_withdrawal_requests_set_updated_at on withdrawal_requests, trg_property_reports_set_updated_at on property_reports, trg_properties_assign_property_id_number on properties
+indexes_properties=properties_pkey: CREATE UNIQUE INDEX properties_pkey ON public.properties USING btree (id) || idx_properties_category: CREATE INDEX idx_properties_category ON public.properties USING btree (category) || idx_properties_is_featured: CREATE INDEX idx_properties_is_featured ON public.properties USING btree (is_featured) || idx_properties_status: CREATE INDEX idx_properties_status ON public.properties USING btree (status) || idx_properties_user_id: CREATE INDEX idx_properties_user_id ON public.properties USING btree (user_id) || idx_properties_active_pin_sort: CREATE INDEX idx_properties_active_pin_sort ON public.properties USING btree (pinned_until DESC, created_at DESC) WHERE (pinned_until IS NOT NULL) || properties_property_id_number_key: CREATE UNIQUE INDEX properties_property_id_number_key ON public.properties USING btree (property_id_number)
+indexes_payments=payment_transactions_pkey: CREATE UNIQUE INDEX payment_transactions_pkey ON public.payment_transactions USING btree (id) || payment_transactions_transaction_id_key: CREATE UNIQUE INDEX payment_transactions_transaction_id_key ON public.payment_transactions USING btree (transaction_id) || idx_payment_transactions_invoice_id: CREATE INDEX idx_payment_transactions_invoice_id ON public.payment_transactions USING btree (invoice_id) || idx_payment_transactions_status: CREATE INDEX idx_payment_transactions_status ON public.payment_transactions USING btree (status) || idx_payment_transactions_transaction_id: CREATE INDEX idx_payment_transactions_transaction_id ON public.payment_transactions USING btree (transaction_id) || idx_payment_transactions_user_id: CREATE INDEX idx_payment_transactions_user_id ON public.payment_transactions USING btree (user_id)

@@ -28,7 +28,6 @@ const tabHref = (tab) => buildPageHref('admin', { tab })
  * until their component exists).
  */
 export const ADMIN_NAV_ITEMS = [
-  { key: 'home', label: 'Go to homepage', href: '/', icon: FiHome },
   {
     key: 'dashboard',
     label: 'Dashboard',
@@ -154,7 +153,7 @@ export const ADMIN_NAV_ITEMS = [
     permission: PERMISSIONS.AUDIT_VIEW,
     description: 'Who changed what, and why.',
   },
-].map((item) => (item.key === 'home' ? item : { ...item, href: tabHref(item.key) }))
+].map((item) => ({ ...item, href: tabHref(item.key) }))
 
 /** Old `?tab=` values that still need to resolve (bookmarks, nginx-less hosts). */
 export const ADMIN_TAB_ALIASES = {
@@ -163,7 +162,7 @@ export const ADMIN_TAB_ALIASES = {
   pricing: { tab: 'credits' },
 }
 
-const SUPPORTED_TABS = new Set(ADMIN_NAV_ITEMS.filter((item) => item.key !== 'home').map((item) => item.key))
+const SUPPORTED_TABS = new Set(ADMIN_NAV_ITEMS.map((item) => item.key))
 
 export const resolveAdminTab = (raw) => {
   if (raw && ADMIN_TAB_ALIASES[raw]) return { ...ADMIN_TAB_ALIASES[raw], aliased: true }

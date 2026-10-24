@@ -487,16 +487,32 @@ begin
   end if;
 end $$;
 
--- T9.1 moderator cannot moderate a listing with a direct UPDATE (must use the RPC)
+-- T6 stripped the moderator's roles; give them back as super_admin before the checks.
 set local role authenticated;
-select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'mod'), 'role', 'authenticated')::text, true);
-select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'mod'), true);
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'super'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'super'), true);
 do $$
 begin
   if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
+  perform public.admin_set_user_roles((select id from t_ids where k = 'mod'), array['moderator']);
+end $$;
+
+-- T9.1 moderator cannot moderate a listing with a direct UPDATE (must use the RPC)
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'mod'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'mod'), true);
+do $$
+declare n int; cur text; trg int;
+begin
+  if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
+  select status into cur from public.properties where id = (select id from t_ids where k = 'prop');
+  select count(*) into trg from pg_trigger where tgrelid = 'public.properties'::regclass and tgname = 'trg_properties_prevent_direct_moderation' and not tgisinternal;
   begin
-    update public.properties set status = 'rejected' where id = (select id from t_ids where k = 'prop');
-    raise exception 'TEST FAIL: moderator changed a listing status with a direct update';
+    -- flip to whichever status differs from the current one so the trigger sees a real change
+    update public.properties set status = case when status = 'rejected' then 'approved' else 'rejected' end
+      where id = (select id from t_ids where k = 'prop');
+    get diagnostics n = row_count;
+    raise exception 'TEST FAIL: moderator changed a listing status with a direct update (rows=%, old status=%, admin=%, trigger=%)',
+      n, cur, public.is_current_user_admin(), trg;
   exception when others then
     if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error on direct status update: %', sqlerrm; end if;
   end;
@@ -511,10 +527,12 @@ select case when to_regproc('public.prevent_direct_property_moderation_changes')
 
 -- T9.2 the RPC path still works for the same moderator
 do $$
-declare r jsonb;
+declare r jsonb; cur text; tgt text;
 begin
   if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
-  r := public.admin_set_property_status(array[(select id from t_ids where k = 'prop')], 'rejected', 'duplicate listing', null, null);
+  select status into cur from public.properties where id = (select id from t_ids where k = 'prop');
+  tgt := case when cur = 'rejected' then 'approved' else 'rejected' end;
+  r := public.admin_set_property_status(array[(select id from t_ids where k = 'prop')], tgt, 'duplicate listing', null, null);
   if (r->>'count')::int <> 1 then raise exception 'TEST FAIL: RPC rejected % rows, expected 1', r->>'count'; end if;
 end $$;
 select case when to_regproc('public.prevent_direct_property_moderation_changes') is null then 'SKIP T9.2' else 'PASS T9.2 moderator still moderates through admin_set_property_status' end;

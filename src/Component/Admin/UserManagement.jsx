@@ -15,6 +15,7 @@ const UserManagement = () => {
   const [blacklistReason, setBlacklistReason] = useState('');
   const [blacklistNotes, setBlacklistNotes] = useState('');
   const [userBlacklistInfo, setUserBlacklistInfo] = useState({});
+  const [actionError, setActionError] = useState('');
   const isMountedRef = useRef(true);
   const successTimerRef = useRef(null);
 
@@ -118,12 +119,12 @@ const UserManagement = () => {
   const handleBlacklistUser = async () => {
     if (!blacklistReason || !blacklistModal) return;
 
-    const result = await blacklistUser(
-      blacklistModal.id,
-      blacklistReason,
-      selectedUser?.id || blacklistModal.id, // admin ID
-      blacklistNotes
-    );
+    // The acting admin is derived from the session on the server; never sent from here.
+    const result = await blacklistUser({
+      userId: blacklistModal.id,
+      reason: blacklistReason,
+      notes: blacklistNotes,
+    });
 
     if (result.error === null) {
       showSuccessMessage('User blacklisted successfully');
@@ -131,6 +132,8 @@ const UserManagement = () => {
       setBlacklistModal(null);
       setBlacklistReason('');
       setBlacklistNotes('');
+    } else {
+      setActionError(result.error.message || 'Could not blacklist this user.');
     }
   };
 
@@ -188,11 +191,28 @@ const UserManagement = () => {
     <div className="space-y-6">
       {/* Success Message */}
       {successMessage && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex justify-between items-center">
+        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex justify-between items-center" role="status">
           <span>{successMessage}</span>
           <button
+            type="button"
             onClick={() => setSuccessMessage('')}
             className="text-green-600 hover:text-green-800"
+            aria-label="Dismiss message"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Action error (server-side permission / validation / connectivity) */}
+      {actionError && (
+        <div className="ui-note ui-note-danger flex justify-between items-center gap-3" role="alert">
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError('')}
+            className="ui-btn ui-btn-ghost ui-btn-sm"
+            aria-label="Dismiss error"
           >
             ✕
           </button>

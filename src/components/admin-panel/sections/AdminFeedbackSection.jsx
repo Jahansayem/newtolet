@@ -14,6 +14,7 @@ const AdminFeedbackSection = ({ searchQuery = '' }) => {
   const [loading, setLoading] = useState(true)
   const [feedbacks, setFeedbacks] = useState([])
   const [message, setMessage] = useState({ type: '', text: '' })
+  const [loadError, setLoadError] = useState('')
 
   const showMessage = (type, text) => {
     setMessage({ type, text })
@@ -24,20 +25,12 @@ const AdminFeedbackSection = ({ searchQuery = '' }) => {
     setLoading(true)
     const { data, error } = await getAllFeedback()
 
+    // A failed load is shown as an error; it is never replaced by local data.
     if (error) {
-      const localFeedback = JSON.parse(localStorage.getItem('userFeedback') || '[]')
-      setFeedbacks(
-        localFeedback.map((feedback, index) => ({
-          id: index + 1,
-          name: feedback.name,
-          email: feedback.email,
-          feedback: feedback.feedback,
-          created_at: feedback.timestamp,
-          is_resolved: false,
-          status: 'pending',
-        }))
-      )
+      setLoadError(error.message || 'Feedback could not be loaded. Check admin access and try again.')
+      setFeedbacks([])
     } else {
+      setLoadError('')
       setFeedbacks(data || [])
     }
 
@@ -125,11 +118,20 @@ const AdminFeedbackSection = ({ searchQuery = '' }) => {
         </div>
       ) : null}
 
+      {loadError ? (
+        <div className="ui-note ui-note-danger flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void fetchFeedback()} className="ui-btn ui-btn-secondary ui-btn-sm self-start">
+            Try again
+          </button>
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
           Loading feedback...
         </div>
-      ) : filteredFeedback.length === 0 ? (
+      ) : loadError ? null : filteredFeedback.length === 0 ? (
         <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
           No feedback found for the current filter.
         </div>

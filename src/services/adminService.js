@@ -206,118 +206,18 @@ const handleTableNotFoundError = (error, tableName) => {
 
 // ==================== USER MANAGEMENT ====================
 
-// Get all blacklisted users with details
-export const getBlacklistedUsers = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('user_blacklist')
-      .select(`
-        *,
-        users(id, name, email, phone, is_active)
-      `)
-      .order('blacklisted_at', { ascending: false })
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'user_blacklist')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching blacklisted users:', error)
-    return { data: [], error: null }
-  }
-}
-
-// Check if user is blacklisted
-export const checkUserBlacklist = async (userId) => {
-  try {
-    const { data, error } = await supabase
-      .from('user_blacklist')
-      .select('*')
-      .eq('user_id', userId)
-      .order('blacklisted_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) return { blacklisted: false, data: null, error }
-    return { blacklisted: !!data, data, error: null }
-  } catch (error) {
-    console.error('Error checking blacklist:', error)
-    return { blacklisted: false, data: null, error }
-  }
-}
-
-// Add user to blacklist
-export const blacklistUser = async (userId, reason, adminId, notes = '', isPermanent = true) => {
-  try {
-    // Add to blacklist table
-    const { data: blacklistData, error: blacklistError } = await supabase
-      .from('user_blacklist')
-      .insert({
-        user_id: userId,
-        reason,
-        blacklisted_by: adminId,
-        notes,
-        is_permanent: isPermanent
-      })
-      .select()
-
-    if (blacklistError) throw blacklistError
-
-    // Also deactivate user account
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .update({ is_active: false })
-      .eq('id', userId)
-      .select()
-
-    if (userError) throw userError
-
-    return { data: { ...blacklistData[0], user: userData[0] }, error: null }
-  } catch (error) {
-    console.error('Error blacklisting user:', error)
-    return { data: null, error }
-  }
-}
-
-// Remove user from blacklist
-export const unblacklistUser = async (userId) => {
-  try {
-    // Remove from blacklist table
-    const { error: deleteError } = await supabase
-      .from('user_blacklist')
-      .delete()
-      .eq('user_id', userId)
-
-    if (deleteError) throw deleteError
-
-    // Reactivate user account
-    const { data, error } = await supabase
-      .from('users')
-      .update({ is_active: true })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error unblacklisting user:', error)
-    return { data: null, error }
-  }
-}
-
-// Get blacklist reasons
-export const getBlacklistReasons = () => {
-  return [
-    { value: 'Violation of terms', label: 'Violation of Terms' },
-    { value: 'Fraud', label: 'Fake Listings / Fraud' },
-    { value: 'Harassment', label: 'Harassment / Abuse' },
-    { value: 'Spam', label: 'Spam / Excessive Posting' },
-    { value: 'Payment fraud', label: 'Payment Issues' },
-    { value: 'Other', label: 'Other' }
-  ]
-}
+// Blacklist / moderation now run through actor-safe RPCs (src/services/admin/users.js);
+// the acting admin is auth.uid() on the server and is never passed from the browser.
+export {
+  blacklistUser,
+  unblacklistUser,
+  checkUserBlacklist,
+  getBlacklistReasons,
+  setUserActive,
+  setEmployeeFlag,
+  setUserRoles,
+  adjustUserCredits,
+} from './admin/users'
 
 // Get all users
 export const getAllUsers = async () => {
@@ -1374,62 +1274,10 @@ export const getTransactionStats = async () => {
 
 // ==================== ANALYTICS ====================
 
-// Get dashboard statistics
-export const getDashboardStats = async () => {
-  console.log('Fetching dashboard stats...')
-
-  try {
-    const [usersResult, propsResult, ordersResult, pendingResult] = await Promise.allSettled([
-      getAllUsers(),
-      supabase.from('properties').select('id', { count: 'exact', head: true }),
-      supabase.from('orders').select('id', { count: 'exact', head: true }),
-      supabase
-        .from('properties')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending'),
-    ])
-
-    const allUsers = usersResult.status === 'fulfilled' ? (usersResult.value.data || []) : []
-    const totalUsers = allUsers.filter(user => user.is_admin === true).length
-    const activeUsers = allUsers.filter(user => user.is_admin === true && user.is_active !== false).length
-    const totalProperties = propsResult.status === 'fulfilled' ? (propsResult.value.count || 0) : 0
-    const totalOrders = ordersResult.status === 'fulfilled' ? (ordersResult.value.count || 0) : 0
-    const pendingProperties = pendingResult.status === 'fulfilled' ? (pendingResult.value.count || 0) : 0
-
-    // Get feedback count from localStorage
-    const feedbackData = JSON.parse(localStorage.getItem('userFeedback') || '[]')
-    const totalFeedback = feedbackData.length
-
-    const statsData = {
-      totalUsers,
-      activeUsers,
-      totalProperties,
-      pendingProperties,
-      totalOrders,
-      totalFeedback
-    }
-
-    console.log('Final dashboard stats:', statsData)
-
-    return {
-      data: statsData,
-      error: null
-    }
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error)
-    return {
-      data: {
-        totalUsers: 0,
-        activeUsers: 0,
-        totalProperties: 0,
-        pendingProperties: 0,
-        totalOrders: 0,
-        totalFeedback: 0
-      },
-      error: null
-    }
-  }
-}
+// Dashboard statistics: head counts for every metric (all users, not only
+// admins; feedback from the database, not localStorage), with per-metric
+// errors surfaced instead of zeros. See src/services/admin/dashboard.js.
+export { getDashboardStats, getAdminQueueCounts, readQueueCountsSnapshot } from './admin/dashboard'
 
 export const getDailyListingReport = async (rangeOrDays = 7) => {
   const range = normalizeReportRange(rangeOrDays)

@@ -1,15 +1,8 @@
 'use client'
 
-import { Suspense } from 'react'
-import AdminRoute from '../../src/Component/Route/AdminRoute.jsx'
-import Admin from '../../src/Component/Home/Admin.jsx'
+import AdminDashboardRedirect from '../../src/components/admin-panel/AdminDashboardRedirect.jsx'
 
+// Compatibility alias: /admin is the canonical admin route.
 export default function AdminDashboardPage() {
-  return (
-    <Suspense fallback={null}>
-      <AdminRoute>
-        <Admin />
-      </AdminRoute>
-    </Suspense>
-  )
+  return <AdminDashboardRedirect />
 }

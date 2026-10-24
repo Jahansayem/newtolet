@@ -346,9 +346,9 @@ const AdminDashboardSection = ({ onQuickAction }) => {
       <div className={loading ? 'hidden' : 'space-y-6'}>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-4">
           <MetricCard
-            label="Total Admin Users"
+            label="Users"
             value={stats.totalUsers}
-            meta={`${stats.activeUsers} active`}
+            meta={`${stats.activeUsers} active · ${stats.adminUsers ?? 0} admins`}
             icon={BiUser}
             tone="border-transparent bg-brand"
           />

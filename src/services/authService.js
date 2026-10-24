@@ -22,6 +22,7 @@ const getStoredUserPayload = (userData = {}) => ({
     referral_code: userData.referral_code,
     referred_by: userData.referred_by,
     is_admin: userData.is_admin,
+    is_employee: userData.is_employee,
     is_active: userData.is_active,
     full_name: userData.full_name,
     avatar_url: userData.avatar_url,

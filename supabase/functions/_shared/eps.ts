@@ -27,6 +27,13 @@ export const getEpsUserName = () => getEnv("EPS_USERNAME");
 export const getEpsPassword = () => getEnv("EPS_PASSWORD");
 export const getEpsHashKey = () => getEnv("EPS_HASH_KEY");
 
+// EPS TransactionTypeId: 1 = Web (reported back by EPS as "Purchase"). The EPS
+// sample bodies send 10, which the sandbox reports as "MobileRecharge", so 1 it is.
+export const getEpsTransactionTypeId = () => {
+  const parsed = Number(getEnv("EPS_TRANSACTION_TYPE_ID", [], "1"));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+};
+
 const fetchWithTimeout = async (
   url: string,
   init: RequestInit,
@@ -167,6 +174,13 @@ export const initializeEpsPayment = async (payload: {
   productName: string;
   ipAddress?: string;
 }) => {
+  // EPS requires a digit-only merchant transaction id of at least 10 digits.
+  if (!/^\d{10,}$/.test(payload.merchantTransactionId)) {
+    throw new Error(
+      "EPS merchantTransactionId must be a digit string of at least 10 digits",
+    );
+  }
+
   const token = await getEpsToken();
   const xHash = await buildEpsHash(payload.merchantTransactionId);
 
@@ -181,10 +195,11 @@ export const initializeEpsPayment = async (payload: {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
+        merchantId: getEpsMerchantId(),
         storeId: getEpsStoreId(),
         CustomerOrderId: payload.customerOrderId,
         merchantTransactionId: payload.merchantTransactionId,
-        transactionTypeId: 1,
+        transactionTypeId: getEpsTransactionTypeId(),
         financialEntityId: 0,
         transitionStatusId: 0,
         totalAmount: payload.totalAmount,
@@ -195,17 +210,17 @@ export const initializeEpsPayment = async (payload: {
         cancelUrl: payload.cancelUrl,
         customerName: payload.customerName,
         customerEmail: payload.customerEmail,
-        CustomerAddress: "N/A",
-        CustomerCity: "Dhaka",
-        CustomerState: "Dhaka",
-        CustomerPostcode: "1000",
-        CustomerCountry: "BD",
-        CustomerPhone: payload.customerPhone,
-        ShippingMethod: "NO",
-        NoOfItem: "1",
-        ProductName: payload.productName,
-        ProductProfile: "general",
-        ProductCategory: "Credits",
+        customerAddress: "N/A",
+        customerCity: "Dhaka",
+        customerState: "Dhaka",
+        customerPostcode: "1000",
+        customerCountry: "BD",
+        customerPhone: payload.customerPhone,
+        shippingMethod: "NO",
+        noOfItem: "1",
+        productName: payload.productName,
+        productProfile: "general",
+        productCategory: "Credits",
       }),
     },
     EPS_TIMEOUT_MS,

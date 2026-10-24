@@ -1,12 +1,26 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createAdminClient, getAuthenticatedContext } from "../_shared/paymently.ts";
-import { checkEpsTransactionStatus } from "../_shared/eps.ts";
+import { checkEpsTransactionStatus, getEpsBaseUrl, getEpsToken } from "../_shared/eps.ts";
 import {
   getPaymentTransactionById,
   getPaymentTransactionForInvoice,
   syncGatewayPayment,
 } from "../_shared/payment-transactions.ts";
+
+// Deploy-time health check: proves the EPS credentials and outbound network from
+// the functions container without creating a payment. Guarded by the agent API key.
+const isAuthorizedPing = (request: Request) => {
+  const expected = Deno.env.get("LISTINGS_AGENT_API_KEY")?.trim() || "";
+  const provided = request.headers.get("x-agent-api-key")?.trim() || "";
+  if (!expected || provided.length !== expected.length) return false;
+
+  let mismatch = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    mismatch |= expected.charCodeAt(index) ^ provided.charCodeAt(index);
+  }
+  return mismatch === 0;
+};
 
 const sanitizePayment = (payment: Record<string, unknown>) => ({
   id: payment.id || null,
@@ -31,6 +45,16 @@ Deno.serve(async (request) => {
     }
 
     const body = await request.json().catch(() => ({}));
+
+    if (body?.action === "eps-ping") {
+      if (!isAuthorizedPing(request)) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      await getEpsToken();
+      return Response.json({ data: { ok: true, baseUrl: getEpsBaseUrl() } });
+    }
+
     const invoiceId = body?.invoiceId || body?.invoice_id || null;
     const paymentId = body?.paymentId || body?.payment_id || null;
     const reference = body?.reference || body?.slug || null;

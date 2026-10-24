@@ -102,6 +102,7 @@ const core = {
     },
     copyright: '© {year} NewTolet. All rights reserved.',
     developedBy: 'Developed by',
+    payWithEps: 'Pay with EPS: Visa, Mastercard, American Express, bKash, Nagad, Rocket and more. Verified by EPS.',
     scrollToTop: 'Scroll to top',
   },
 

@@ -17,8 +17,12 @@ import {
 
 const PROVIDER = "eps";
 
-const buildMerchantTransactionId = (paymentId: string) =>
-  `EPS${Date.now()}${paymentId.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+// EPS requires a digit-only merchant transaction id (minimum 10 digits).
+// 13-digit millisecond timestamp + 5 random digits = 18 digits, unique enough per merchant.
+const buildMerchantTransactionId = () => {
+  const random = crypto.getRandomValues(new Uint32Array(1))[0] % 100_000;
+  return `${Date.now()}${String(random).padStart(5, "0")}`;
+};
 
 Deno.serve(async (request) => {
   try {
@@ -56,7 +60,7 @@ Deno.serve(async (request) => {
       customerPhone,
     });
 
-    const merchantTransactionId = buildMerchantTransactionId(paymentTransaction.id);
+    const merchantTransactionId = buildMerchantTransactionId();
 
     try {
       const checkoutUrls = getEpsCheckoutUrls(merchantTransactionId);
@@ -75,7 +79,8 @@ Deno.serve(async (request) => {
         failUrl: checkoutUrls.failUrl,
         cancelUrl: checkoutUrls.cancelUrl,
         customerName: getDisplayName(profile, user),
-        customerEmail: profile.email || user.email || "",
+        // EPS marks customerEmail as mandatory; phone-only accounts have no email.
+        customerEmail: profile.email || user.email || "support@newtolet.com",
         customerPhone,
         productName: `${selectedPackage.package_name} credit purchase`,
       });

@@ -338,6 +338,14 @@ const BuyCredits = () => {
               </div>
             </div>
 
+            <img
+              src="/payments/eps-checkout-banner.webp"
+              alt={t('payments.checkout.payWithEps')}
+              className="mb-6 w-full rounded-xl"
+              loading="lazy"
+              decoding="async"
+            />
+
             <div className="flex gap-4">
               <button
                 onClick={() => setStep(1)}

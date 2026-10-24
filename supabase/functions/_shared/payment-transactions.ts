@@ -50,9 +50,12 @@ const mapEpsStatusToPaymentStatus = (status: string) => {
   switch ((status || "").toLowerCase()) {
     case "success":
       return "awaiting_admin_approval";
+    // The sandbox reports an unpaid/abandoned transaction as "Cancel".
+    case "cancel":
     case "cancelled":
     case "canceled":
       return "cancelled";
+    case "fail":
     case "failed":
     case "error":
       return "failed";
@@ -307,10 +310,15 @@ export const syncGatewayPayment = async (
     throw new Error("Payment transaction not found for this invoice");
   }
 
-  const verifiedAmount = toNumber(
+  // Gateways report 0 for pending/failed transactions; never overwrite the
+  // stored amount with that, and only auto-credit when the paid amount matches.
+  const storedAmount = toNumber(payment.amount, 0);
+  const gatewayAmount = toNumber(
     provider === "eps" ? payload?.totalAmount : payload?.amount,
-    payment.amount ?? 0,
+    0,
   );
+  const verifiedAmount = gatewayAmount > 0 ? gatewayAmount : storedAmount;
+  const amountMatches = Math.abs(verifiedAmount - storedAmount) < 0.01;
   const nextStatus = mapProviderStatusToPaymentStatus(provider, gatewayStatus);
   const sharedUpdate = {
     amount: verifiedAmount,
@@ -336,11 +344,21 @@ export const syncGatewayPayment = async (
       status: "awaiting_admin_approval",
     });
 
-    if (verifiedAmount > AUTO_APPROVAL_THRESHOLD_BDT) {
+    if (verifiedAmount > AUTO_APPROVAL_THRESHOLD_BDT || !amountMatches) {
       return syncedPayment;
     }
 
-    return creditApprovedPayment(adminClient, syncedPayment.id, null);
+    try {
+      return await creditApprovedPayment(adminClient, syncedPayment.id, null);
+    } catch (error) {
+      // Leave the payment in awaiting_admin_approval so an admin can credit it
+      // manually instead of failing the whole verification.
+      console.error("[payment-transactions] auto-credit failed", {
+        paymentId: syncedPayment.id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return syncedPayment;
+    }
   }
 
   return updatePaymentTransactionById(adminClient, payment.id, {

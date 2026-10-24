@@ -6,6 +6,7 @@
 #   HOST           VPS IP or hostname (user defaults to root; use user@host to override)
 #   FUNCTION ...   function directories under supabase/functions to deploy,
 #                  default: agent-listings. supabase/functions/_shared is always included.
+#                  Payments: paymently-create-checkout paymently-verify paymently-approve
 #
 # Environment (all optional once the server .env already has them):
 #   AGENT_USER_ID  value for LISTINGS_AGENT_USER_ID (from create-agent-owner.sh)
@@ -17,6 +18,14 @@
 #   SMOKE_IMAGE_URL optional public JPEG/PNG URL; when set, the smoke test creates a
 #                  listing with that image, checks the stored copy, and soft-deletes it
 #   SSH_KEY        private key path, default ~/.ssh/newtolet_vps
+#   EPS_BASE_URL   EPS gateway: https://sandboxpgapi.eps.com.bd (test) or
+#                  https://pgapi.eps.com.bd (live)
+#   EPS_MERCHANT_ID, EPS_STORE_ID, EPS_USERNAME, EPS_PASSWORD, EPS_HASH_KEY
+#                  EPS merchant credentials for the paymently-* functions. Stored
+#                  single-quoted in the server .env and forwarded to the container.
+#                  Required (from the environment or an earlier run) whenever a
+#                  paymently-* function is deployed; NEXT_PUBLIC_SITE_URL must be https.
+#   EPS_TRANSACTION_TYPE_ID  optional EPS TransactionTypeId override
 #
 # What it does on the server (/opt/supabase):
 #   1. replaces volumes/functions/<name> and volumes/functions/_shared with the repo copy
@@ -24,7 +33,8 @@
 #      `functions` service (the upstream docker-compose.yml is left untouched so
 #      update.sh keeps working)
 #   3. adds the secrets to .env (chmod 600) and makes COMPOSE_FILE load the override
-#   4. recreates the functions container and smoke-tests agent-listings
+#   4. recreates the functions container and smoke-tests agent-listings and, when
+#      deployed, paymently-verify (unknown reference -> 404, eps-ping -> 200)
 #
 # Works from Git Bash on Windows: only tar, ssh and scp are required.
 
@@ -61,10 +71,14 @@ echo "uploading to $TARGET"
 scp "${SSH_OPTS[@]}" -q "$ARCHIVE" "$TARGET:/tmp/$ARCHIVE"
 
 echo "installing on the server"
-ssh "${SSH_OPTS[@]}" "$TARGET" \
-  AGENT_USER_ID="${AGENT_USER_ID:-}" AGENT_API_KEY="${AGENT_API_KEY:-}" SITE_URL_OVERRIDE="${SITE_URL:-}" \
-  PUBLIC_URL_OVERRIDE="${PUBLIC_URL:-}" SMOKE_IMAGE_URL="${SMOKE_IMAGE_URL:-}" \
-  bash -s -- "$ARCHIVE" "${FUNCTIONS[@]}" <<'REMOTE'
+# Values are %q-quoted so passwords with shell metacharacters survive the ssh command line.
+REMOTE_ENV=()
+for key in AGENT_USER_ID AGENT_API_KEY SMOKE_IMAGE_URL \
+  EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY EPS_TRANSACTION_TYPE_ID; do
+  REMOTE_ENV+=("$(printf '%s=%q' "$key" "${!key:-}")")
+done
+REMOTE_ENV+=("$(printf 'SITE_URL_OVERRIDE=%q' "${SITE_URL:-}")" "$(printf 'PUBLIC_URL_OVERRIDE=%q' "${PUBLIC_URL:-}")")
+ssh "${SSH_OPTS[@]}" "$TARGET" "${REMOTE_ENV[@]}" bash -s -- "$ARCHIVE" "${FUNCTIONS[@]}" <<'REMOTE'
 set -euo pipefail
 ARCHIVE="$1"; shift
 FUNCTIONS=("$@")
@@ -88,8 +102,8 @@ chown -R root:root "$FN_DIR"
 find "$FN_DIR" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 
 # 2. Compose override that exposes the agent secrets to the functions service.
-#    Rewritten when a newer variable (SUPABASE_PUBLIC_URL) is missing from an older copy.
-if [[ ! -f "$OVERRIDE" ]] || ! grep -q "LISTINGS_AGENT_API_KEY" "$OVERRIDE" || ! grep -q "SUPABASE_PUBLIC_URL" "$OVERRIDE"; then
+#    Rewritten when a newer variable (SUPABASE_PUBLIC_URL, EPS_HASH_KEY) is missing from an older copy.
+if [[ ! -f "$OVERRIDE" ]] || ! grep -q "LISTINGS_AGENT_API_KEY" "$OVERRIDE" || ! grep -q "SUPABASE_PUBLIC_URL" "$OVERRIDE" || ! grep -q "EPS_HASH_KEY" "$OVERRIDE"; then
   cat > "$OVERRIDE" <<'YAML'
 # Local additions to the upstream docker-compose.yml. Loaded through COMPOSE_FILE in .env.
 # Secrets live in .env; this file only forwards them to the edge-runtime container.
@@ -101,6 +115,14 @@ services:
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SITE_URL}}
       # Browser-reachable Supabase URL; agent-listings builds stored image URLs from it.
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-${API_EXTERNAL_URL}}
+      # EPS payment gateway credentials for the paymently-* functions (values live in .env).
+      EPS_BASE_URL: ${EPS_BASE_URL:-https://sandboxpgapi.eps.com.bd}
+      EPS_MERCHANT_ID: ${EPS_MERCHANT_ID:-}
+      EPS_STORE_ID: ${EPS_STORE_ID:-}
+      EPS_USERNAME: ${EPS_USERNAME:-}
+      EPS_PASSWORD: ${EPS_PASSWORD:-}
+      EPS_HASH_KEY: ${EPS_HASH_KEY:-}
+      EPS_TRANSACTION_TYPE_ID: ${EPS_TRANSACTION_TYPE_ID:-}
 YAML
   echo "wrote $OVERRIDE"
 fi
@@ -115,6 +137,16 @@ set_env() {  # set_env KEY VALUE  (adds or replaces the line)
   fi
 }
 get_env() { grep -E "^$1=" "$ENV_FILE" | head -1 | cut -d= -f2-; }
+set_secret() {  # set_secret KEY VALUE  (single-quoted so $ and # survive compose's .env parsing)
+  local key="$1" value="$2"
+  if [[ "$value" == *"'"* ]]; then
+    echo "$key contains a single quote, which this script cannot store safely" >&2
+    exit 1
+  fi
+  sed -i "/^${key}=/d" "$ENV_FILE"
+  if [[ -s "$ENV_FILE" && -n "$(tail -c1 "$ENV_FILE")" ]]; then echo >> "$ENV_FILE"; fi
+  printf "%s='%s'\n" "$key" "$value" >> "$ENV_FILE"
+}
 
 if [[ -n "${AGENT_API_KEY:-}" ]]; then
   set_env LISTINGS_AGENT_API_KEY "$AGENT_API_KEY"
@@ -149,6 +181,25 @@ case "$PUBLIC_BASE" in
     ;;
 esac
 PUBLIC_BASE="${PUBLIC_BASE%/}"
+
+# EPS secrets: store whatever the caller passed; require a full set when deploying payments.
+for key in EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY EPS_TRANSACTION_TYPE_ID; do
+  if [[ -n "${!key:-}" ]]; then set_secret "$key" "${!key}"; fi
+done
+DEPLOYING_PAYMENTS=0
+if printf '%s\n' "${FUNCTIONS[@]}" | grep -q '^paymently-'; then
+  DEPLOYING_PAYMENTS=1
+  for key in EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY; do
+    if ! grep -qE "^${key}=.+" "$ENV_FILE"; then
+      echo "$key is missing from $ENV_FILE; pass it in the environment (see header)." >&2
+      exit 1
+    fi
+  done
+  case "$(get_env NEXT_PUBLIC_SITE_URL)" in
+    https://*) ;;
+    *) echo "NEXT_PUBLIC_SITE_URL must be https for EPS return URLs; pass SITE_URL=https://www.newtolet.com" >&2; exit 1 ;;
+  esac
+fi
 
 COMPOSE_FILE_VALUE="$(get_env COMPOSE_FILE)"
 if [[ -z "$COMPOSE_FILE_VALUE" ]]; then
@@ -219,6 +270,33 @@ if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx agent-listings; then
     fi
     rm -f /tmp/agent-smoke-create.json
   fi
+fi
+# Payments smoke test (only when paymently-verify was deployed): an unknown reference
+# must come back as a 404 JSON error (function routed, env loaded, DB reachable) and the
+# key-guarded eps-ping must get an EPS auth token (credentials + outbound access).
+if [[ "$DEPLOYING_PAYMENTS" == "1" ]] && printf '%s\n' "${FUNCTIONS[@]}" | grep -qx paymently-verify; then
+  PORT="$(get_env API_GW_HTTP_PORT)"; PORT="${PORT:-8000}"
+  ANON="$(get_env ANON_KEY)"
+  VERIFY="http://127.0.0.1:${PORT}/functions/v1/paymently-verify"
+  PAY_OK=1
+  CODE="$(curl -s -o /tmp/pay-smoke.json -w '%{http_code}' --max-time 60 -X POST "$VERIFY" \
+    -H "Content-Type: application/json" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+    --data '{"provider":"eps","reference":"0000000000"}' </dev/null)"
+  echo "smoke payments: unknown reference -> $CODE (expect 404 Payment transaction not found)"
+  if [[ "$CODE" != "404" ]] || ! grep -q "Payment transaction not found" /tmp/pay-smoke.json; then PAY_OK=0; fi
+  PING="$(curl -s -o /tmp/pay-ping.json -w '%{http_code}' --max-time 60 -X POST "$VERIFY" \
+    -H "Content-Type: application/json" -H "X-Agent-API-Key: $(get_env LISTINGS_AGENT_API_KEY)" \
+    --data '{"action":"eps-ping"}' </dev/null)"
+  echo "smoke payments: eps-ping -> $PING (expect 200): $(head -c 200 /tmp/pay-ping.json)"
+  [[ "$PING" == "200" ]] || PAY_OK=0
+  if [[ "$PAY_OK" != "1" ]]; then
+    head -c 600 /tmp/pay-smoke.json; echo
+    echo "--- recent functions logs ---"
+    docker logs supabase-edge-functions --tail 40 2>&1 </dev/null | tail -40
+    rm -f /tmp/pay-smoke.json /tmp/pay-ping.json
+    exit 1
+  fi
+  rm -f /tmp/pay-smoke.json /tmp/pay-ping.json
 fi
 echo "deployed: ${FUNCTIONS[*]}"
 REMOTE

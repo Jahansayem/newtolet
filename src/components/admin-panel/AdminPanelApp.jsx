@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { getStoredUser } from '../../services/authService'
+import { getRoutePage } from '../../lib/routePaths'
 import CoverPhotoManagement from '../../Component/Admin/CoverPhotoManagement.jsx'
 import PaymentMonitoring from '../../Component/Admin/PaymentMonitoring.jsx'
 import PropertyManagement from '../../Component/Admin/PropertyManagement.jsx'
@@ -28,7 +29,7 @@ const AdminPanelApp = () => {
   const [currentUser, setCurrentUser] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const adminPageKey = location.pathname === '/admin-dashboard' ? 'admin-dashboard' : 'admin'
+  const adminPageKey = getRoutePage(location.pathname) === 'admin-dashboard' ? 'admin-dashboard' : 'admin'
   const adminNavItems = useMemo(() => getAdminPanelNavItems(adminPageKey), [adminPageKey])
   const supportedTabs = useMemo(() => new Set(getSupportedAdminTabs(adminPageKey)), [adminPageKey])
   const activeMenu = useMemo(() => {

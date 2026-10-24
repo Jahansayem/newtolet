@@ -55,6 +55,11 @@ if [[ -n "$DOMAIN" ]]; then
   SERVER_NAME="$DOMAIN www.$DOMAIN"
 fi
 sed "s/SERVER_NAME/$SERVER_NAME/" "$CONF_SRC" > "$CONF_DST"
+if [[ -n "$DOMAIN" && -f "$(dirname "$0")/nginx-newtolet-api.conf" ]]; then
+  # api.DOMAIN -> Supabase gateway; needs the certificate below and a Cloudflare A record "api".
+  sed "s/DOMAIN/$DOMAIN/g" "$(dirname "$0")/nginx-newtolet-api.conf" > /etc/nginx/sites-available/newtolet-api
+  ln -sfn /etc/nginx/sites-available/newtolet-api /etc/nginx/sites-enabled/newtolet-api
+fi
 ln -sfn "$CONF_DST" /etc/nginx/sites-enabled/newtolet
 rm -f /etc/nginx/sites-enabled/default
 
@@ -66,7 +71,7 @@ if [[ -n "$DOMAIN" ]]; then
   apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
   certbot --nginx --non-interactive --agree-tos --redirect \
     --register-unsafely-without-email \
-    -d "$DOMAIN" -d "www.$DOMAIN" || echo "certbot failed; check that DNS for $DOMAIN points here" >&2
+    -d "$DOMAIN" -d "www.$DOMAIN" -d "api.$DOMAIN" || echo "certbot failed; check that DNS for $DOMAIN points here" >&2
 fi
 
 echo "nginx is serving $SITE_ROOT/current (server_name: $SERVER_NAME)"

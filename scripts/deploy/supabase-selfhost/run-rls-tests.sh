@@ -11,6 +11,7 @@
 #                        rolled back. Use this BEFORE applying for real.
 #   --dry-run-lockdown   same for 20261101090000_lock_admin_direct_writes.sql
 #                        (the Stage 3 follow-up); enables the T9 checks.
+#   --dry-run-customers  same for 20261102090000_customer_events.sql; enables T10.
 #
 # Everything runs inside BEGIN ... ROLLBACK, so nothing persists. Identity is
 # switched with SET LOCAL ROLE + request.jwt.claims; `postgres` is a member of
@@ -28,10 +29,12 @@ shift
 SSH_KEY="$HOME/.ssh/newtolet_vps"
 DRY_RUN=0
 DRY_RUN_LOCKDOWN=0
+DRY_RUN_CUSTOMERS=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run-migration) DRY_RUN=1 ;;
     --dry-run-lockdown) DRY_RUN_LOCKDOWN=1 ;;
+    --dry-run-customers) DRY_RUN_CUSTOMERS=1 ;;
     *) SSH_KEY="$arg" ;;
   esac
 done
@@ -44,6 +47,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TESTS="$REPO/scripts/deploy/supabase-selfhost/rls-tests.sql"
 MIGRATION="$REPO/supabase/migrations/20261025090000_admin_roles_audit_rpcs.sql"
 LOCKDOWN="$REPO/supabase/migrations/20261101090000_lock_admin_direct_writes.sql"
+CUSTOMERS="$REPO/supabase/migrations/20261102090000_customer_events.sql"
 [[ -f "$TESTS" ]] || { echo "missing $TESTS" >&2; exit 1; }
 
 SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
@@ -56,7 +60,11 @@ build_sql() {
   fi
   if [[ "$DRY_RUN_LOCKDOWN" == "1" ]]; then
     echo "-- dry run: lock-down migration body without its own begin/commit"
-    tr -d '' < "$LOCKDOWN" | sed -e '/^begin;$/d' -e '/^commit;$/d'
+    tr -d '\r' < "$LOCKDOWN" | sed -e '/^begin;$/d' -e '/^commit;$/d'
+  fi
+  if [[ "$DRY_RUN_CUSTOMERS" == "1" ]]; then
+    echo "-- dry run: customer events migration body without its own begin/commit"
+    tr -d '\r' < "$CUSTOMERS" | sed -e '/^begin;$/d' -e '/^commit;$/d'
   fi
   tr -d '\r' < "$TESTS"
   echo "rollback;"

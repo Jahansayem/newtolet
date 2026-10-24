@@ -74,7 +74,7 @@ declare c int;
 begin
   select count(*) into c from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'execute');
-  if c > 7 then raise exception 'TEST FAIL: % SECURITY DEFINER functions are executable by anon (allow-list is 7)', c; end if;
+  if c > 7 + (to_regproc('public.track_customer_event') is not null)::int then raise exception 'TEST FAIL: % SECURITY DEFINER functions are executable by anon (allow-list is 7, +1 with track_customer_event)', c; end if;
   if has_function_privilege('anon', 'public.increment_user_credits(uuid,integer)', 'execute')
      or has_function_privilege('authenticated', 'public.increment_user_credits(uuid,integer)', 'execute') then
     raise exception 'TEST FAIL: increment_user_credits is still client-executable';
@@ -576,6 +576,118 @@ begin
   end;
 end $$;
 select case when to_regproc('public.prevent_direct_property_moderation_changes') is null then 'SKIP T9.4' else 'PASS T9.4 owner can resubmit but not approve their own listing' end;
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- T10. customer events (20261102090000): skipped with a notice until that
+--      migration is applied or streamed with --dry-run-customers.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if to_regproc('public.track_customer_event') is null then
+    raise notice 'SKIP T10 customer-event checks: 20261102090000_customer_events.sql not applied';
+    return;
+  end if;
+  insert into t_ids values ('cm', '00000000-0000-4000-8000-000000000006'), ('visitor', '00000000-0000-4000-8000-0000000000d1'), ('sess', '00000000-0000-4000-8000-0000000000d2');
+  insert into public.users (id, email, name, is_admin, is_active, credits, role)
+  values ((select id from t_ids where k = 'cm'), 'rls-cm@test.local', 'RLS Content', false, true, 0, 'tenant');
+  insert into public.admin_memberships (user_id, role, source) values ((select id from t_ids where k = 'cm'), 'content_manager', 'manual');
+end $$;
+
+-- T10.1 anonymous visitor: one listing_view row, deduped on repeat, forged types ignored
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
+do $$
+begin
+  if to_regproc('public.track_customer_event') is null then return; end if;
+  perform public.track_customer_event('listing_view', (select id from t_ids where k = 'visitor'), (select id from t_ids where k = 'sess'), (select id from t_ids where k = 'prop'), '/listing/x', null, '{"category":"Flat"}');
+  perform public.track_customer_event('listing_view', (select id from t_ids where k = 'visitor'), (select id from t_ids where k = 'sess'), (select id from t_ids where k = 'prop'), '/listing/x', null, '{}');
+  perform public.track_customer_event('contact_unlock', (select id from t_ids where k = 'visitor'), null, (select id from t_ids where k = 'prop'), null, null, '{}');
+  perform public.track_customer_event('order', (select id from t_ids where k = 'visitor'), null, null, null, null, '{}');
+end $$;
+reset role;
+do $$
+declare n int; u uuid; s text;
+begin
+  if to_regproc('public.track_customer_event') is null then return; end if;
+  select count(*), max(user_id::text)::uuid, max(source) into n, u, s from public.customer_events where visitor_id = (select id from t_ids where k = 'visitor');
+  if n <> 1 then raise exception 'TEST FAIL: expected 1 anonymous event, found % (dedupe or forged types)', n; end if;
+  if u is not null then raise exception 'TEST FAIL: anonymous event has a user_id'; end if;
+  if s <> 'client' then raise exception 'TEST FAIL: anonymous event source is %', s; end if;
+end $$;
+select case when to_regproc('public.track_customer_event') is null then 'SKIP T10.1' else 'PASS T10.1 anon tracks one deduped listing view and cannot forge server events' end;
+
+-- T10.2 plain user: no direct read, admin RPCs denied, inquiry trigger attributes the event
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'plain'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'plain'), true);
+do $$
+declare n int;
+begin
+  if to_regproc('public.track_customer_event') is null then return; end if;
+  select count(*) into n from public.customer_events;
+  if n <> 0 then raise exception 'TEST FAIL: plain user can read % customer events', n; end if;
+  begin
+    perform * from public.admin_customer_daily_stats(now() - interval '7 days', now());
+    raise exception 'TEST FAIL: plain user read customer daily stats';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error on plain stats: %', sqlerrm; end if;
+  end;
+  insert into public.property_inquiries (property_id, name, email, phone, message)
+  values ((select id from t_ids where k = 'prop'), 'RLS Plain', 'rls-plain@test.local', '01711111111', 'Is this still available?');
+  perform public.track_customer_event('phone_tap', (select id from t_ids where k = 'visitor'), (select id from t_ids where k = 'sess'), (select id from t_ids where k = 'prop'), '/listing/x', null, '{"placement":"sidebar"}');
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  if to_regproc('public.track_customer_event') is null then return; end if;
+  select count(*) into n from public.customer_events where event_type = 'inquiry' and source = 'trigger' and user_id = (select id from t_ids where k = 'plain');
+  if n <> 1 then raise exception 'TEST FAIL: inquiry trigger wrote % events for plain', n; end if;
+  select count(*) into n from public.customer_events where event_type = 'phone_tap' and user_id = (select id from t_ids where k = 'plain') and visitor_id = (select id from t_ids where k = 'visitor');
+  if n <> 1 then raise exception 'TEST FAIL: signed-in phone tap not stamped with user and visitor (%)', n; end if;
+end $$;
+select case when to_regproc('public.track_customer_event') is null then 'SKIP T10.2' else 'PASS T10.2 plain user cannot read events; inquiry trigger and signed-in tap are attributed' end;
+
+-- T10.3 finance (users.view): stats, list, timeline (stitched anonymous view), top listings
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'fin'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'fin'), true);
+set local role authenticated;
+do $$
+declare n int; r record;
+begin
+  if to_regproc('public.track_customer_event') is null then return; end if;
+  select count(*) into n from public.admin_customer_daily_stats(now() - interval '1 day', now() + interval '1 day');
+  if n < 1 then raise exception 'TEST FAIL: finance got no daily stats rows'; end if;
+  select * into r from public.admin_customer_range_totals(now() - interval '1 day', now() + interval '1 day');
+  if r.listing_views < 1 or r.inquiries < 1 or r.phone_taps < 1 then raise exception 'TEST FAIL: range totals missing events: %', to_jsonb(r); end if;
+  if r.anonymous_visitors < 1 then raise exception 'TEST FAIL: anonymous visitor not counted: %', to_jsonb(r); end if;
+  select count(*) into n from public.admin_customer_list(null, now() - interval '1 day', now() + interval '1 day', true, 'last_seen', 'desc', 50, 0) l where l.id = (select id from t_ids where k = 'plain') and l.inquiries = 1 and l.phone_taps = 1;
+  if n <> 1 then raise exception 'TEST FAIL: customer list does not show plain with 1 inquiry and 1 tap'; end if;
+  select count(*) into n from public.admin_customer_list('rls-plain', null, null, false, 'name', 'asc', 50, 0);
+  if n <> 1 then raise exception 'TEST FAIL: customer search by email returned % rows', n; end if;
+  select count(*) into n from public.admin_customer_timeline((select id from t_ids where k = 'plain'), null, 100, 0) t where t.event_type = 'listing_view' and t.user_id is null;
+  if n <> 1 then raise exception 'TEST FAIL: anonymous listing view not stitched into the timeline (%)', n; end if;
+  select count(*) into n from public.admin_top_viewed_listings(now() - interval '1 day', now() + interval '1 day', 10) t where t.property_id = (select id from t_ids where k = 'prop') and t.views = 1 and t.phone_taps = 1;
+  if n <> 1 then raise exception 'TEST FAIL: top listings missing the fixture listing'; end if;
+end $$;
+select case when to_regproc('public.track_customer_event') is null then 'SKIP T10.3' else 'PASS T10.3 finance reads stats, list, stitched timeline and top listings' end;
+
+-- T10.4 content_manager (no users.view) is denied
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'cm'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'cm'), true);
+do $$
+begin
+  if to_regproc('public.track_customer_event') is null then return; end if;
+  begin
+    perform * from public.admin_customer_list(null, null, null, true, 'last_seen', 'desc', 10, 0);
+    raise exception 'TEST FAIL: content_manager read the customer list';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error for content_manager: %', sqlerrm; end if;
+  end;
+end $$;
+select case when to_regproc('public.track_customer_event') is null then 'SKIP T10.4' else 'PASS T10.4 content_manager is denied customer data' end;
 reset role;
 
 select 'RLS_TESTS_PASSED';

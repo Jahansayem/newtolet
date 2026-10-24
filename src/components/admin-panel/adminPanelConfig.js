@@ -3,6 +3,7 @@ import {
   FiCreditCard,
   FiFileText,
   FiGrid,
+  FiActivity,
   FiHome,
   FiImage,
   FiMail,
@@ -43,6 +44,14 @@ export const ADMIN_NAV_ITEMS = [
     icon: FiBarChart2,
     permission: PERMISSIONS.DASHBOARD_VIEW,
     description: 'Listing trends, moderation backlog and payment totals.',
+  },
+  {
+    key: 'customers',
+    label: 'Customers',
+    section: 'Overview',
+    icon: FiActivity,
+    permission: PERMISSIONS.USERS_VIEW,
+    description: 'Visitor activity, listing views, unlocks and inquiries per customer.',
   },
   {
     key: 'properties',

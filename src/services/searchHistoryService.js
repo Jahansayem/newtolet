@@ -1,5 +1,6 @@
 import { isRecoverableSupabaseError, supabase } from './supabaseClient'
 import { getStoredUser } from './authService'
+import { trackSearch } from './customerEventsService'
 
 const TABLE_NAME = 'customer_search_history'
 
@@ -81,12 +82,14 @@ const normalizeSearchPayload = ({
 export const logCustomerSearch = async (payload) => {
   try {
     const normalizedPayload = normalizeSearchPayload(payload)
+    trackSearch(normalizedPayload)
 
-    const { data, error } = await supabase
+    // No .select(): anonymous visitors may insert but cannot read the row back,
+    // and asking for it made PostgREST roll the insert back.
+
+    const { error } = await supabase
       .from(TABLE_NAME)
       .insert(normalizedPayload)
-      .select()
-      .single()
 
     if (error) {
       if (isMissingTableError(error)) {
@@ -96,7 +99,7 @@ export const logCustomerSearch = async (payload) => {
       throw error
     }
 
-    return { data, error: null }
+    return { data: normalizedPayload, error: null }
   } catch (error) {
     if (!isRecoverableSupabaseError(error)) {
       console.error('Error logging customer search:', error)

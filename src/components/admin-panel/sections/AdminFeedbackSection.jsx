@@ -1,235 +1,172 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
-import { MdCancel, MdCheckCircle, MdDelete } from 'react-icons/md'
-import {
-  approveFeedback,
-  deleteFeedback,
-  getAllFeedback,
-  rejectFeedback,
-  updateFeedbackStatus,
-} from '../../../services/adminService'
+import React, { useMemo, useState } from 'react'
+import { FiArchive, FiCheck, FiEye, FiRefreshCw, FiX } from 'react-icons/fi'
+import { listFeedback, reviewFeedback, archiveFeedback } from '../../../services/admin/feedback'
+import { useShellHeader } from '../../panel/PanelShellContext'
+import { useAdminList } from '../hooks/useAdminList'
+import { useAdminMutation } from '../hooks/useAdminMutation'
+import Badge from '../../ui/Badge'
+import Button from '../../ui/Button'
+import ConfirmDialog from '../../ui/ConfirmDialog'
+import Dialog from '../../ui/Dialog'
+import EmptyState from '../../ui/EmptyState'
+import FilterBar from '../../ui/FilterBar'
+import InlineAlert from '../../ui/InlineAlert'
+import Pagination from '../../ui/Pagination'
+import ReasonDialog from '../../ui/ReasonDialog'
+import { SkeletonRows } from '../../ui/Skeleton'
+import StatusPill from '../../ui/StatusPill'
+import Tabs from '../../ui/Tabs'
 
-const AdminFeedbackSection = ({ searchQuery = '' }) => {
-  const [loading, setLoading] = useState(true)
-  const [feedbacks, setFeedbacks] = useState([])
-  const [message, setMessage] = useState({ type: '', text: '' })
-  const [loadError, setLoadError] = useState('')
+const formatDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
 
-  const showMessage = (type, text) => {
-    setMessage({ type, text })
-    window.setTimeout(() => setMessage({ type: '', text: '' }), 3000)
-  }
+const TABS = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: '', label: 'All' },
+]
 
-  const fetchFeedback = async () => {
-    setLoading(true)
-    const { data, error } = await getAllFeedback()
+const AdminFeedbackSection = () => {
+  const list = useAdminList({ domain: 'feedback', fetcher: listFeedback, initialFilters: { status: 'pending', resolved: '', archived: '' } })
+  const [rejectTarget, setRejectTarget] = useState(null)
+  const [archiveTarget, setArchiveTarget] = useState(null)
+  const [previewTarget, setPreviewTarget] = useState(null)
 
-    // A failed load is shown as an error; it is never replaced by local data.
-    if (error) {
-      setLoadError(error.message || 'Feedback could not be loaded. Check admin access and try again.')
-      setFeedbacks([])
-    } else {
-      setLoadError('')
-      setFeedbacks(data || [])
-    }
+  const reviewMutation = useAdminMutation((id, payload) => reviewFeedback(id, payload), {
+    successMessage: (result) => (result.data?.status === 'approved' ? 'Feedback approved' : result.data?.status === 'rejected' ? 'Feedback rejected' : 'Feedback updated'),
+    invalidate: ['feedback'],
+  })
+  const archiveMutation = useAdminMutation((id, reason) => archiveFeedback(id, reason), { successMessage: 'Feedback archived', invalidate: ['feedback'] })
 
-    setLoading(false)
-  }
+  const refreshAction = useMemo(
+    () => (
+      <Button variant="secondary" icon={<FiRefreshCw />} onClick={() => list.refresh()} busy={list.isRefreshing} busyLabel="Refreshing…">
+        Refresh
+      </Button>
+    ),
+    [list]
+  )
+  useShellHeader({ actions: refreshAction })
 
-  useEffect(() => {
-    void fetchFeedback()
-  }, [])
-
-  const filteredFeedback = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase()
-    if (!query) {
-      return feedbacks
-    }
-
-    return feedbacks.filter((feedback) =>
-      [feedback?.name, feedback?.email, feedback?.feedback]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query))
-    )
-  }, [feedbacks, searchQuery])
-
-  const handleDeleteFeedback = async (feedbackId) => {
-    if (!window.confirm('Are you sure you want to delete this feedback?')) {
-      return
-    }
-
-    const { error } = await deleteFeedback(feedbackId)
-    if (error) {
-      showMessage('error', 'Failed to delete feedback')
-      return
-    }
-
-    showMessage('success', 'Feedback deleted successfully')
-    await fetchFeedback()
-  }
-
-  const handleToggleFeedbackStatus = async (feedbackId, currentStatus) => {
-    const { error } = await updateFeedbackStatus(feedbackId, !currentStatus)
-    if (error) {
-      showMessage('error', 'Failed to update feedback status')
-      return
-    }
-
-    showMessage('success', 'Feedback status updated successfully')
-    await fetchFeedback()
-  }
-
-  const handleApproveFeedback = async (feedbackId) => {
-    const userId = JSON.parse(localStorage.getItem('user'))?.id
-    const { error } = await approveFeedback(feedbackId, userId)
-    if (error) {
-      showMessage('error', 'Failed to approve feedback')
-      return
-    }
-
-    showMessage('success', 'Feedback approved and will show on homepage')
-    await fetchFeedback()
-  }
-
-  const handleRejectFeedback = async (feedbackId) => {
-    const userId = JSON.parse(localStorage.getItem('user'))?.id
-    const { error } = await rejectFeedback(feedbackId, userId)
-    if (error) {
-      showMessage('error', 'Failed to reject feedback')
-      return
-    }
-
-    showMessage('success', 'Feedback rejected and hidden from homepage')
-    await fetchFeedback()
-  }
+  const busyFor = (id) => reviewMutation.busy && reviewMutation.busyKey === id
 
   return (
-    <div className="space-y-6">
-      {message.text ? (
-        <div
-          className={`rounded-[24px] border px-4 py-3 text-sm font-medium ${
-            message.type === 'success'
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-700'
-          }`}
-        >
-          {message.text}
-        </div>
-      ) : null}
+    <div className="space-y-4">
+      <Tabs tabs={TABS} value={list.filters.status ?? ''} onChange={(key) => list.setFilter('status', key)} ariaLabel="Feedback status" />
 
-      {loadError ? (
-        <div className="ui-note ui-note-danger flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" role="alert">
-          <span>{loadError}</span>
-          <button type="button" onClick={() => void fetchFeedback()} className="ui-btn ui-btn-secondary ui-btn-sm self-start">
-            Try again
-          </button>
-        </div>
-      ) : null}
+      <FilterBar
+        search={{ value: list.search, onChange: list.setSearch, label: 'Search feedback', placeholder: 'Name or text…' }}
+        filters={[
+          { key: 'resolved', label: 'Resolution', type: 'select', value: list.filters.resolved, onChange: (value) => list.setFilter('resolved', value), options: [{ value: 'resolved', label: 'Resolved' }, { value: 'open', label: 'Open' }], placeholder: 'Any' },
+          { key: 'archived', label: 'Show', type: 'select', value: list.filters.archived, onChange: (value) => list.setFilter('archived', value), options: [{ value: 'archived', label: 'Archived only' }], placeholder: 'Active feedback' },
+        ]}
+        resultCount={list.status === 'loading' ? null : list.totalCount}
+        resultLabel="entries"
+      />
 
-      {loading ? (
-        <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
-          Loading feedback...
+      {list.isLoading ? (
+        <div className="ui-card p-6" aria-busy="true">
+          <SkeletonRows rows={4} cols={3} />
         </div>
-      ) : loadError ? null : filteredFeedback.length === 0 ? (
-        <div className="rounded-[28px] border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
-          No feedback found for the current filter.
-        </div>
+      ) : list.status === 'error' || list.status === 'permission-denied' ? (
+        <InlineAlert variant={list.error?.permissionDenied ? 'permission' : 'danger'} action={list.error?.permissionDenied ? null : { label: 'Try again', onClick: list.retry }}>
+          {list.error?.message}
+        </InlineAlert>
+      ) : list.items.length === 0 ? (
+        <EmptyState title="No feedback here" description={list.filters.status === 'pending' ? 'Nothing is waiting for review.' : 'Try another tab or clear the search.'} />
       ) : (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          {filteredFeedback.map((feedback) => (
-            <div key={feedback.id} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex justify-between gap-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-slate-900">{feedback.name}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{feedback.email}</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    {new Date(feedback.created_at).toLocaleDateString()}
-                  </p>
+        <ul className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-busy={list.isRefreshing || undefined}>
+          {list.items.map((item) => (
+            <li key={item.id} className="ui-card flex flex-col gap-4 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-ink">{item.name}</h3>
+                  <p className="text-caption text-muted">{formatDate(item.created_at)}</p>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      feedback.status === 'approved'
-                        ? 'bg-green-100 text-green-800'
-                        : feedback.status === 'rejected'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                    }`}
-                  >
-                    {feedback.status === 'approved'
-                      ? 'Approved'
-                      : feedback.status === 'rejected'
-                        ? 'Rejected'
-                        : 'Pending'}
-                  </span>
-                  {feedback.is_resolved ? (
-                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
-                      Resolved
-                    </span>
-                  ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill status={item.status} />
+                  <Badge variant={item.is_resolved ? 'success' : 'neutral'}>{item.is_resolved ? 'Resolved' : 'Open'}</Badge>
+                  {item.status === 'approved' && item.is_public ? <Badge variant="brand">Visible on homepage</Badge> : null}
                 </div>
               </div>
-              <p className="mt-4 text-sm text-slate-700">{feedback.feedback}</p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                {feedback.status === 'pending' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleApproveFeedback(feedback.id)}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 transition hover:bg-green-100"
-                    >
-                      <MdCheckCircle />
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRejectFeedback(feedback.id)}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-                    >
-                      <MdCancel />
-                      Reject
-                    </button>
-                  </>
+              <p className="whitespace-pre-wrap text-sm text-ink">{item.feedback}</p>
+              {item.rejection_reason ? <p className="ui-note ui-note-danger text-sm">Rejected: {item.rejection_reason}</p> : null}
+              <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+                {item.status !== 'approved' ? (
+                  <Button size="sm" variant="primary" icon={<FiCheck />} busy={busyFor(item.id)} onClick={() => void reviewMutation.run(item.id, { status: 'approved' })}>
+                    Approve
+                  </Button>
                 ) : null}
-                {feedback.status === 'approved' ? (
-                  <button
-                    type="button"
-                    onClick={() => handleRejectFeedback(feedback.id)}
-                    className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-                  >
-                    Reject & Hide
-                  </button>
+                {item.status !== 'rejected' ? (
+                  <Button size="sm" variant="danger-outline" icon={<FiX />} onClick={() => setRejectTarget(item)}>
+                    Reject
+                  </Button>
                 ) : null}
-                {feedback.status === 'rejected' ? (
-                  <button
-                    type="button"
-                    onClick={() => handleApproveFeedback(feedback.id)}
-                    className="rounded-2xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 transition hover:bg-green-100"
-                  >
-                    Approve & Show
-                  </button>
+                <Button size="sm" variant="secondary" onClick={() => void reviewMutation.run(item.id, { isResolved: !item.is_resolved })} busy={busyFor(item.id)}>
+                  {item.is_resolved ? 'Reopen' : 'Mark resolved'}
+                </Button>
+                {item.status === 'approved' ? (
+                  <label className="ml-auto flex items-center gap-2 text-sm text-ink">
+                    <input type="checkbox" role="switch" aria-checked={Boolean(item.is_public)} className="h-5 w-5 accent-brand" checked={Boolean(item.is_public)} onChange={(event) => void reviewMutation.run(item.id, { isPublic: event.target.checked })} />
+                    Show on homepage
+                  </label>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => handleToggleFeedbackStatus(feedback.id, feedback.is_resolved)}
-                  className="rounded-2xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
-                >
-                  {feedback.is_resolved ? 'Unresolve' : 'Mark Resolved'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteFeedback(feedback.id)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-                >
-                  <MdDelete />
-                  Delete
-                </button>
+                <Button size="sm" variant="ghost" icon={<FiEye />} onClick={() => setPreviewTarget(item)}>
+                  Preview
+                </Button>
+                <Button size="sm" variant="ghost" iconOnly aria-label={`Archive feedback from ${item.name}`} onClick={() => setArchiveTarget(item)}>
+                  <FiArchive />
+                </Button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
+
+      <Pagination page={list.page} pageSize={list.pageSize} total={list.totalCount} onPageChange={list.setPage} onPageSizeChange={list.setPageSize} />
+
+      <ReasonDialog
+        open={Boolean(rejectTarget)}
+        onClose={() => setRejectTarget(null)}
+        decision="reject"
+        title="Reject this feedback?"
+        description="Rejected feedback is hidden from the homepage."
+        subject={rejectTarget ? <p className="line-clamp-3">“{rejectTarget.feedback}”</p> : null}
+        busy={reviewMutation.busy}
+        error={reviewMutation.error}
+        showNote={false}
+        onConfirm={async ({ reason }) => {
+          const target = rejectTarget
+          const result = await reviewMutation.run(target.id, { status: 'rejected', rejectionReason: reason })
+          if (!result.error) setRejectTarget(null)
+        }}
+      />
+
+      <Dialog open={Boolean(previewTarget)} onClose={() => setPreviewTarget(null)} title="Public preview" description="How this testimonial appears on the homepage." size="sm">
+        {previewTarget ? (
+          <figure className="ui-card p-5">
+            <blockquote className="text-sm text-ink">“{previewTarget.feedback}”</blockquote>
+            <figcaption className="mt-3 text-caption font-semibold text-muted">— {previewTarget.name}</figcaption>
+          </figure>
+        ) : null}
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(archiveTarget)}
+        onCancel={() => setArchiveTarget(null)}
+        onConfirm={async () => {
+          const target = archiveTarget
+          setArchiveTarget(null)
+          await archiveMutation.run(target.id, 'Archived from the feedback list')
+        }}
+        title="Archive this feedback?"
+        description="Archived feedback is hidden from the homepage and the active list but kept for records."
+        confirmLabel="Archive"
+        busy={archiveMutation.busy}
+        busyLabel="Archiving…"
+      />
     </div>
   )
 }

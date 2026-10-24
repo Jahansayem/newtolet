@@ -315,58 +315,6 @@ html[data-theme='dark'] .shadow-xl {
 .animation-delay-200 { animation-delay: 0.2s; }
 .animation-delay-300 { animation-delay: 0.3s; }
 
-/* ========== ADMIN LEGACY RE-SKIN (unchanged scope; tokens only) ========== */
-
-.admin-panel-scope {
-  color: var(--site-text);
-}
-
-.admin-panel-scope :where(.bg-white.rounded-lg.shadow, .bg-white.rounded-lg.shadow-md, .bg-white.rounded-lg.shadow-xl, .bg-white.rounded-xl.shadow, .bg-white.rounded-2xl.shadow-2xl) {
-  border: 1px solid var(--site-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
-
-.admin-panel-scope :where(.bg-white.rounded-lg.shadow:hover, .bg-white.rounded-lg.shadow-md:hover, .bg-white.rounded-xl.shadow:hover) {
-  box-shadow: var(--shadow-raised);
-}
-
-.admin-panel-scope :where(input, select, textarea) {
-  border-radius: var(--radius-input);
-}
-
-.admin-panel-scope :where(button) {
-  border-radius: var(--radius-button);
-}
-
-.admin-panel-scope :where(thead.bg-gray-50, .bg-gray-50.rounded-lg, .bg-gray-100.rounded-lg) {
-  background-color: var(--site-surface-muted) !important;
-}
-
-.admin-panel-scope :where(.text-gray-900) {
-  color: var(--site-text) !important;
-}
-
-.admin-panel-scope :where(.text-gray-800) {
-  color: var(--site-text) !important;
-}
-
-.admin-panel-scope :where(.text-gray-700, .text-gray-600, .text-gray-500) {
-  color: var(--site-text-muted) !important;
-}
-
-.admin-panel-scope :where(.border-gray-200, .divide-gray-200) {
-  border-color: var(--site-border) !important;
-}
-
-.admin-panel-scope :where(.bg-primary-50) {
-  background-color: var(--color-brand-soft) !important;
-}
-
-.admin-panel-scope :where(.text-primary-600, .text-primary-700, .text-primary-800) {
-  color: var(--color-brand) !important;
-}
-
 /* Layout + primitives live in the components layer so Tailwind utilities (hidden, lg:inline-flex,
    rounded-*, bg-*) can still override them per element. */
 @layer components {

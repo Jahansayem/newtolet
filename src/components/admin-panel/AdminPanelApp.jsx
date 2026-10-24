@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useAdminPermissions } from '../../contexts/AdminAccessContext'
@@ -23,14 +23,10 @@ import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
 import AdminOrdersSection from './sections/AdminOrdersSection.jsx'
 import AdminPricingSection from './sections/AdminPricingSection.jsx'
 
-// Sections that still rely on the header search box until they get their own FilterBar.
-const HEADER_SEARCH_TABS = new Set(['orders', 'inquiries', 'feedback'])
-
 const AdminPanelApp = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
   const access = useAdminPermissions()
-  const [searchQuery, setSearchQuery] = useState('')
 
   const { tab: activeMenu, view, aliased } = useMemo(() => resolveAdminTab(searchParams.get('tab')), [searchParams])
 
@@ -42,10 +38,6 @@ const AdminPanelApp = () => {
     if (view) next.set('view', view)
     setSearchParams(next, { replace: true })
   }, [aliased, activeMenu, view, searchParams, setSearchParams])
-
-  useEffect(() => {
-    setSearchQuery('')
-  }, [activeMenu])
 
   const { counts } = useAdminQueueCounts({ enabled: access.isAdmin })
 
@@ -94,13 +86,13 @@ const AdminPanelApp = () => {
       case 'properties':
         return <PropertyManagement />
       case 'orders':
-        return <AdminOrdersSection searchQuery={searchQuery} />
+        return <AdminOrdersSection />
       case 'inquiries':
-        return <AdminInquiriesSection searchQuery={searchQuery} />
+        return <AdminInquiriesSection />
       case 'search-history':
         return <SearchHistoryManagement />
       case 'feedback':
-        return <AdminFeedbackSection searchQuery={searchQuery} />
+        return <AdminFeedbackSection />
       case 'refunds':
         return <ContactUnlockRefundReview />
       default:
@@ -116,11 +108,6 @@ const AdminPanelApp = () => {
         description={activeItem?.description || null}
         items={navItems}
         userMeta={userMeta}
-        search={
-          HEADER_SEARCH_TABS.has(activeMenu)
-            ? { value: searchQuery, onChange: setSearchQuery, label: `Search ${getAdminPanelTitle(activeMenu).toLowerCase()}`, placeholder: `Search ${getAdminPanelTitle(activeMenu).toLowerCase()}…` }
-            : null
-        }
       >
         {renderSection()}
       </AdminShell>

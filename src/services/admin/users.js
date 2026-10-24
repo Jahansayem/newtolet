@@ -4,12 +4,53 @@
 import { supabase } from '../supabaseClient'
 import { callAdminRpc } from './adminRpc'
 import { fail, ok } from './adminResult'
+import { runAdminListQuery } from './adminQuery'
 import { invalidateAdminSnapshots } from './adminCache'
 
 const afterMutation = (result) => {
   if (!result.error) invalidateAdminSnapshots('users')
   return result
 }
+
+export const USER_LIST_COLUMNS = `
+  id, name, email, phone, avatar_url, provider, credits, is_active, is_admin, is_employee, role, created_at, updated_at,
+  blacklist:user_blacklist!user_blacklist_user_id_fkey(id, reason, notes, blacklisted_at, is_permanent, expires_at, lifted_at),
+  memberships:admin_memberships!admin_memberships_user_id_fkey(role, is_active)
+`
+
+const normalizeUser = (row) => {
+  const blacklist = Array.isArray(row.blacklist) ? row.blacklist : row.blacklist ? [row.blacklist] : []
+  const activeBlacklist = blacklist.find((entry) => !entry.lifted_at) || null
+  const memberships = Array.isArray(row.memberships) ? row.memberships : []
+  return {
+    ...row,
+    blacklist: activeBlacklist,
+    blacklist_history: blacklist,
+    is_blacklisted: Boolean(activeBlacklist),
+    roles: memberships.filter((entry) => entry.is_active).map((entry) => entry.role),
+  }
+}
+
+/** listUsers({ page, pageSize, sort, filters: { status: 'active'|'blocked', role, isAdmin }, search }) */
+export const listUsers = ({ page = 1, pageSize = 20, sort, filters = {}, search = '' } = {}, { signal } = {}) =>
+  runAdminListQuery({
+    table: 'users',
+    columns: USER_LIST_COLUMNS,
+    page,
+    pageSize,
+    sort: sort || { column: 'created_at', dir: 'desc' },
+    sortable: ['created_at', 'name', 'email', 'credits'],
+    filters: { is_active: filters.status, is_admin: filters.isAdmin, is_employee: filters.isEmployee },
+    filterSpec: {
+      is_active: { op: 'eq', values: (value) => value === 'active' },
+      is_admin: { op: 'eq', values: (value) => value === 'true' || value === true },
+      is_employee: { op: 'eq', values: (value) => value === 'true' || value === true },
+    },
+    search,
+    searchColumns: ['name', 'email', 'phone'],
+    map: normalizeUser,
+    signal,
+  })
 
 export const getBlacklistReasons = () => [
   { value: 'Violation of terms', label: 'Violation of terms' },

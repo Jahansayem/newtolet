@@ -211,8 +211,12 @@ Content-Type: application/json
   "amenities": ["Lift", "Parking"],
   "images": [
     {
-      "image_url": "https://example.com/image.jpg",
+      "image_url": "https://scontent.xx.fbcdn.net/v/t39.30808-6/photo.jpg?...",
       "is_thumbnail": true,
+      "display_order": 0
+    },
+    {
+      "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgAB...",
       "display_order": 1
     }
   ]
@@ -231,8 +235,21 @@ Behaviour:
 - `user_id` is set to `LISTINGS_AGENT_USER_ID` and `status` to `pending` on the server. The listing is not public until an administrator approves it.
 - `property_id_number` is assigned by the database.
 - `contact_number` is optional. Send it only when the source listing shows a number. When omitted, the phone on the owner profile is used. If the owner profile has no phone either, the API answers `400` asking for `contact_number`.
-- Amenities and images are inserted after the property row. If either insert fails, the property row is removed again so nothing half-created remains, and the API returns `500`.
-- Response is `201` with the same shape as the detail endpoint, including `status: "pending"`, `is_active: true`, and `is_owned: true`.
+- Every image is **copied into NewTolet's own storage**. An `image_url` is downloaded by the server (follow redirects, 10 s per image, 5 MB max); an `image_base64` payload is decoded (4 MB max). The copy is stored in the `property-images` bucket and the listing gets a permanent URL, so expiring links (Facebook CDN, WhatsApp, Google Photos previews) are safe to send as long as the request is made while the link still works.
+- A photo that cannot be stored never fails the request. It is reported in `images_skipped` (see below) and the remaining photos close the gap; if the thumbnail was skipped, the first stored photo becomes the thumbnail.
+- Amenities and image rows are inserted after the property row. If the database insert fails, the stored copies and the property row are removed again so nothing half-created remains, and the API returns `500`.
+- Response is `201` with `data` in the same shape as the detail endpoint, including `status: "pending"`, `is_active: true`, `is_owned: true`, and a top-level `images_skipped` array.
+
+```json
+{
+  "data": { "id": "...", "property_id_number": "100322", "status": "pending", "images": [ { "url": "http://138.252.125.198:8000/storage/v1/object/public/property-images/0f4a8c0e-.../agent-1761200000000-1a2b3c4d.jpg", "is_thumbnail": true, "display_order": 0 } ], "...": "..." },
+  "images_skipped": [
+    { "index": 1, "source": "https://scontent.xx.fbcdn.net/v/t39.30808-6/expired.jpg?...", "reason": "fetch_failed" }
+  ]
+}
+```
+
+`images_skipped[].reason` is one of `fetch_failed` (non-2xx, DNS, redirect loop, expired link), `timeout`, `too_large`, `not_an_image` (an HTML page, SVG, HEIC or other unsupported type), `forbidden_host` (private or internal address), `invalid_base64`, `duplicate` (same bytes as an earlier image in the request), `upload_failed`, or `time_budget_exhausted` (the request ran out of its 40 s image budget; send fewer or smaller images).
 
 ## Update a listing
 
@@ -260,6 +277,7 @@ Behaviour:
 
 - Only fields from the schema table below may be sent; at least one is required. Fields that are omitted stay unchanged.
 - `images` and `amenities` are **replaced** only when the key is present. Send the full new list. Send `[]` to remove all.
+- To keep an existing photo, re-send its `url` from the GET response as `image_url`; URLs already in NewTolet storage are kept as they are, not copied again. New `image_url` / `image_base64` items are copied into storage like on POST, and stored copies that are no longer in the list are deleted. The response carries `images_skipped` like POST.
 - Every agent edit sets `status` back to `pending` and clears the review timestamp, so the change goes through moderation again. An approved listing leaves the public search until it is re-approved.
 - The listing must be owned by the agent account, otherwise `403`. Unknown ids return `404`.
 - Response is `200` with the updated owned listing.
@@ -313,7 +331,7 @@ All fields are optional on PATCH. Required on POST are marked.
 | `deadline` | string | `YYYY-MM-DD`, on or after `available_from`; `null` clears |
 | `contact_number` | string | Bangladesh mobile, e.g. `01712345678` or `+8801712345678`. Stored normalised, never returned |
 | `amenities` | string[] | Up to 30 items, each up to 60 chars, deduplicated case-insensitively |
-| `images` | object[] | Up to 10 items of `{ "image_url": "https://...", "is_thumbnail": bool, "display_order": int }`. http(s) URLs only, duplicates dropped, one thumbnail (defaults to the first), `display_order` re-sequenced from 0 |
+| `images` | object[] | Up to 10 items. Each is `{ "image_url": "https://...", "is_thumbnail"?: bool, "display_order"?: int }` **or** `{ "image_base64": "<base64 or data: URI>", "content_type"?: "image/jpeg", "is_thumbnail"?, "display_order"? }` (a plain string counts as `image_url`). The server stores a copy of every image: `image_url` is fetched (http(s) only, public hosts only, 5 MB max), `image_base64` is decoded (4 MB max, JPEG/PNG/WebP/GIF, type detected from the bytes). Duplicates are dropped, one thumbnail (defaults to the first stored image), `display_order` re-sequenced from 0. Keep the whole request body under 10 MB; prefer URLs over base64 |
 
 Fields that are **rejected with 400** because the server owns them: `id`, `user_id`, `status`, `reviewed_at`, `is_admin`, `is_active`, `is_featured`, `is_pinned`, `pinned_at`, `pinned_until`, `deactivated_at`, `property_id_number`, `views`, `created_at`, `updated_at`. Any other unknown key is also rejected.
 
@@ -324,6 +342,8 @@ Listing objects contain only safe public fields:
 `id`, `property_id_number`, `category`, `property_type`, `total_rooms`, `total_bathrooms`, `balcony`, `floor_level`, `occupancy`, `room_size_sqft`, `rent_amount_bdt`, `rent_period`, `state_district`, `area`, `sub_area`, `short_description`, `available_from`, `deadline`, `created_at`, `updated_at`, `is_featured`, `is_pinned`, `total_kitchen`, `dining_rooms`, `living_rooms`, `is_rent_negotiable`, `lat`, `lng`, `images[] { url, is_thumbnail, display_order }`, `amenities[]`, `public_url`.
 
 Listings owned by the agent account additionally include `status` (`pending`, `approved`, or `rejected`), `is_active`, and `is_owned: true`.
+
+`images[].url` always points at NewTolet's own storage (`.../storage/v1/object/public/property-images/...`) and does not expire. `POST` and `PATCH` responses also carry a top-level `images_skipped` array (empty when every image was stored).
 
 Never returned: `contact_number`, `user_id`, owner name or email, `sector`, `road`, `house_plot`, `reviewed_at`, `views`, or any credential.
 
@@ -340,11 +360,12 @@ All errors are JSON: `{ "error": "message" }`, with an optional `details` array 
 
 | Status | Meaning | Typical causes |
 | --- | --- | --- |
-| `400` | Invalid input | Bad JSON, unknown or forbidden field, missing required field, value out of range, invalid cursor, `cursor` with rent sorting, `contact_number` needed |
+| `400` | Invalid input | Bad JSON, unknown or forbidden field, missing required field, value out of range, invalid cursor, `cursor` with rent sorting, `contact_number` needed, an `images` item with neither or both of `image_url` / `image_base64`, unsupported `content_type`, base64 over 4 MB |
 | `401` | Unauthorized | Missing or wrong API key |
 | `403` | Forbidden | The listing exists but is not owned by the agent account |
 | `404` | Not found | Unknown id / number, unknown route, or a non-public listing not owned by the agent |
 | `405` | Method not allowed | Unsupported method, or `POST` to `/agent-listings/{id}` |
+| `413` | Payload too large | Request body over 12 MB (too many or too large `image_base64` payloads; send URLs instead) |
 | `500` | Server error | Database failure, missing server configuration (`"Agent API is not configured"`) |
 
 Example 400:
@@ -365,7 +386,9 @@ Example 400:
 - The function uses the Supabase service-role client internally. It is never exposed to callers; all ownership rules are enforced in the function.
 - Public reads go through the `public_property_catalog` view (approved and active only). Private address fields and contact numbers are stripped from every response.
 - `status`, `reviewed_at`, `is_active`, `is_featured`, `is_pinned`, and `user_id` are server-controlled. New listings are always `pending`; edits reset to `pending`.
-- Deletes are soft. The API cannot hard-delete properties, images, or amenities.
+- Deletes are soft. The API cannot hard-delete properties, images, or amenities. A PATCH that drops an image only deletes the agent's own stored copy of that image (objects named `agent-*`), never photos uploaded through the web app.
+- Image downloads refuse loopback, private, link-local and internal (dotless) hosts, follow at most 5 redirects with the same check on every hop, and accept only bytes that start like a JPEG, PNG, WebP or GIF.
+- The functions container needs `SUPABASE_PUBLIC_URL` (the browser-reachable Supabase URL); `scripts/deploy/edge-functions.sh` forwards it. Without it, requests that contain images fail with `500 "Agent API is not configured"` while requests without images keep working.
 - CORS allows any origin for the methods above, but the key requirement makes browser use inappropriate; call the API from a server or an agent runtime.
 
 ## Claude Code integration

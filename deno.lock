@@ -1,6 +1,7 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/encoding@1": "1.0.11",
     "jsr:@supabase/functions-js@*": "2.118.0",
     "jsr:@supabase/supabase-js@2": "2.118.0",
     "npm:@supabase/auth-js@2.118.0": "2.118.0",
@@ -11,6 +12,9 @@
     "npm:openai@^4.52.5": "4.104.0"
   },
   "jsr": {
+    "@std/encoding@1.0.11": {
+      "integrity": "e7cef2f0b3153bccc17431e7c864a1de03a4b6d9647389c43e08aaa775d37385"
+    },
     "@supabase/functions-js@2.118.0": {
       "integrity": "5f5494c5a288a7f03d0f9a2b591a39465d80cc7fcf44a85f5fb533b555b0580a",
       "dependencies": [

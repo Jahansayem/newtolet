@@ -11,6 +11,11 @@
 #   AGENT_USER_ID  value for LISTINGS_AGENT_USER_ID (from create-agent-owner.sh)
 #   AGENT_API_KEY  value for LISTINGS_AGENT_API_KEY; generated with openssl if absent
 #   SITE_URL       value for NEXT_PUBLIC_SITE_URL inside the functions container
+#   PUBLIC_URL     value for SUPABASE_PUBLIC_URL inside the functions container (the
+#                  browser-reachable Supabase URL, e.g. http://138.252.125.198:8000);
+#                  defaults to SUPABASE_PUBLIC_URL or API_EXTERNAL_URL from the server .env
+#   SMOKE_IMAGE_URL optional public JPEG/PNG URL; when set, the smoke test creates a
+#                  listing with that image, checks the stored copy, and soft-deletes it
 #   SSH_KEY        private key path, default ~/.ssh/newtolet_vps
 #
 # What it does on the server (/opt/supabase):
@@ -58,6 +63,7 @@ scp "${SSH_OPTS[@]}" -q "$ARCHIVE" "$TARGET:/tmp/$ARCHIVE"
 echo "installing on the server"
 ssh "${SSH_OPTS[@]}" "$TARGET" \
   AGENT_USER_ID="${AGENT_USER_ID:-}" AGENT_API_KEY="${AGENT_API_KEY:-}" SITE_URL_OVERRIDE="${SITE_URL:-}" \
+  PUBLIC_URL_OVERRIDE="${PUBLIC_URL:-}" SMOKE_IMAGE_URL="${SMOKE_IMAGE_URL:-}" \
   bash -s -- "$ARCHIVE" "${FUNCTIONS[@]}" <<'REMOTE'
 set -euo pipefail
 ARCHIVE="$1"; shift
@@ -82,7 +88,8 @@ chown -R root:root "$FN_DIR"
 find "$FN_DIR" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 
 # 2. Compose override that exposes the agent secrets to the functions service.
-if [[ ! -f "$OVERRIDE" ]] || ! grep -q "LISTINGS_AGENT_API_KEY" "$OVERRIDE"; then
+#    Rewritten when a newer variable (SUPABASE_PUBLIC_URL) is missing from an older copy.
+if [[ ! -f "$OVERRIDE" ]] || ! grep -q "LISTINGS_AGENT_API_KEY" "$OVERRIDE" || ! grep -q "SUPABASE_PUBLIC_URL" "$OVERRIDE"; then
   cat > "$OVERRIDE" <<'YAML'
 # Local additions to the upstream docker-compose.yml. Loaded through COMPOSE_FILE in .env.
 # Secrets live in .env; this file only forwards them to the edge-runtime container.
@@ -92,6 +99,8 @@ services:
       LISTINGS_AGENT_API_KEY: ${LISTINGS_AGENT_API_KEY}
       LISTINGS_AGENT_USER_ID: ${LISTINGS_AGENT_USER_ID}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SITE_URL}}
+      # Browser-reachable Supabase URL; agent-listings builds stored image URLs from it.
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-${API_EXTERNAL_URL}}
 YAML
   echo "wrote $OVERRIDE"
 fi
@@ -129,6 +138,18 @@ elif [[ -z "$(get_env NEXT_PUBLIC_SITE_URL)" ]]; then
   set_env NEXT_PUBLIC_SITE_URL "$(get_env SITE_URL)"
 fi
 
+if [[ -n "${PUBLIC_URL_OVERRIDE:-}" ]]; then
+  set_env SUPABASE_PUBLIC_URL "${PUBLIC_URL_OVERRIDE%/}"
+fi
+PUBLIC_BASE="$(get_env SUPABASE_PUBLIC_URL)"; PUBLIC_BASE="${PUBLIC_BASE:-$(get_env API_EXTERNAL_URL)}"
+case "$PUBLIC_BASE" in
+  ""|*localhost*|*127.0.0.1*|*kong:*)
+    echo "SUPABASE_PUBLIC_URL/API_EXTERNAL_URL is '$PUBLIC_BASE'; pass PUBLIC_URL=http://<public-host>:8000 so stored image URLs work in browsers." >&2
+    exit 1
+    ;;
+esac
+PUBLIC_BASE="${PUBLIC_BASE%/}"
+
 COMPOSE_FILE_VALUE="$(get_env COMPOSE_FILE)"
 if [[ -z "$COMPOSE_FILE_VALUE" ]]; then
   set_env COMPOSE_FILE "docker-compose.yml:docker-compose.override.yml"
@@ -165,6 +186,39 @@ if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx agent-listings; then
     exit 1
   fi
   rm -f /tmp/agent-smoke.json
+
+  # Optional end-to-end image check: create a listing with one remote image, verify the
+  # stored copy is served from the public base, then soft-delete the listing.
+  if [[ -n "${SMOKE_IMAGE_URL:-}" ]]; then
+    BODY="$(printf '{"category":"Family","property_type":"Apartment","rent_period":"Monthly","rent_amount_bdt":1,"state_district":"Dhaka","area":"Smoke Test","available_from":"%s","contact_number":"01700000000","short_description":"Deployment smoke test listing, safe to reject.","images":[{"image_url":"%s"}]}' "$(date +%Y-%m-%d)" "$SMOKE_IMAGE_URL")"
+    CREATE="$(curl -s -o /tmp/agent-smoke-create.json -w '%{http_code}' --max-time 90 -X POST "$BASE" \
+      -H "X-Agent-API-Key: $KEY" -H "Content-Type: application/json" --data "$BODY" </dev/null)"
+    LISTING_ID="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("data",{}).get("id",""))' /tmp/agent-smoke-create.json 2>/dev/null </dev/null || true)"
+    IMAGE_URL="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); i=d.get("data",{}).get("images",[]); print(i[0]["url"] if i else "")' /tmp/agent-smoke-create.json 2>/dev/null </dev/null || true)"
+    SKIPPED="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d.get("images_skipped")))' /tmp/agent-smoke-create.json 2>/dev/null </dev/null || true)"
+    echo "smoke image: create -> $CREATE (expect 201), images_skipped=$SKIPPED"
+    echo "smoke image: stored url -> ${IMAGE_URL:-<none>}"
+    IMAGE_OK=1
+    if [[ "$CREATE" != "201" || "$SKIPPED" != "[]" || "$IMAGE_URL" != "$PUBLIC_BASE/storage/v1/object/public/property-images/"* ]]; then
+      IMAGE_OK=0
+    else
+      IMG_STATUS="$(curl -s -o /dev/null -w '%{http_code} %{content_type}' --max-time 30 "$IMAGE_URL" </dev/null)"
+      echo "smoke image: GET stored copy -> $IMG_STATUS (expect 200 image/*)"
+      [[ "$IMG_STATUS" == 200\ image/* ]] || IMAGE_OK=0
+    fi
+    if [[ -n "$LISTING_ID" ]]; then
+      DEL="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -X DELETE "$BASE/$LISTING_ID" -H "X-Agent-API-Key: $KEY" </dev/null)"
+      echo "smoke image: soft-deleted test listing $LISTING_ID -> $DEL"
+    fi
+    if [[ "$IMAGE_OK" != "1" ]]; then
+      head -c 800 /tmp/agent-smoke-create.json; echo
+      echo "--- recent functions logs ---"
+      docker logs supabase-edge-functions --tail 40 2>&1 </dev/null | tail -40
+      rm -f /tmp/agent-smoke-create.json
+      exit 1
+    fi
+    rm -f /tmp/agent-smoke-create.json
+  fi
 fi
 echo "deployed: ${FUNCTIONS[*]}"
 REMOTE

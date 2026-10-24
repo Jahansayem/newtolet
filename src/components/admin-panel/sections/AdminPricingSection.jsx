@@ -55,6 +55,8 @@ const AdminPricingSection = () => {
   const [selectedUserForCredit, setSelectedUserForCredit] = useState(null)
   const [creditAmount, setCreditAmount] = useState(0)
   const [creditAction, setCreditAction] = useState('add')
+  const [creditReason, setCreditReason] = useState('')
+  const [savingCredits, setSavingCredits] = useState(false)
   const [deletePackageTarget, setDeletePackageTarget] = useState(null)
   const [deletingPackage, setDeletingPackage] = useState(false)
 
@@ -195,22 +197,34 @@ const AdminPricingSection = () => {
     await loadPricingData()
   }
 
-  const handleUpdateUserCredits = async () => {
+  const closeCreditModal = () => {
+    setShowCreditModal(false)
+    setSelectedUserForCredit(null)
+    setCreditAmount(0)
+    setCreditReason('')
+  }
+
+  const handleUpdateUserCredits = async (event) => {
+    event?.preventDefault?.()
     if (!selectedUserForCredit || creditAmount <= 0) {
       showMessage('error', 'Please select a user and enter a valid amount')
       return
     }
-
-    const { error } = await updateUserCredits(selectedUserForCredit.id, creditAmount, creditAction)
-    if (error) {
-      showMessage('error', 'Failed to update user credits')
+    if (!creditReason.trim()) {
+      showMessage('error', 'A reason is required for every credit adjustment')
       return
     }
 
-    setShowCreditModal(false)
-    setSelectedUserForCredit(null)
-    setCreditAmount(0)
-    showMessage('success', 'User credits updated successfully')
+    setSavingCredits(true)
+    const { error, auditId } = await updateUserCredits(selectedUserForCredit.id, creditAmount, creditAction, creditReason)
+    setSavingCredits(false)
+    if (error) {
+      showMessage('error', error.message || 'Failed to update user credits')
+      return
+    }
+
+    closeCreditModal()
+    showMessage('success', auditId ? `User credits updated · audit ref ${auditId}` : 'User credits updated')
     await loadPricingData()
   }
 
@@ -544,50 +558,65 @@ const AdminPricingSection = () => {
       ) : null}
 
       {showCreditModal && selectedUserForCredit ? (
-        <ModalShell
-          title="Modify User Credits"
-          onClose={() => {
-            setShowCreditModal(false)
-            setSelectedUserForCredit(null)
-          }}
-        >
-          <div className="space-y-4">
-            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+        <ModalShell title="Adjust user credits" onClose={closeCreditModal}>
+          <form className="space-y-4" onSubmit={handleUpdateUserCredits}>
+            <div className="rounded-2xl bg-canvas p-4 text-sm text-muted">
               <p>
-                User: <span className="font-semibold text-slate-900">{selectedUserForCredit.name || 'Unknown'}</span>
+                User: <span className="font-semibold text-ink">{selectedUserForCredit.name || 'Unknown'}</span>
               </p>
               <p className="mt-1">
-                Email: <span className="font-medium text-slate-900">{selectedUserForCredit.email}</span>
+                Email: <span className="font-medium text-ink">{selectedUserForCredit.email}</span>
               </p>
               <p className="mt-1">
-                Current Credits:{' '}
-                <span className="font-bold text-brand">{selectedUserForCredit.credits || 0}</span>
+                Current credits: <span className="font-bold text-brand">{selectedUserForCredit.credits || 0}</span>
               </p>
             </div>
-            <select
-              value={creditAction}
-              onChange={(event) => setCreditAction(event.target.value)}
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
-            >
-              <option value="add">Add Credits</option>
-              <option value="subtract">Subtract Credits</option>
-              <option value="set">Set Credits</option>
-            </select>
-            <input
-              type="number"
-              value={creditAmount}
-              onChange={(event) => setCreditAmount(Number.parseInt(event.target.value, 10) || 0)}
-              min="0"
-              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
-            />
-            <button
-              type="button"
-              onClick={handleUpdateUserCredits}
-              className="w-full rounded-2xl bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
-            >
-              Apply Changes
+            <div>
+              <label htmlFor="credit-adjust-action" className="ui-label">Action</label>
+              <select id="credit-adjust-action" value={creditAction} onChange={(event) => setCreditAction(event.target.value)} className="ui-field">
+                <option value="add">Add credits</option>
+                <option value="subtract">Subtract credits</option>
+                <option value="set">Set balance to</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="credit-adjust-amount" className="ui-label">Amount</label>
+              <input
+                id="credit-adjust-amount"
+                type="number"
+                value={creditAmount}
+                onChange={(event) => setCreditAmount(Number.parseInt(event.target.value, 10) || 0)}
+                min="0"
+                required
+                className="ui-field"
+              />
+            </div>
+            <div>
+              <label htmlFor="credit-adjust-reason" className="ui-label">Reason (recorded in the audit log)</label>
+              <textarea
+                id="credit-adjust-reason"
+                value={creditReason}
+                onChange={(event) => setCreditReason(event.target.value)}
+                rows={2}
+                required
+                placeholder="Why is this balance changing?"
+                className="ui-field"
+              />
+            </div>
+            <p className="text-xs text-muted">
+              Resulting balance:{' '}
+              <span className="font-semibold text-ink">
+                {creditAction === 'set'
+                  ? creditAmount
+                  : creditAction === 'subtract'
+                    ? Math.max(0, (selectedUserForCredit.credits || 0) - creditAmount)
+                    : (selectedUserForCredit.credits || 0) + creditAmount}
+              </span>
+            </p>
+            <button type="submit" disabled={savingCredits} className="ui-btn ui-btn-primary w-full">
+              {savingCredits ? 'Applying…' : 'Apply adjustment'}
             </button>
-          </div>
+          </form>
         </ModalShell>
       ) : null}
     </div>

@@ -1,4 +1,5 @@
 import { isRecoverableSupabaseError, supabase } from './supabaseClient'
+import { adjustUserCredits } from './admin/users'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 const MAX_LISTING_REPORT_DAYS = 90
@@ -104,95 +105,24 @@ export {
   adjustUserCredits,
 } from './admin/users'
 
-// Get all users
-export const getAllUsers = async () => {
-  try {
-    console.log('Fetching all users from Supabase...')
-    const { data, error, count } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+// Direct writes to public.users from the admin UI were removed: is_active,
+// is_employee, is_admin and credits change only through the RPCs above
+// (admin_set_user_active, admin_set_employee_flag, admin_set_user_roles,
+// admin_adjust_user_credits), each of which writes an admin_audit_log row.
+// Accounts are deactivated, never hard-deleted.
 
-    console.log('getAllUsers result:', { dataCount: data?.length, error, count })
+const USER_LOOKUP_CHUNK = 200
 
-    if (error) {
-      console.error('Error in getAllUsers query:', error)
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching users:', error)
-    return { data: null, error }
+const fetchUsersByIds = async (ids = [], columns = 'id, name, email') => {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  const rows = []
+  for (let index = 0; index < unique.length; index += USER_LOOKUP_CHUNK) {
+    const chunk = unique.slice(index, index + USER_LOOKUP_CHUNK)
+    const { data, error } = await supabase.from('users').select(columns).in('id', chunk)
+    if (error) return { data: null, error }
+    rows.push(...(data || []))
   }
-}
-
-// Update user status (block/unblock)
-export const updateUserStatus = async (userId, isActive) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ is_active: isActive })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating user status:', error)
-    return { data: null, error }
-  }
-}
-
-// Delete user
-export const deleteUser = async (userId) => {
-  try {
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', userId)
-
-    if (error) throw error
-    return { error: null }
-  } catch (error) {
-    console.error('Error deleting user:', error)
-    return { error }
-  }
-}
-
-// Make user admin
-export const updateUserRole = async (userId, isAdmin) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({
-        is_admin: isAdmin,
-        ...(isAdmin ? { is_employee: false } : {})
-      })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating user role:', error)
-    return { data: null, error }
-  }
-}
-
-export const updateUserEmployeeStatus = async (userId, isEmployee) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ is_employee: isEmployee })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating employee status:', error)
-    return { data: null, error }
-  }
+  return { data: rows, error: null }
 }
 
 // ==================== PROPERTY MANAGEMENT ====================
@@ -388,25 +318,15 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
   const emptyReport = buildEmptySubmitterListingReport(range)
 
   try {
-    const [recentPropertiesResult, usersResult] = await Promise.all([
-      supabase
-        .from('properties')
-        .select('created_at, user_id')
-        .in('status', LISTING_REPORT_STATUSES)
-        .gte('created_at', range.startDate.toISOString())
-        .lte('created_at', range.endDate.toISOString())
-        .order('created_at', { ascending: true }),
-      getAllUsers()
-    ])
+    const recentPropertiesResult = await supabase
+      .from('properties')
+      .select('created_at, user_id')
+      .in('status', LISTING_REPORT_STATUSES)
+      .gte('created_at', range.startDate.toISOString())
+      .lte('created_at', range.endDate.toISOString())
+      .order('created_at', { ascending: true })
 
     if (recentPropertiesResult.error) throw recentPropertiesResult.error
-    if (usersResult.error) throw usersResult.error
-
-    const usersById = new Map(
-      (usersResult.data || [])
-        .filter((user) => user?.id)
-        .map((user) => [user.id, user])
-    )
 
     const submitterIds = Array.from(
       new Set(
@@ -414,6 +334,15 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
           .map((property) => property?.user_id)
           .filter(Boolean)
       )
+    )
+
+    const usersResult = await fetchUsersByIds(submitterIds)
+    if (usersResult.error) throw usersResult.error
+
+    const usersById = new Map(
+      (usersResult.data || [])
+        .filter((user) => user?.id)
+        .map((user) => [user.id, user])
     )
 
     const submitters = submitterIds
@@ -495,28 +424,6 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
   } catch (error) {
     console.error('Error fetching daily submitter-wise listing report:', error)
     return { data: emptyReport, error }
-  }
-}
-
-export const getDailyEmployeeWiseListingReport = async (days = 7) => {
-  const result = await getDailySubmitterWiseListingReport(days)
-
-  if (!result?.data) {
-    return result
-  }
-
-  return {
-    data: {
-      ...result.data,
-      employees: result.data.submitters,
-      todayCountsByEmployeeId: result.data.todayCountsBySubmitterId,
-      totalsByEmployeeId: result.data.totalsBySubmitterId,
-      dailyRows: result.data.dailyRows.map((day) => ({
-        ...day,
-        countsByEmployeeId: day.countsBySubmitterId
-      }))
-    },
-    error: result.error
   }
 }
 
@@ -949,25 +856,6 @@ export const getCreditPackages = async () => {
   }
 }
 
-export const saveCreditPackages = async (packages) => {
-  try {
-    const payload = packages.map((packageData) => ({
-      id: packageData.id,
-      ...buildCreditPackagePayload(packageData, true)
-    }))
-
-    const { error } = await supabase
-      .from('credit_packages')
-      .upsert(payload)
-
-    if (error) throw error
-    return { success: true, error: null }
-  } catch (error) {
-    console.error('Error saving credit packages:', error)
-    return { success: false, error }
-  }
-}
-
 export const addCreditPackage = async (packageData) => {
   try {
     let result = await supabase
@@ -1173,36 +1061,28 @@ export const saveSiteTheme = async (theme) => {
   }
 }
 
-// Update user credits manually (admin)
-export const updateUserCredits = async (userId, credits, action = 'set') => {
-  try {
-    let newCredits = credits
+// Compat wrapper for the pricing section. Credits change only through
+// admin_adjust_user_credits (credits.adjust permission, ledger row, audit row);
+// `set` is expressed as a delta guarded by the balance the admin was looking at.
+export const updateUserCredits = async (userId, credits, action = 'set', reason = '') => {
+  const amount = Number.parseInt(credits, 10)
+  const trimmedReason = String(reason || '').trim()
+  const invalid = (message) => ({ data: null, error: { code: 'VALIDATION', message, retryable: false, permissionDenied: false }, auditId: null })
+  if (!userId) return invalid('Select a user first.')
+  if (!Number.isFinite(amount) || amount < 0) return invalid('Enter a valid credit amount.')
+  if (!trimmedReason) return invalid('A reason is required for every credit adjustment.')
 
-    if (action === 'add' || action === 'subtract') {
-      const { data: user, error: fetchError } = await supabase
-        .from('users')
-        .select('credits')
-        .eq('id', userId)
-        .single()
-
-      if (fetchError) throw fetchError
-
-      const currentCredits = user?.credits || 0
-      newCredits = action === 'add' ? currentCredits + credits : Math.max(0, currentCredits - credits)
-    }
-
-    const { data, error } = await supabase
-      .from('users')
-      .update({ credits: newCredits })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    logAdminError('Error updating user credits:', error)
-    return { data: null, error }
+  let delta = amount
+  let expectedBalance = null
+  if (action === 'subtract') delta = -amount
+  if (action === 'set') {
+    const { data: user, error: fetchError } = await supabase.from('users').select('credits').eq('id', userId).single()
+    if (fetchError) return { data: null, error: fetchError, auditId: null }
+    expectedBalance = Number(user?.credits) || 0
+    delta = amount - expectedBalance
   }
+  if (delta === 0) return invalid('The balance is already at that amount.')
+  return adjustUserCredits({ userId, delta, reason: trimmedReason, expectedBalance })
 }
 
 // Get all users with credits
@@ -1222,42 +1102,6 @@ export const getAllUsersWithCredits = async () => {
 }
 
 // ==================== SITE SETTINGS ====================
-
-// Get site settings
-export const getSiteSettings = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('site_settings')
-      .select('*')
-      .single()
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'site_settings')
-      if (handled.data !== null) return { data: {}, error: null }
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    logAdminError('Error fetching site settings:', error)
-    return { data: {}, error: null }
-  }
-}
-
-// Update site settings
-export const updateSiteSettings = async (settings) => {
-  try {
-    const { data, error } = await supabase
-      .from('site_settings')
-      .upsert(settings)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    logAdminError('Error updating site settings:', error)
-    return { data: null, error }
-  }
-}
 
 // Get auto-approve properties setting
 export const getAutoApproveProperties = async () => {

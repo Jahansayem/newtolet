@@ -18,6 +18,7 @@ import { useAdminQueueCounts } from './hooks/useAdminQueueCounts'
 import AdminAnalyticsSection from './sections/AdminAnalyticsSection.jsx'
 import AdminAuditLogSection from './sections/AdminAuditLogSection.jsx'
 import AdminContentSection from './sections/AdminContentSection.jsx'
+import AdminCustomersSection from './sections/AdminCustomersSection.jsx'
 import AdminDashboardSection from './sections/AdminDashboardSection.jsx'
 import AdminFeedbackSection from './sections/AdminFeedbackSection.jsx'
 import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
@@ -86,6 +87,8 @@ const AdminPanelApp = () => {
         return <AdminContentSection />
       case 'analytics':
         return <AdminAnalyticsSection />
+      case 'customers':
+        return <AdminCustomersSection />
       case 'settings':
         return <AdminSettingsSection />
       case 'audit':

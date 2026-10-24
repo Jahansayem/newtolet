@@ -36,6 +36,7 @@ import {
     toggleSavedProperty,
     SAVED_PROPERTIES_BROWSER_EVENT,
 } from '../../services/userPanelService';
+import { trackEvent } from '../../services/customerEventsService';
 import RentDisplay from '../../components/RentDisplay';
 import { PropertyThumbnailImage } from '../../components/PropertyCardMedia';
 import Dialog from '../../components/ui/Dialog';
@@ -270,6 +271,15 @@ const Listdetails = () => {
 
         void recordPropertyView(user.id, id);
     }, [id, session?.user?.id, user?.id]);
+
+    useEffect(() => {
+        if (!id || !lists?.id || lists.id !== id) {
+            return;
+        }
+
+        // Anonymous and signed-in visitors alike; once per listing per tab.
+        trackEvent('listing_view', { propertyId: id, metadata: { category: lists.category || null, district: lists.state_district || null } });
+    }, [id, lists?.id, lists?.category, lists?.state_district]);
 
     const syncStoredCredits = (nextCredits) => {
         if (typeof window === 'undefined') {
@@ -530,7 +540,7 @@ const Listdetails = () => {
                 <span>{t('listing.detail.contact.contactOwner')}</span>
             </button>
             {location.contact_number ? (
-                <a href={`tel:${location.contact_number}`} className="ui-btn ui-btn-secondary w-full">
+                <a href={`tel:${location.contact_number}`} className="ui-btn ui-btn-secondary w-full" onClick={() => trackEvent('phone_tap', { propertyId: id, metadata: { placement: 'sidebar' } })}>
                     <FiPhone className="text-base" aria-hidden="true" />
                     <span>{t('listing.detail.contact.callNow')}</span>
                 </a>
@@ -846,7 +856,7 @@ const Listdetails = () => {
 
                     {isProtectedUnlocked ? (
                         location.contact_number ? (
-                            <a href={`tel:${location.contact_number}`} className="ui-btn ui-btn-primary w-full">
+                            <a href={`tel:${location.contact_number}`} className="ui-btn ui-btn-primary w-full" onClick={() => trackEvent('phone_tap', { propertyId: id, metadata: { placement: 'contact_dialog' } })}>
                                 <FiPhone aria-hidden="true" />
                                 <span>{location.contact_number}</span>
                             </a>

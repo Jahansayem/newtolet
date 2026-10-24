@@ -779,6 +779,63 @@ html[data-theme='dark'] .shadow-xl {
     background: var(--color-brand-soft);
     color: var(--color-brand-pressed);
   }
+
+  /* Pending / warning status (marigold = promoted + pending/warning). */
+  .ui-badge-warning {
+    background: var(--color-marigold-soft);
+    color: var(--color-marigold-700);
+  }
+
+  .ui-note-warning {
+    border-color: rgba(240, 162, 2, 0.35);
+    border-left-color: var(--color-marigold-500);
+    background: var(--color-marigold-soft);
+    color: var(--color-marigold-700);
+  }
+
+  /* Admin data tables (DataTable primitive). */
+  .ui-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .ui-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-surface);
+    white-space: nowrap;
+  }
+
+  .ui-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: top;
+    color: var(--color-ink);
+  }
+
+  .ui-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .ui-table tbody tr:hover td {
+    background: var(--color-canvas);
+  }
+
+  .ui-table-compact td {
+    padding: 0.5rem 0.75rem;
+  }
   
   /* Horizontal chip rails fade at the edges instead of hiding the scrollbar silently. */
   .ui-scroll-fade {

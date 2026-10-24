@@ -71,7 +71,7 @@ const getSubmitterLabel = (property = {}) => {
 const getAdminEditPropertyHref = (propertyId) =>
   buildEditPropertyHref(propertyId, {
     admin: '1',
-    returnTo: buildPageHref('admin-dashboard', { tab: 'properties' }),
+    returnTo: buildPageHref('admin', { tab: 'properties' }),
   })
 
 const matchesPropertySearch = (property, search) => {

@@ -9,7 +9,6 @@ import { ToastProvider } from '../ui/ToastProvider'
 import InlineAlert from '../ui/InlineAlert'
 import CoverPhotoManagement from '../../Component/Admin/CoverPhotoManagement.jsx'
 import PaymentMonitoring from '../../Component/Admin/PaymentMonitoring.jsx'
-import PropertyManagement from '../../Component/Admin/PropertyManagement.jsx'
 import ReferralManagement from '../../Component/Admin/ReferralManagement.jsx'
 import SearchHistoryManagement from '../../Component/Admin/SearchHistoryManagement.jsx'
 import UserManagement from '../../Component/Admin/UserManagement.jsx'
@@ -22,6 +21,7 @@ import AdminFeedbackSection from './sections/AdminFeedbackSection.jsx'
 import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
 import AdminOrdersSection from './sections/AdminOrdersSection.jsx'
 import AdminPricingSection from './sections/AdminPricingSection.jsx'
+import AdminPropertiesSection from './sections/AdminPropertiesSection.jsx'
 
 const AdminPanelApp = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -84,7 +84,7 @@ const AdminPanelApp = () => {
       case 'users':
         return <UserManagement />
       case 'properties':
-        return <PropertyManagement />
+        return <AdminPropertiesSection />
       case 'orders':
         return <AdminOrdersSection />
       case 'inquiries':

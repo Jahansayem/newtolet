@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
-import { getStoredUser } from '../../services/authService'
-import { getRoutePage } from '../../lib/routePaths'
+import React, { useEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
+import { useAdminPermissions } from '../../contexts/AdminAccessContext'
+import { formatRoleLabels } from '../../lib/adminPermissions'
+import { ToastProvider } from '../ui/ToastProvider'
+import InlineAlert from '../ui/InlineAlert'
 import CoverPhotoManagement from '../../Component/Admin/CoverPhotoManagement.jsx'
 import PaymentMonitoring from '../../Component/Admin/PaymentMonitoring.jsx'
 import PropertyManagement from '../../Component/Admin/PropertyManagement.jsx'
@@ -12,11 +15,8 @@ import SearchHistoryManagement from '../../Component/Admin/SearchHistoryManageme
 import UserManagement from '../../Component/Admin/UserManagement.jsx'
 import ContactUnlockRefundReview from '../../Component/Admin/ContactUnlockRefundReview.jsx'
 import AdminShell from './AdminShell.jsx'
-import {
-  getAdminPanelNavItems,
-  getAdminPanelTitle,
-  getSupportedAdminTabs,
-} from './adminPanelConfig.js'
+import { ADMIN_NAV_ITEMS, getAdminNavItem, getAdminPanelTitle, resolveAdminTab } from './adminPanelConfig.js'
+import { useAdminQueueCounts } from './hooks/useAdminQueueCounts'
 import AdminDashboardSection from './sections/AdminDashboardSection.jsx'
 import AdminFeedbackSection from './sections/AdminFeedbackSection.jsx'
 import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
@@ -24,61 +24,94 @@ import AdminOrdersSection from './sections/AdminOrdersSection.jsx'
 import AdminPricingSection from './sections/AdminPricingSection.jsx'
 
 const AdminPanelApp = () => {
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [currentUser, setCurrentUser] = useState(null)
-  const [searchQuery, setSearchQuery] = useState('')
+  const { user } = useAuth()
+  const access = useAdminPermissions()
 
-  const adminPageKey = getRoutePage(location.pathname) === 'admin-dashboard' ? 'admin-dashboard' : 'admin'
-  const adminNavItems = useMemo(() => getAdminPanelNavItems(adminPageKey), [adminPageKey])
-  const supportedTabs = useMemo(() => new Set(getSupportedAdminTabs(adminPageKey)), [adminPageKey])
-  const activeMenu = useMemo(() => {
-    const requestedTab = searchParams.get('tab') || 'dashboard'
-    return supportedTabs.has(requestedTab) ? requestedTab : 'dashboard'
-  }, [searchParams, supportedTabs])
+  const { tab: activeMenu, view, aliased } = useMemo(() => resolveAdminTab(searchParams.get('tab')), [searchParams])
 
+  // Rewrite legacy ?tab= aliases to the canonical key so bookmarks keep working.
   useEffect(() => {
-    const user = getStoredUser()
-    if (user) {
-      setCurrentUser(user)
-    }
-  }, [])
+    if (!aliased) return
+    const next = new URLSearchParams(searchParams.toString())
+    next.set('tab', activeMenu)
+    if (view) next.set('view', view)
+    setSearchParams(next, { replace: true })
+  }, [aliased, activeMenu, view, searchParams, setSearchParams])
 
-  useEffect(() => {
-    setSearchQuery('')
-  }, [activeMenu])
+  const { counts } = useAdminQueueCounts({ enabled: access.isAdmin })
+
+  const navItems = useMemo(
+    () =>
+      ADMIN_NAV_ITEMS.filter((item) => !item.stage && (item.key === 'home' || access.hasPermission(item.permission))).map((item) => {
+        const badge = item.badgeKey && counts ? counts[item.badgeKey] : null
+        return { ...item, badge: typeof badge === 'number' ? badge : null, badgeLabel: typeof badge === 'number' ? `${badge} pending` : undefined }
+      }),
+    [access, counts]
+  )
+
+  const activeItem = getAdminNavItem(activeMenu)
+  const allowed = activeItem ? access.hasPermission(activeItem.permission) : false
 
   const handleMenuChange = (menuId) => {
     const nextParams = new URLSearchParams(searchParams.toString())
     nextParams.set('tab', menuId)
+    nextParams.delete('view')
     setSearchParams(nextParams)
   }
 
-  const showSearch = ['orders', 'inquiries', 'feedback'].includes(activeMenu)
+  const userMeta = {
+    name: user?.name,
+    detail: user?.email || user?.phone,
+    roleLabel: access.isLegacyAdmin ? 'Super admin' : formatRoleLabels(access.roles),
+  }
+
+  const renderSection = () => {
+    if (!allowed) {
+      return <InlineAlert variant="permission" title="Permission required" />
+    }
+    switch (activeMenu) {
+      case 'dashboard':
+        return <AdminDashboardSection onQuickAction={handleMenuChange} />
+      case 'payments':
+        return <PaymentMonitoring />
+      case 'referrals':
+        return <ReferralManagement />
+      case 'credits':
+        return <AdminPricingSection />
+      case 'content':
+        return <CoverPhotoManagement />
+      case 'users':
+        return <UserManagement />
+      case 'properties':
+        return <PropertyManagement />
+      case 'orders':
+        return <AdminOrdersSection />
+      case 'inquiries':
+        return <AdminInquiriesSection />
+      case 'search-history':
+        return <SearchHistoryManagement />
+      case 'feedback':
+        return <AdminFeedbackSection />
+      case 'refunds':
+        return <ContactUnlockRefundReview />
+      default:
+        return <AdminDashboardSection onQuickAction={handleMenuChange} />
+    }
+  }
 
   return (
-    <AdminShell
-      activeKey={activeMenu}
-      title={getAdminPanelTitle(activeMenu, adminPageKey)}
-      items={adminNavItems}
-      currentUserName={currentUser?.name}
-      searchQuery={searchQuery}
-      onSearchChange={setSearchQuery}
-      showSearch={showSearch}
-    >
-      {activeMenu === 'dashboard' ? <AdminDashboardSection onQuickAction={handleMenuChange} /> : null}
-      {activeMenu === 'payments' ? <PaymentMonitoring /> : null}
-      {activeMenu === 'referrals' ? <ReferralManagement /> : null}
-      {activeMenu === 'pricing' ? <AdminPricingSection /> : null}
-      {activeMenu === 'cover-photos' ? <CoverPhotoManagement /> : null}
-      {activeMenu === 'users' ? <UserManagement /> : null}
-      {activeMenu === 'properties' ? <PropertyManagement /> : null}
-      {activeMenu === 'orders' ? <AdminOrdersSection searchQuery={searchQuery} /> : null}
-      {activeMenu === 'inquiries' ? <AdminInquiriesSection searchQuery={searchQuery} /> : null}
-      {activeMenu === 'search-history' ? <SearchHistoryManagement /> : null}
-      {activeMenu === 'feedback' ? <AdminFeedbackSection searchQuery={searchQuery} /> : null}
-      {activeMenu === 'unlock-refunds' ? <ContactUnlockRefundReview /> : null}
-    </AdminShell>
+    <ToastProvider>
+      <AdminShell
+        activeKey={activeMenu}
+        title={getAdminPanelTitle(activeMenu)}
+        description={activeItem?.description || null}
+        items={navItems}
+        userMeta={userMeta}
+      >
+        {renderSection()}
+      </AdminShell>
+    </ToastProvider>
   )
 }
 

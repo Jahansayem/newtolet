@@ -315,58 +315,6 @@ html[data-theme='dark'] .shadow-xl {
 .animation-delay-200 { animation-delay: 0.2s; }
 .animation-delay-300 { animation-delay: 0.3s; }
 
-/* ========== ADMIN LEGACY RE-SKIN (unchanged scope; tokens only) ========== */
-
-.admin-panel-scope {
-  color: var(--site-text);
-}
-
-.admin-panel-scope :where(.bg-white.rounded-lg.shadow, .bg-white.rounded-lg.shadow-md, .bg-white.rounded-lg.shadow-xl, .bg-white.rounded-xl.shadow, .bg-white.rounded-2xl.shadow-2xl) {
-  border: 1px solid var(--site-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-}
-
-.admin-panel-scope :where(.bg-white.rounded-lg.shadow:hover, .bg-white.rounded-lg.shadow-md:hover, .bg-white.rounded-xl.shadow:hover) {
-  box-shadow: var(--shadow-raised);
-}
-
-.admin-panel-scope :where(input, select, textarea) {
-  border-radius: var(--radius-input);
-}
-
-.admin-panel-scope :where(button) {
-  border-radius: var(--radius-button);
-}
-
-.admin-panel-scope :where(thead.bg-gray-50, .bg-gray-50.rounded-lg, .bg-gray-100.rounded-lg) {
-  background-color: var(--site-surface-muted) !important;
-}
-
-.admin-panel-scope :where(.text-gray-900) {
-  color: var(--site-text) !important;
-}
-
-.admin-panel-scope :where(.text-gray-800) {
-  color: var(--site-text) !important;
-}
-
-.admin-panel-scope :where(.text-gray-700, .text-gray-600, .text-gray-500) {
-  color: var(--site-text-muted) !important;
-}
-
-.admin-panel-scope :where(.border-gray-200, .divide-gray-200) {
-  border-color: var(--site-border) !important;
-}
-
-.admin-panel-scope :where(.bg-primary-50) {
-  background-color: var(--color-brand-soft) !important;
-}
-
-.admin-panel-scope :where(.text-primary-600, .text-primary-700, .text-primary-800) {
-  color: var(--color-brand) !important;
-}
-
 /* Layout + primitives live in the components layer so Tailwind utilities (hidden, lg:inline-flex,
    rounded-*, bg-*) can still override them per element. */
 @layer components {
@@ -778,6 +726,63 @@ html[data-theme='dark'] .shadow-xl {
   .ui-badge-brand {
     background: var(--color-brand-soft);
     color: var(--color-brand-pressed);
+  }
+
+  /* Pending / warning status (marigold = promoted + pending/warning). */
+  .ui-badge-warning {
+    background: var(--color-marigold-soft);
+    color: var(--color-marigold-700);
+  }
+
+  .ui-note-warning {
+    border-color: rgba(240, 162, 2, 0.35);
+    border-left-color: var(--color-marigold-500);
+    background: var(--color-marigold-soft);
+    color: var(--color-marigold-700);
+  }
+
+  /* Admin data tables (DataTable primitive). */
+  .ui-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .ui-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-surface);
+    white-space: nowrap;
+  }
+
+  .ui-table td {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: top;
+    color: var(--color-ink);
+  }
+
+  .ui-table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .ui-table tbody tr:hover td {
+    background: var(--color-canvas);
+  }
+
+  .ui-table-compact td {
+    padding: 0.5rem 0.75rem;
   }
   
   /* Horizontal chip rails fade at the edges instead of hiding the scrollbar silently. */

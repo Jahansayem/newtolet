@@ -8,6 +8,7 @@ import {
 } from './cacheService'
 import { invokeSupabaseFunction } from './functionClient'
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
+import { mapPaymentTransactionRecord } from '../lib/paymentStatus'
 
 const PAYMENT_GATEWAYS = {
   EPS_PAYMENT: {
@@ -19,24 +20,8 @@ const PAYMENT_GATEWAYS = {
   },
 }
 
-const STATUS_LABELS = {
-  paid: 'credited',
-  success: 'credited',
-  created: 'pending',
-}
+// Status mapping shared with the admin data layer (src/lib/paymentStatus.js).
 
-const mapPaymentTransactionRecord = (record) => ({
-  ...record,
-  amount: Number(record?.amount ?? record?.amount_bdt ?? 0),
-  credits_to_add: Number(record?.credits_to_add ?? 0),
-  invoice_id: record?.invoice_id || record?.reference || null,
-  transaction_id: record?.transaction_id || record?.invoice_id || record?.id,
-  status: STATUS_LABELS[record?.status] || record?.status || 'pending',
-  payment_method: record?.payment_method ? String(record.payment_method).toLowerCase() : null,
-  description:
-    record?.description ||
-    `${Number(record?.credits_to_add ?? 0)} credits purchase`,
-})
 
 export const getCreditPackages = async () => {
   const packages = await getAdminCreditPackages()

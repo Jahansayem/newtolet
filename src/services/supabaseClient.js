@@ -232,6 +232,12 @@ const supabaseFetch = async (input, init) => {
   try {
     response = await globalThis.fetch(input, init)
   } catch (error) {
+    // A cancelled request (AbortController, React effect cleanup, navigation)
+    // says nothing about connectivity: surface it unchanged instead of marking
+    // the backend unreachable for the next 30 seconds.
+    if (error?.name === 'AbortError' || init?.signal?.aborted) {
+      throw error
+    }
     markSupabaseConnectionUnavailable()
     return createSupabaseConnectionFailureResponse(error)
   }

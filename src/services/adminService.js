@@ -1,6 +1,4 @@
 import { isRecoverableSupabaseError, supabase } from './supabaseClient'
-import { getAccessToken } from './apiClient'
-import { invokeSupabaseFunction } from './functionClient'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 const MAX_LISTING_REPORT_DAYS = 90
@@ -862,415 +860,50 @@ export const togglePropertyFeatured = async (propertyId, isFeatured) => {
   }
 }
 
-// ==================== FEEDBACK MANAGEMENT ====================
-
-// Get all feedback
-export const getAllFeedback = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('feedback')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'feedback')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching feedback:', error)
-    return { data: [], error: null }
-  }
-}
-
-// Delete feedback
-export const deleteFeedback = async (feedbackId) => {
-  try {
-    const { error } = await supabase
-      .from('feedback')
-      .delete()
-      .eq('id', feedbackId)
-
-    if (error) throw error
-    return { error: null }
-  } catch (error) {
-    console.error('Error deleting feedback:', error)
-    return { error }
-  }
-}
-
-// Mark feedback as resolved
-export const updateFeedbackStatus = async (feedbackId, isResolved) => {
-  try {
-    const { data, error } = await supabase
-      .from('feedback')
-      .update({ is_resolved: isResolved })
-      .eq('id', feedbackId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating feedback status:', error)
-    return { data: null, error }
-  }
-}
-
-// Approve feedback (make it visible on homepage)
-export const approveFeedback = async (feedbackId, userId) => {
-  try {
-    const { data, error } = await supabase
-      .from('feedback')
-      .update({
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: userId
-      })
-      .eq('id', feedbackId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error approving feedback:', error)
-    return { data: null, error }
-  }
-}
-
-// Reject feedback (hide from homepage)
-export const rejectFeedback = async (feedbackId, userId) => {
-  try {
-    const { data, error } = await supabase
-      .from('feedback')
-      .update({
-        status: 'rejected',
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: userId
-      })
-      .eq('id', feedbackId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error rejecting feedback:', error)
-    return { data: null, error }
-  }
-}
-
-// ==================== ORDERS MANAGEMENT ====================
-
-// Get all orders
-export const getAllOrders = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        users(name, email)
-      `)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching orders:', error)
-    return { data: null, error }
-  }
-}
-
-// Update order status
-export const updateOrderStatus = async (orderId, status) => {
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .update({ status: status })
-      .eq('id', orderId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating order status:', error)
-    return { data: null, error }
-  }
-}
-
-export const updateOrderJobFeed = async (orderId, updates) => {
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .update(updates)
-      .eq('id', orderId)
-      .select()
-      .single()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating order job feed:', error)
-    return { data: null, error }
-  }
-}
-
-// Delete order
-export const deleteOrder = async (orderId) => {
-  try {
-    const { error } = await supabase
-      .from('orders')
-      .delete()
-      .eq('id', orderId)
-
-    if (error) throw error
-    return { error: null }
-  } catch (error) {
-    console.error('Error deleting order:', error)
-    return { error }
-  }
-}
-
-// ==================== PROPERTY INQUIRIES ====================
-
-// Get all property inquiries
-export const getAllPropertyInquiries = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('property_inquiries')
-      .select(`
-        *,
-        properties(id, category, short_description, state_district, area)
-      `)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'property_inquiries')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching property inquiries:', error)
-    return { data: [], error: null }
-  }
-}
-
-// Update inquiry status
-export const updateInquiryStatus = async (inquiryId, status) => {
-  try {
-    const { data, error } = await supabase
-      .from('property_inquiries')
-      .update({
-        status: status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', inquiryId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating inquiry status:', error)
-    return { data: null, error }
-  }
-}
-
-// Delete inquiry
-export const deleteInquiry = async (inquiryId) => {
-  try {
-    const { error } = await supabase
-      .from('property_inquiries')
-      .delete()
-      .eq('id', inquiryId)
-
-    if (error) throw error
-    return { error: null }
-  } catch (error) {
-    console.error('Error deleting inquiry:', error)
-    return { error }
-  }
-}
-
-// ==================== PAYMENT TRANSACTIONS ====================
-
-const PAYMENT_TRANSACTION_RELATIONS = `
-  *,
-  buyer:users!payment_transactions_user_id_fkey(name, email),
-  package:credit_packages!payment_transactions_package_id_fkey(package_name)
-`
-
-const serializeAdminError = (error) => ({
-  code: error?.code || null,
-  message: error?.message || 'Unknown error',
-  details: error?.details || null,
-  hint: error?.hint || null,
-})
-
-// Get all payment transactions
-export const getAllPaymentTransactions = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('payment_transactions')
-      .select(PAYMENT_TRANSACTION_RELATIONS)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'payment_transactions')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data: (data || []).map(mapPaymentTransactionRecord), error: null }
-  } catch (error) {
-    console.error('Error fetching payment transactions:', serializeAdminError(error))
-    return { data: [], error }
-  }
-}
-
-// Get payment transactions by status
-export const getPaymentTransactionsByStatus = async (status) => {
-  try {
-    let query = supabase
-      .from('payment_transactions')
-      .select(PAYMENT_TRANSACTION_RELATIONS)
-      .order('created_at', { ascending: false })
-
-    query = query.eq('status', status)
-
-    const { data, error } = await query
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'payment_transactions')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data: (data || []).map(mapPaymentTransactionRecord), error: null }
-  } catch (error) {
-    console.error('Error fetching payment transactions by status:', serializeAdminError(error))
-    return { data: [], error }
-  }
-}
-
-// Get payment transactions by user
-export const getPaymentTransactionsByUser = async (userId) => {
-  try {
-    const { data, error } = await supabase
-      .from('payment_transactions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'payment_transactions')
-      if (handled.data !== null) return handled
-      throw error
-    }
-    return { data: (data || []).map(mapPaymentTransactionRecord), error: null }
-  } catch (error) {
-    console.error('Error fetching user transactions:', error)
-    return { data: [], error: null }
-  }
-}
-
-// Update transaction status
-export const updateTransactionStatus = async (transactionId, status) => {
-  try {
-    const { data, error } = await supabase
-      .from('payment_transactions')
-      .update({
-        status,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', transactionId)
-      .select('*')
-      .maybeSingle()
-
-    if (error) throw error
-    return {
-      data: mapPaymentTransactionRecord(
-        ensureSingleMutationResult(data, 'Payment transaction')
-      ),
-      error: null
-    }
-  } catch (error) {
-    console.error('Error updating transaction status:', error)
-    return { data: null, error }
-  }
-}
-
-export const approvePaymentTransaction = async (transactionId) => {
-  try {
-    const token = await getAccessToken()
-
-    if (!token) {
-      throw new Error('Authentication required')
-    }
-
-    const response = await invokeSupabaseFunction({
-      functionName: 'paymently-approve',
-      token,
-      body: {
-        paymentId: transactionId,
-      },
-    })
-
-    return {
-      data: mapPaymentTransactionRecord(response?.data || {}),
-      error: null
-    }
-  } catch (error) {
-    console.error('Error approving payment transaction:', error)
-    return { data: null, error }
-  }
-}
-
-// Get transaction statistics
-export const getTransactionStats = async () => {
-  try {
-    const { data: allTransactions, error } = await supabase
-      .from('payment_transactions')
-      .select('status, amount')
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'payment_transactions')
-      if (handled.data !== null) {
-        return {
-          data: {
-            totalTransactions: 0,
-            totalRevenue: 0,
-            successfulTransactions: 0,
-            failedTransactions: 0,
-            pendingTransactions: 0
-          },
-          error: null
-        }
-      }
-      throw error
-    }
-
-    const stats = {
-      totalTransactions: allTransactions?.length || 0,
-      totalRevenue: allTransactions?.reduce((sum, t) => sum + Number(t.amount || 0), 0) || 0,
-      successfulTransactions: allTransactions?.filter(t => t.status === 'credited').length || 0,
-      failedTransactions: allTransactions?.filter(t => t.status === 'failed').length || 0,
-      pendingTransactions:
-        allTransactions?.filter(t => t.status === 'pending' || t.status === 'awaiting_admin_approval').length || 0
-    }
-
-    return { data: stats, error: null }
-  } catch (error) {
-    console.error('Error fetching transaction stats:', error)
-    return {
-      data: {
-        totalTransactions: 0,
-        totalRevenue: 0,
-        successfulTransactions: 0,
-        failedTransactions: 0,
-        pendingTransactions: 0
-      },
-      error: null
-    }
-  }
-}
+// ==================== FEEDBACK / ORDERS / INQUIRIES / PAYMENTS ====================
+// These domains now live in src/services/admin/* (server-side pagination, RPC-backed
+// mutations with the actor derived from auth.uid(), archive instead of delete).
+// The old names are kept as compatibility wrappers.
+export {
+  listFeedback,
+  reviewFeedback,
+  archiveFeedback,
+  getAllFeedback,
+  deleteFeedback,
+  updateFeedbackStatus,
+  approveFeedback,
+  rejectFeedback,
+} from './admin/feedback'
+export {
+  listOrders,
+  setOrderStatus,
+  setOrderJobFeed,
+  setOrderAssignee,
+  archiveOrder,
+  getAllOrders,
+  updateOrderStatus,
+  updateOrderJobFeed,
+  deleteOrder,
+} from './admin/orders'
+export {
+  listInquiries,
+  updateInquiry,
+  archiveInquiry,
+  getAllPropertyInquiries,
+  updateInquiryStatus,
+  deleteInquiry,
+} from './admin/inquiries'
+export {
+  listPayments,
+  getPayment,
+  approvePayment,
+  reviewPayment,
+  refundPayment,
+  exportPaymentsCsv,
+  approvePaymentTransaction,
+  getAllPaymentTransactions,
+  getPaymentTransactionsByStatus,
+} from './admin/payments'
 
 // ==================== ANALYTICS ====================
 
@@ -1639,25 +1272,6 @@ const mapCreditSettingsRecord = (record) => {
     photo_view: sharedUnlockCost
   }
 }
-
-const mapPaymentTransactionRecord = (record) => ({
-  ...record,
-  users: record?.users || record?.buyer || null,
-  credit_packages: record?.credit_packages || record?.package || null,
-  amount: Number(record?.amount ?? record?.amount_bdt ?? 0),
-  credits_to_add: Number(record?.credits_to_add ?? 0),
-  transaction_id: record?.transaction_id || record?.invoice_id || record?.id,
-  invoice_id: record?.invoice_id || record?.reference || null,
-  description: record?.description || `${Number(record?.credits_to_add ?? 0)} credits purchase`,
-  status:
-    record?.status === 'paid' || record?.status === 'success'
-      ? 'credited'
-      : record?.status === 'created'
-        ? 'pending'
-        : (record?.status || 'pending'),
-  raw_status: record?.status,
-  payment_method: record?.payment_method ? String(record.payment_method).toLowerCase() : null
-})
 
 const isMissingColumnError = (error) =>
   error?.code === 'PGRST204' ||

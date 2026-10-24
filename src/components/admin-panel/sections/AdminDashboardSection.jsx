@@ -19,6 +19,7 @@ import {
   getDailySubmitterWiseListingReport,
 } from '../../../services/adminService'
 import { getCoverPhotos } from '../../../services/coverPhotoService'
+import StatCard from '../../ui/StatCard'
 
 const REPORT_FILTER_PRESETS = {
   last7: 'last7',
@@ -144,20 +145,8 @@ const buildReportRangeLabel = (filter, startDate, endDate) => {
   return 'Last 7 Days'
 }
 
-const MetricCard = ({ label, value, meta, icon: Icon, tone }) => (
-  <div className={`rounded-[var(--radius-panel)] border p-6 shadow-sm ${tone}`}>
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <p className="text-sm font-medium text-white/80">{label}</p>
-        <p className="mt-3 text-4xl font-bold tracking-tight text-white">{value}</p>
-        <p className="mt-2 text-xs font-medium text-white/70">{meta}</p>
-      </div>
-      <div className="rounded-2xl bg-white/15 p-3 text-3xl text-white">
-        <Icon />
-      </div>
-    </div>
-  </div>
-)
+// Neutral, token-based metric tile (the `tone` prop from the old gradient cards is ignored).
+const MetricCard = ({ label, value, meta, icon: Icon }) => <StatCard label={label} value={value} hint={meta} icon={Icon ? <Icon /> : null} />
 
 const AdminDashboardSection = ({ onQuickAction }) => {
   const [loading, setLoading] = useState(true)
@@ -518,17 +507,17 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                   ['properties', 'Review properties', GiHouse],
                   ['orders', 'Update orders', BiPackage],
                   ['feedback', 'Moderate feedback', MdFeedback],
-                  ['pricing', 'Adjust credits', MdSettings],
-                  ['cover-photos', 'Refresh banners', BiImage],
+                  ['credits', 'Adjust credits', MdSettings],
+                  ['content', 'Refresh banners', BiImage],
                   ['inquiries', 'Review inquiries', MdAdd],
                 ].map(([key, label, Icon]) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => onQuickAction(key)}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-700 transition hover:border-brand hover:bg-[#eef2ff]"
+                    className="flex min-h-11 items-center gap-3 rounded-[var(--radius-card)] border border-line bg-canvas px-4 py-3 text-left text-sm font-medium text-ink transition hover:border-brand hover:bg-brand-soft"
                   >
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-brand shadow-sm">
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-[var(--radius-card)] bg-surface text-brand shadow-card" aria-hidden="true">
                       <Icon />
                     </span>
                     <span>{label}</span>
@@ -561,7 +550,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
             </div>
           ) : (
             <div className="mt-6 space-y-6">
-              <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
+              <div className="rounded-[var(--radius-card)] border border-line bg-canvas p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h4 className="text-base font-semibold text-slate-900">Today User-Wise Listing</h4>
@@ -573,7 +562,7 @@ const AdminDashboardSection = ({ onQuickAction }) => {
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   {(submittersWithListingsToday.length > 0 ? submittersWithListingsToday : dashboardSubmitters).map((submitter) => (
-                    <div key={submitter.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-cyan-100">
+                    <div key={submitter.id} className="ui-card p-4">
                       <p className="text-sm font-medium text-slate-600">{submitter.name}</p>
                       <p className="mt-2 text-2xl font-bold text-slate-900">
                         {submitterListingReport.todayCountsBySubmitterId?.[submitter.id] || 0}

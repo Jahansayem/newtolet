@@ -1,248 +1,211 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiRefreshCw } from 'react-icons/fi'
+import { FiCheck, FiExternalLink, FiRefreshCw, FiX } from 'react-icons/fi'
 import { buildListDetailsHref } from '../../lib/routePaths'
-import {
-  getAdminContactUnlockRefundRequests,
-  reviewContactUnlockRefundRequest,
-} from '../../services/adminService'
+import { listRefundRequests, reviewRefundRequest } from '../../services/admin/refunds'
 import { getPropertyDisplayLabel } from '../../utils/propertyDisplaySerial'
+import { useAdminPermissions } from '../../contexts/AdminAccessContext'
+import { PERMISSIONS } from '../../lib/adminPermissions'
+import { useShellHeader } from '../../components/panel/PanelShellContext'
+import { useAdminList } from '../../components/admin-panel/hooks/useAdminList'
+import { useAdminMutation } from '../../components/admin-panel/hooks/useAdminMutation'
+import { useEntityParam } from '../../components/admin-panel/hooks/useEntityParam'
+import Badge from '../../components/ui/Badge'
+import Button from '../../components/ui/Button'
+import DataTable from '../../components/ui/DataTable'
+import Dialog from '../../components/ui/Dialog'
+import EmptyState from '../../components/ui/EmptyState'
+import FilterBar from '../../components/ui/FilterBar'
+import InlineAlert from '../../components/ui/InlineAlert'
+import KeyValueList from '../../components/ui/KeyValueList'
+import Pagination from '../../components/ui/Pagination'
+import ReasonDialog from '../../components/ui/ReasonDialog'
+import StatusPill from '../../components/ui/StatusPill'
+import Tabs from '../../components/ui/Tabs'
 
-const STATUS_STYLES = {
-  requested: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-700',
-}
+const REASON_LABELS = { rented_out: 'Already rented out', unreachable: 'Phone unreachable', wrong_location: 'Wrong location', other: 'Other' }
+const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
 
-const REASON_LABELS = {
-  rented_out: 'Already rented out',
-  unreachable: 'Phone unreachable',
-  wrong_location: 'Wrong location',
-  other: 'Other',
-}
-
-const formatDate = (value) => {
-  if (!value) {
-    return 'N/A'
-  }
-
-  return new Date(value).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const TABS = [
+  { key: 'requested', label: 'Requested' },
+  { key: 'approved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: '', label: 'All' },
+]
 
 const ContactUnlockRefundReview = () => {
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [busyId, setBusyId] = useState(null)
-  const [feedback, setFeedback] = useState({ type: '', text: '' })
-  const [adminNotes, setAdminNotes] = useState({})
+  const { hasPermission } = useAdminPermissions()
+  const canReview = hasPermission(PERMISSIONS.REFUNDS_REVIEW)
+  const list = useAdminList({ domain: 'refunds', fetcher: listRefundRequests, initialSort: { column: 'requested_at', dir: 'desc' }, initialFilters: { status: 'requested', reasonCode: '' } })
+  const [selectedId, setSelectedId] = useEntityParam('id')
+  const [decision, setDecision] = useState(null) // { request, status }
 
-  const loadRequests = useCallback(async () => {
-    setLoading(true)
-    const data = await getAdminContactUnlockRefundRequests()
-    setRequests(data)
-    setLoading(false)
-  }, [])
+  const reviewMutation = useAdminMutation((id, status, note) => reviewRefundRequest(id, status, note), {
+    successMessage: (result, _id, status) => (status === 'approved' ? 'Refund approved and credits restored' : 'Refund request rejected'),
+    invalidate: ['refunds', 'users'],
+  })
 
-  useEffect(() => {
-    void loadRequests()
-  }, [loadRequests])
+  const headerActions = useMemo(
+    () => (
+      <Button variant="secondary" icon={<FiRefreshCw />} onClick={() => list.refresh()} busy={list.isRefreshing} busyLabel="Refreshing…">
+        Refresh
+      </Button>
+    ),
+    [list]
+  )
+  useShellHeader({ actions: headerActions })
 
-  const pendingCount = useMemo(
-    () => requests.filter((entry) => entry.status === 'requested').length,
-    [requests]
+  const selected = list.items.find((request) => request.id === selectedId) || null
+
+  const columns = useMemo(
+    () => [
+      {
+        key: 'property',
+        header: 'Listing',
+        render: (request) => (
+          <div className="min-w-0">
+            <p className="font-medium text-ink">{request.property?.category || 'Property'}</p>
+            <p className="text-caption text-muted">{getPropertyDisplayLabel(request.property)} · {[request.property?.area, request.property?.state_district].filter(Boolean).join(', ')}</p>
+          </div>
+        ),
+      },
+      {
+        key: 'user',
+        header: 'User',
+        render: (request) => (
+          <div className="min-w-0">
+            <p className="font-medium text-ink">{request.user?.name || 'Unknown'}</p>
+            <p className="truncate text-caption text-muted">{request.user?.email || request.user?.phone || '—'}</p>
+          </div>
+        ),
+      },
+      { key: 'reason_code', header: 'Reason', render: (request) => <Badge variant="neutral">{REASON_LABELS[request.reason_code] || request.reason_code}</Badge> },
+      { key: 'credits', header: 'Credits', align: 'right', render: (request) => Number(request.contact_view?.credits_spent || 0) },
+      { key: 'status', header: 'Status', sortable: true, render: (request) => <StatusPill status={request.status} /> },
+      { key: 'requested_at', header: 'Requested', sortable: true, hideBelow: 'lg', render: (request) => formatDateTime(request.requested_at) },
+    ],
+    []
   )
 
-  const handleReview = async (requestId, status) => {
-    setBusyId(requestId)
-    setFeedback({ type: '', text: '' })
-
-    const { error } = await reviewContactUnlockRefundRequest(
-      requestId,
-      status,
-      adminNotes[requestId] || ''
-    )
-
-    setBusyId(null)
-
-    if (error) {
-      setFeedback({ type: 'error', text: error.message || 'Unable to update refund request.' })
-      return
-    }
-
-    setFeedback({
-      type: 'success',
-      text:
-        status === 'approved'
-          ? 'Refund approved and credits restored.'
-          : 'Refund request rejected.',
-    })
-    await loadRequests()
-  }
+  const rowActions = (request) => (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setSelectedId(request.id)}>
+        Details
+      </Button>
+      {canReview && request.status === 'requested' ? (
+        <>
+          <Button size="sm" variant="primary" icon={<FiCheck />} onClick={() => setDecision({ request, status: 'approved' })}>
+            Approve
+          </Button>
+          <Button size="sm" variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ request, status: 'rejected' })}>
+            Reject
+          </Button>
+        </>
+      ) : null}
+    </>
+  )
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <p className="text-sm text-slate-500">Total Requests</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{requests.length}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <p className="text-sm text-slate-500">Pending Review</p>
-          <p className="mt-2 text-3xl font-bold text-slate-900">{pendingCount}</p>
-        </div>
-        <div className="rounded-2xl bg-white p-5 shadow">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-slate-500">Actions</p>
-              <p className="mt-2 text-sm text-slate-700">Refresh the unlock refund queue.</p>
+    <div className="space-y-4">
+      <Tabs tabs={TABS} value={list.filters.status ?? ''} onChange={(key) => list.setFilter('status', key)} ariaLabel="Refund request status" />
+
+      <FilterBar
+        search={{ value: list.search, onChange: list.setSearch, label: 'Search refund requests', placeholder: 'Details or admin note…' }}
+        filters={[{ key: 'reasonCode', label: 'Reason', type: 'select', value: list.filters.reasonCode, onChange: (value) => list.setFilter('reasonCode', value), options: Object.entries(REASON_LABELS).map(([value, label]) => ({ value, label })), placeholder: 'All reasons' }]}
+        resultCount={list.status === 'loading' ? null : list.totalCount}
+        resultLabel="requests"
+      />
+
+      {!canReview ? <InlineAlert variant="info">You can view refund requests. Approving or rejecting needs the finance role.</InlineAlert> : null}
+
+      <DataTable
+        caption="Contact unlock refund requests"
+        columns={columns}
+        rows={list.items}
+        loading={list.isLoading}
+        error={list.status === 'error' || list.status === 'permission-denied' ? list.error : null}
+        onRetry={list.retry}
+        empty={<EmptyState title="No refund requests" description={list.filters.status === 'requested' ? 'Nothing is waiting for review.' : 'Try another tab.'} />}
+        rowActions={rowActions}
+        sort={{ key: list.sort.column, direction: list.sort.dir }}
+        onSortChange={(next) => list.setSort({ column: next.key, dir: next.direction })}
+        getRowLabel={(request) => `refund request from ${request.user?.name || 'user'}`}
+      />
+
+      <Pagination page={list.page} pageSize={list.pageSize} total={list.totalCount} onPageChange={list.setPage} onPageSizeChange={list.setPageSize} />
+
+      <Dialog open={Boolean(selected)} onClose={() => setSelectedId(null)} title="Refund request" size="lg" fullScreenOnMobile>
+        {selected ? (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill status={selected.status} />
+              <Badge variant="neutral">{REASON_LABELS[selected.reason_code] || selected.reason_code}</Badge>
             </div>
-            <button
-              type="button"
-              onClick={() => void loadRequests()}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-            >
-              <FiRefreshCw />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {feedback.text ? (
-        <div
-          className={`rounded-2xl border px-4 py-3 text-sm font-medium ${
-            feedback.type === 'success'
-              ? 'border-green-200 bg-green-50 text-green-700'
-              : 'border-red-200 bg-red-50 text-red-700'
-          }`}
-        >
-          {feedback.text}
-        </div>
-      ) : null}
-
-      <div className="rounded-2xl bg-white p-6 shadow">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">Unlock Refund Requests</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Review requests, open the property, and decide whether credits should be restored.
-            </p>
-          </div>
-        </div>
-
-        {loading ? (
-          <p className="text-sm text-slate-500">Loading refund requests...</p>
-        ) : requests.length === 0 ? (
-          <p className="text-sm text-slate-500">No refund requests found.</p>
-        ) : (
-          <div className="space-y-4">
-            {requests.map((request) => (
-              <div key={request.id} className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          STATUS_STYLES[request.status] || 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {String(request.status || 'requested').replace(/_/g, ' ')}
-                      </span>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                        {REASON_LABELS[request.reason_code] || request.reason_code}
-                      </span>
-                    </div>
-
-                    <p className="text-lg font-semibold text-slate-900">
-                      {request.property?.category || 'Property'}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {getPropertyDisplayLabel(request.property)}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {[request.property?.area, request.property?.state_district].filter(Boolean).join(', ')}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      User: {request.user?.name || 'Unknown'} {request.user?.email ? ` - ${request.user.email}` : ''}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      Phone: {request.user?.phone || 'N/A'}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      Unlocked: {formatDate(request.contact_view?.viewed_at)}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      Credits spent: {Number(request.contact_view?.credits_spent || 0)}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      Requested: {formatDate(request.requested_at)}
-                    </p>
-                    {request.details ? (
-                      <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                        {request.details}
-                      </p>
-                    ) : null}
-                    {request.admin_note ? (
-                      <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                        Admin note: {request.admin_note}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div className="w-full max-w-md space-y-3">
-                    <Link
-                      to={buildListDetailsHref(request.property?.id || request.property_id)}
-                      className="inline-flex w-full items-center justify-center rounded-2xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
-                    >
-                      Open Property
-                    </Link>
-
-                    <textarea
-                      value={adminNotes[request.id] || ''}
-                      onChange={(event) =>
-                        setAdminNotes((current) => ({
-                          ...current,
-                          [request.id]: event.target.value,
-                        }))
-                      }
-                      rows={3}
-                      placeholder="Admin note"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-brand"
-                    />
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => void handleReview(request.id, 'approved')}
-                        disabled={busyId === request.id || request.status !== 'requested'}
-                        className="inline-flex flex-1 items-center justify-center rounded-2xl bg-green-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Approve & Restore Credits
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleReview(request.id, 'rejected')}
-                        disabled={busyId === request.id || request.status !== 'requested'}
-                        className="inline-flex flex-1 items-center justify-center rounded-2xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                </div>
+            <KeyValueList
+              columns={2}
+              items={[
+                { key: 'listing', label: 'Listing', value: `${selected.property?.category || 'Property'} · ${getPropertyDisplayLabel(selected.property)}` },
+                { key: 'location', label: 'Location', value: [selected.property?.area, selected.property?.state_district].filter(Boolean).join(', ') },
+                { key: 'user', label: 'User', value: selected.user?.name },
+                { key: 'email', label: 'Email', value: selected.user?.email },
+                { key: 'phone', label: 'Phone', value: selected.user?.phone },
+                { key: 'unlocked', label: 'Unlocked', value: formatDateTime(selected.contact_view?.viewed_at) },
+                { key: 'spent', label: 'Credits spent', value: Number(selected.contact_view?.credits_spent || 0) },
+                { key: 'requested', label: 'Requested', value: formatDateTime(selected.requested_at) },
+                { key: 'reviewed', label: 'Reviewed', value: selected.reviewed_at ? formatDateTime(selected.reviewed_at) : null },
+                { key: 'restored', label: 'Credits restored', value: selected.credits_restored },
+                { key: 'note', label: 'Admin note', value: selected.admin_note },
+              ]}
+            />
+            {selected.details ? (
+              <div>
+                <h3 className="text-sm font-semibold text-ink">User's explanation</h3>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{selected.details}</p>
               </div>
-            ))}
+            ) : null}
+            <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+              <Link to={buildListDetailsHref(selected.property?.id || selected.property_id)} className="ui-btn ui-btn-secondary" target="_blank" rel="noopener">
+                <FiExternalLink aria-hidden="true" /> Open listing
+              </Link>
+              {canReview && selected.status === 'requested' ? (
+                <>
+                  <Button variant="primary" icon={<FiCheck />} onClick={() => setDecision({ request: selected, status: 'approved' })}>
+                    Approve and restore credits
+                  </Button>
+                  <Button variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ request: selected, status: 'rejected' })}>
+                    Reject
+                  </Button>
+                </>
+              ) : null}
+            </div>
           </div>
-        )}
-      </div>
+        ) : null}
+      </Dialog>
+
+      <ReasonDialog
+        open={Boolean(decision)}
+        onClose={() => setDecision(null)}
+        decision={decision?.status === 'approved' ? 'approve' : 'reject'}
+        title={decision?.status === 'approved' ? 'Approve this refund?' : 'Reject this refund?'}
+        description={decision?.status === 'approved' ? `${Number(decision?.request.contact_view?.credits_spent || 0)} credits will be returned to the user.` : 'The user keeps the unlock and no credits are returned.'}
+        subject={decision ? <p>{decision.request.user?.name || 'User'} · {REASON_LABELS[decision.request.reason_code] || decision.request.reason_code}</p> : null}
+        reasonLabel="Admin note"
+        reasonHelp="Shown to the user with the decision."
+        reasonRequired={decision?.status === 'rejected'}
+        showNote={false}
+        busy={reviewMutation.busy}
+        error={reviewMutation.error}
+        onConfirm={async ({ reason }) => {
+          const { request, status } = decision
+          const result = await reviewMutation.run(request.id, status, reason || '')
+          if (!result.error) {
+            setDecision(null)
+            setSelectedId(null)
+          }
+        }}
+      />
     </div>
   )
 }

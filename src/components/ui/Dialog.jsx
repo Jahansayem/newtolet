@@ -19,6 +19,7 @@ const SIZE_CLASS = {
   sm: 'max-w-md',
   md: 'max-w-lg',
   lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
 }
 
 const Dialog = ({
@@ -33,6 +34,8 @@ const Dialog = ({
   dismissible = true,
   initialFocusRef = null,
   className = '',
+  role = 'dialog',
+  fullScreenOnMobile = false,
 }) => {
   const panelRef = useRef(null)
   const previouslyFocusedRef = useRef(null)
@@ -110,19 +113,23 @@ const Dialog = ({
 
   return ReactDOM.createPortal(
     <div
-      className="fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-ink/55 p-4"
+      className={`fixed inset-0 z-[var(--z-overlay)] flex items-center justify-center bg-ink/55 ${fullScreenOnMobile ? 'p-0 sm:p-4' : 'p-4'}`}
       onClick={requestClose}
     >
       <div
         ref={panelRef}
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         onClick={(event) => event.stopPropagation()}
-        className={`ui-panel flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden shadow-overlay outline-none ${SIZE_CLASS[size] || SIZE_CLASS.md} ${className}`}
+        className={`ui-panel flex w-full flex-col overflow-hidden shadow-overlay outline-none ${
+          fullScreenOnMobile
+            ? 'h-dvh max-h-dvh rounded-none sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:rounded-[var(--radius-panel)]'
+            : 'max-h-[calc(100dvh-2rem)]'
+        } ${SIZE_CLASS[size] || SIZE_CLASS.md} ${className}`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
           <div className="min-w-0">
@@ -140,7 +147,11 @@ const Dialog = ({
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">{children}</div>
-        {footer ? <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line px-5 py-4 sm:px-6">{footer}</div> : null}
+        {footer ? (
+          <div className="flex flex-col-reverse gap-3 border-t border-line px-5 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:px-6 [&>*]:w-full sm:[&>*]:w-auto">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body

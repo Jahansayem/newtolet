@@ -11,6 +11,7 @@ import {
   validateCoverImage
 } from '../../services/coverPhotoService';
 import { getDashboardStats } from '../../services/adminService';
+import StatCard from '../../components/ui/StatCard'
 
 const CoverPhotoManagement = () => {
   const [photos, setPhotos] = useState([]);
@@ -210,17 +211,8 @@ const CoverPhotoManagement = () => {
 
   return (
     <div className="space-y-6">
-      {/* Total Users Badge */}
-      <div className="flex items-center justify-end">
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-5 py-3 rounded-xl shadow-lg flex items-center gap-3">
-          <div className="bg-white/20 p-2 rounded-lg">
-            <FiUsers className="text-white text-xl" />
-          </div>
-          <div>
-            <p className="text-gray-900 text-xs font-medium uppercase tracking-wide">Total Users</p>
-            <p className="text-xl font-bold text-white leading-tight">{totalUsers}</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Users" value={totalUsers} icon={<FiUsers />} hint="Visitors who see these banners" />
       </div>
 
       {/* Success Message */}
@@ -520,7 +512,7 @@ const CoverPhotoManagement = () => {
                   <button
                     onClick={() => handleMoveUp(index)}
                     disabled={index === 0}
-                    title="Move up in order"
+                    aria-label="Move up in order"
                     className="flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <FiArrowUp size={16} />
@@ -529,7 +521,7 @@ const CoverPhotoManagement = () => {
                   <button
                     onClick={() => handleMoveDown(index)}
                     disabled={index === photos.length - 1}
-                    title="Move down in order"
+                    aria-label="Move down in order"
                     className="flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <FiArrowDown size={16} />
@@ -537,7 +529,7 @@ const CoverPhotoManagement = () => {
 
                   <button
                     onClick={() => handleDeletePhoto(photo.id)}
-                    title="Delete photo"
+                    aria-label="Delete photo"
                     className="flex items-center justify-center px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
                   >
                     <FiTrash2 size={16} />

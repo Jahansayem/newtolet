@@ -41,6 +41,7 @@ const UserPanelShell = ({ activeKey, title, children, headerActions = null }) =>
       labels={labels}
       logoHref="/"
       stickyTopClassName="top-[var(--nav-h)]"
+      sidebarBreakpoint="xl"
     >
       {children}
     </SharedPanelShell>

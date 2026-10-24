@@ -46,7 +46,7 @@ const AdminPanelApp = () => {
 
   const navItems = useMemo(
     () =>
-      ADMIN_NAV_ITEMS.filter((item) => !item.stage && (item.key === 'home' || access.hasPermission(item.permission))).map((item) => {
+      ADMIN_NAV_ITEMS.filter((item) => !item.stage && access.hasPermission(item.permission)).map((item) => {
         const badge = item.badgeKey && counts ? counts[item.badgeKey] : null
         return { ...item, badge: typeof badge === 'number' ? badge : null, badgeLabel: typeof badge === 'number' ? `${badge} pending` : undefined }
       }),

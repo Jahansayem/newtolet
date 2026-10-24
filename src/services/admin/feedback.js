@@ -42,15 +42,3 @@ export const reviewFeedback = async (feedbackId, { status = null, rejectionReaso
 
 export const archiveFeedback = async (feedbackId, reason = null) =>
   after(await callAdminRpc('admin_archive_feedback', { p_feedback_id: feedbackId, p_reason: reason }))
-
-// ---- compatibility wrappers (actor ids are ignored; the server uses auth.uid()) ----
-export const approveFeedback = (feedbackId) => reviewFeedback(feedbackId, { status: 'approved' })
-export const rejectFeedback = (feedbackId, _userId, reason = 'Rejected by admin') => reviewFeedback(feedbackId, { status: 'rejected', rejectionReason: reason })
-export const updateFeedbackStatus = (feedbackId, isResolved) => reviewFeedback(feedbackId, { isResolved })
-/** @deprecated feedback is archived, never hard-deleted */
-export const deleteFeedback = (feedbackId) => archiveFeedback(feedbackId, 'Removed from the admin panel')
-/** @deprecated use listFeedback */
-export const getAllFeedback = async () => {
-  const result = await listFeedback({ pageSize: 100 })
-  return { data: result.data, error: result.error }
-}

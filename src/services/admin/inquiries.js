@@ -53,13 +53,3 @@ export const updateInquiry = async (inquiryId, { status = null, assignedTo = nul
 
 export const archiveInquiry = async (inquiryId, reason = null) =>
   after(await callAdminRpc('admin_archive_inquiry', { p_inquiry_id: inquiryId, p_reason: reason }))
-
-// ---- compatibility wrappers ----
-export const updateInquiryStatus = (inquiryId, status) => updateInquiry(inquiryId, { status })
-/** @deprecated inquiries are archived, never hard-deleted */
-export const deleteInquiry = (inquiryId) => archiveInquiry(inquiryId, 'Removed from the admin panel')
-/** @deprecated use listInquiries */
-export const getAllPropertyInquiries = async () => {
-  const result = await listInquiries({ pageSize: 100 })
-  return { data: result.data, error: result.error }
-}

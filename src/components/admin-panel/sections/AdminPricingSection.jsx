@@ -20,6 +20,7 @@ import {
   updateUserCredits,
 } from '../../../services/adminService'
 import Dialog from '../../ui/Dialog'
+import PricingVersionsCard from './PricingVersionsCard.jsx'
 import ConfirmDialog from '../../ui/ConfirmDialog'
 
 const SITE_THEME_EVENT = 'site-theme-updated'
@@ -280,13 +281,17 @@ const AdminPricingSection = () => {
             Unlock Cost Settings
           </h3>
           <div className="mt-4 grid gap-4 md:grid-cols-[1fr_1fr_auto]">
-            <input
-              type="number"
-              value={creditCosts.contact_view || 20}
-              onChange={(event) => handleUnlockCostChange(event.target.value)}
-              min="0"
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
-            />
+            <div>
+              <label htmlFor="unlock-cost-credits" className="ui-label">Unlock cost (credits)</label>
+              <input
+                id="unlock-cost-credits"
+                type="number"
+                value={creditCosts.contact_view || 20}
+                onChange={(event) => handleUnlockCostChange(event.target.value)}
+                min="0"
+                className="ui-field"
+              />
+            </div>
             <div className="rounded-[var(--radius-card)] border border-dashed border-brand/30 bg-brand-soft px-4 py-3 text-sm text-ink">
               Shared with contact unlock, photo unlock, and legacy listing cost fields.
             </div>
@@ -301,14 +306,13 @@ const AdminPricingSection = () => {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto]">
-            <select
-              value={siteTheme}
-              onChange={(event) => setSiteTheme(event.target.value)}
-              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
+            <div>
+              <label htmlFor="site-theme-select" className="ui-label">Default site theme</label>
+              <select id="site-theme-select" value={siteTheme} onChange={(event) => setSiteTheme(event.target.value)} className="ui-field">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </div>
             <button
               type="button"
               onClick={handleSaveSiteTheme}
@@ -442,6 +446,8 @@ const AdminPricingSection = () => {
         busy={deletingPackage}
         busyLabel="Deleting…"
       />
+
+      <PricingVersionsCard onRolledBack={loadPricingData} />
 
       {showAddPackageModal ? (
         <ModalShell title="Add Credit Package" onClose={() => setShowAddPackageModal(false)}>

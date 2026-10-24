@@ -44,7 +44,6 @@ export const ADMIN_NAV_ITEMS = [
     icon: FiBarChart2,
     permission: PERMISSIONS.DASHBOARD_VIEW,
     description: 'Listing trends, moderation backlog and payment totals.',
-    stage: 4,
   },
   {
     key: 'properties',
@@ -146,7 +145,6 @@ export const ADMIN_NAV_ITEMS = [
     icon: FiSettings,
     permission: PERMISSIONS.SETTINGS_MANAGE,
     description: 'Roles, theme and platform switches.',
-    stage: 4,
   },
   {
     key: 'audit',
@@ -155,7 +153,6 @@ export const ADMIN_NAV_ITEMS = [
     icon: FiFileText,
     permission: PERMISSIONS.AUDIT_VIEW,
     description: 'Who changed what, and why.',
-    stage: 4,
   },
 ].map((item) => (item.key === 'home' ? item : { ...item, href: tabHref(item.key) }))
 

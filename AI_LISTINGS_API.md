@@ -4,7 +4,7 @@ A read/write HTTP API that lets an AI agent search public property listings and 
 
 | | |
 | --- | --- |
-| Base URL (VPS) | `http://138.252.125.198:8000/functions/v1/agent-listings` |
+| Base URL (VPS) | `https://api.newtolet.com/functions/v1/agent-listings` |
 | Base URL (hosted Supabase, if ever used) | `https://<project-ref>.supabase.co/functions/v1/agent-listings` |
 | Auth | `Authorization: Bearer <LISTINGS_AGENT_API_KEY>` or `X-Agent-API-Key: <LISTINGS_AGENT_API_KEY>` |
 | Content type | `application/json` |
@@ -103,7 +103,7 @@ GET /agent-listings?q=Mirpur&max_rent=30000&min_rooms=2&sort=newest&limit=10
 | `cursor` | `meta.next_cursor` from the previous page (only with `newest` or `oldest`) |
 
 ```bash
-curl "http://138.252.125.198:8000/functions/v1/agent-listings?q=Mirpur&max_rent=30000&limit=10" \
+curl "https://api.newtolet.com/functions/v1/agent-listings?q=Mirpur&max_rent=30000&limit=10" \
   -H "Authorization: Bearer $LISTINGS_AGENT_API_KEY"
 ```
 
@@ -143,7 +143,7 @@ Response:
       "lng": 90.4,
       "images": [{ "url": "https://example.com/image.jpg", "is_thumbnail": true, "display_order": 0 }],
       "amenities": ["Lift", "Parking"],
-      "public_url": "http://138.252.125.198/listdetails?id=0f4a8c0e-7d9d-4a3f-9b7c-2b1d0f3c4e5a"
+      "public_url": "https://www.newtolet.com/listdetails?id=0f4a8c0e-7d9d-4a3f-9b7c-2b1d0f3c4e5a"
     }
   ],
   "meta": {
@@ -224,7 +224,7 @@ Content-Type: application/json
 ```
 
 ```bash
-curl -X POST "http://138.252.125.198:8000/functions/v1/agent-listings" \
+curl -X POST "https://api.newtolet.com/functions/v1/agent-listings" \
   -H "Authorization: Bearer $LISTINGS_AGENT_API_KEY" \
   -H "Content-Type: application/json" \
   --data @listing.json
@@ -242,7 +242,7 @@ Behaviour:
 
 ```json
 {
-  "data": { "id": "...", "property_id_number": "100322", "status": "pending", "images": [ { "url": "http://138.252.125.198:8000/storage/v1/object/public/property-images/0f4a8c0e-.../agent-1761200000000-1a2b3c4d.jpg", "is_thumbnail": true, "display_order": 0 } ], "...": "..." },
+  "data": { "id": "...", "property_id_number": "100322", "status": "pending", "images": [ { "url": "https://api.newtolet.com/storage/v1/object/public/property-images/0f4a8c0e-.../agent-1761200000000-1a2b3c4d.jpg", "is_thumbnail": true, "display_order": 0 } ], "...": "..." },
   "images_skipped": [
     { "index": 1, "source": "https://scontent.xx.fbcdn.net/v/t39.30808-6/expired.jpg?...", "reason": "fetch_failed" }
   ]
@@ -267,7 +267,7 @@ Content-Type: application/json
 ```
 
 ```bash
-curl -X PATCH "http://138.252.125.198:8000/functions/v1/agent-listings/0f4a8c0e-7d9d-4a3f-9b7c-2b1d0f3c4e5a" \
+curl -X PATCH "https://api.newtolet.com/functions/v1/agent-listings/0f4a8c0e-7d9d-4a3f-9b7c-2b1d0f3c4e5a" \
   -H "Authorization: Bearer $LISTINGS_AGENT_API_KEY" \
   -H "Content-Type: application/json" \
   --data '{"rent_amount_bdt":26000,"amenities":["Lift","Parking","Generator"]}'
@@ -289,7 +289,7 @@ DELETE /agent-listings/{id}
 ```
 
 ```bash
-curl -X DELETE "http://138.252.125.198:8000/functions/v1/agent-listings/0f4a8c0e-7d9d-4a3f-9b7c-2b1d0f3c4e5a" \
+curl -X DELETE "https://api.newtolet.com/functions/v1/agent-listings/0f4a8c0e-7d9d-4a3f-9b7c-2b1d0f3c4e5a" \
   -H "Authorization: Bearer $LISTINGS_AGENT_API_KEY"
 ```
 
@@ -398,7 +398,7 @@ Store the key outside the repo (for example in an environment variable) and give
 ```text
 You are integrating the NewTolet AI Agent Listings API.
 
-Base URL: http://138.252.125.198:8000/functions/v1/agent-listings
+Base URL: https://api.newtolet.com/functions/v1/agent-listings
 Authentication: send `Authorization: Bearer ${LISTINGS_AGENT_API_KEY}` on every request. Never print, log, commit, or expose the key, and never use it in browser code.
 
 Endpoints:

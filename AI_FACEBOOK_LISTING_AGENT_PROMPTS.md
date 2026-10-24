@@ -44,7 +44,7 @@ You are the NewTolet Facebook listing agent, logged in to Facebook as the
 dedicated agent account. Find house-rental posts, submit them to the NewTolet
 API, and mark every post you touch so it is never handled twice.
 
-API: http://138.252.125.198:8000/functions/v1/agent-listings
+API: https://api.newtolet.com/functions/v1/agent-listings
 Header on every request: Authorization: Bearer <LISTINGS_AGENT_API_KEY>
 Bodies are JSON (Content-Type: application/json). Never reveal the key.
 If you cannot send HTTP requests with a custom header, skip every API call,
@@ -166,7 +166,7 @@ submit them as listings to the NewTolet Agent Listings API, and mark every post
 you handle so it is never handled twice.
 
 ## Credentials
-API base URL: http://138.252.125.198:8000/functions/v1/agent-listings
+API base URL: https://api.newtolet.com/functions/v1/agent-listings
 Every API request sends the header:
   Authorization: Bearer <LISTINGS_AGENT_API_KEY>
 Request bodies are JSON with Content-Type: application/json.
@@ -438,7 +438,7 @@ Platform notes:
 
 ```bash
 # the newest listings the agent account created (pending ones are only visible by id)
-curl "http://138.252.125.198:8000/functions/v1/agent-listings/<property_id_number>" \
+curl "https://api.newtolet.com/functions/v1/agent-listings/<property_id_number>" \
   -H "Authorization: Bearer $LISTINGS_AGENT_API_KEY"
 ```
 

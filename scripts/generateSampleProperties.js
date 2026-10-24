@@ -32,8 +32,6 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1)
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey)
-
 // Sample data arrays
 const CATEGORIES = ['Family', 'Office', 'Sublet', 'Bachelor', 'Hostel', 'Shop', 'Warehouse', 'Factory']
 const PROPERTY_TYPES = ['Apartment', 'House', 'Office Space', 'Shop', 'Warehouse', 'Factory', 'Hostel', 'Building']

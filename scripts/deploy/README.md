@@ -44,6 +44,24 @@ ssh -i ~/.ssh/newtolet_vps root@138.252.125.198 'bash /root/domain-cutover.sh ne
 before building. Port 8000 stays open so the raw-IP API URL keeps working for
 existing agent integrations; close it in ufw once they have moved.
 
+## Admin dashboard at admin.newtolet.com
+
+The dashboard is the `/admin/` route of the same static build, so the admin
+host shares `/var/www/newtolet/current` and every `upload.sh` release updates
+both hosts. `nginx-newtolet-admin.conf` only redirects `/` to `/admin/` and adds
+`X-Robots-Tag: noindex`. Setup: add a proxied `A admin` record in Cloudflare,
+then run `admin-subdomain.sh` on the VPS (vhost, certificate expansion, and
+`https://admin.newtolet.com/**` appended to `ADDITIONAL_REDIRECT_URLS`):
+
+```bash
+scp -i ~/.ssh/newtolet_vps scripts/deploy/admin-subdomain.sh scripts/deploy/nginx-newtolet-admin.conf root@138.252.125.198:/root/
+ssh -i ~/.ssh/newtolet_vps root@138.252.125.198 'bash /root/admin-subdomain.sh newtolet.com'
+```
+
+Sessions live in `localStorage`, which browsers scope per origin, so an admin
+signed in on `www` must sign in again on `admin`; `AdminRoute` then checks the
+stored user's `is_admin` flag as before.
+
 ## Each deploy
 
 ```bash

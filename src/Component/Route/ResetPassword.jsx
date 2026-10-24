@@ -1,17 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { resetPassword } from '../../services/authService';
 import { supabase } from '../../services/supabaseClient';
+import { buildDashboardHref } from '../../lib/routePaths';
 import { useLanguage } from '../../i18n/useLanguage';
 import LanguageToggle from '../../components/LanguageToggle.jsx';
 import PasswordInput from './PasswordInput.jsx';
 import './Login.css';
 
+// GoTrue reports a bad recovery link by redirecting back with
+// #error=access_denied&error_code=otp_expired&error_description=...
+// supabase-js leaves that hash in place, so we read it ourselves.
+const readRecoveryParams = () => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const searchParams = new URLSearchParams(window.location.search);
+    const pick = (key) => hashParams.get(key) || searchParams.get(key);
+
+    return {
+        error: pick('error'),
+        errorCode: pick('error_code'),
+        errorDescription: pick('error_description'),
+        accessToken: pick('access_token'),
+        refreshToken: pick('refresh_token'),
+        type: pick('type'),
+    };
+};
+
 const ResetPassword = () => {
     const { t } = useLanguage();
     const navigate = useNavigate();
-    const location = useLocation();
     const [isLoading, setIsLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
@@ -43,116 +61,81 @@ const ResetPassword = () => {
 
     const newPassword = watch('newPassword');
 
-    // Check if we're in password recovery mode on component mount
+    // Work out whether this page was opened from a valid recovery link.
+    // Runs once on mount and reads window.location directly: the router shim's
+    // location.hash is empty on the first render, and supabase-js (detectSessionInUrl)
+    // may already have consumed a valid token hash by the time this effect runs.
     useEffect(() => {
-        const checkRecoverySession = async () => {
-            // SSR guard
-            if (typeof window === 'undefined') {
-                return
+        if (typeof window === 'undefined') {
+            return undefined;
+        }
+
+        // The client emits PASSWORD_RECOVERY (or SIGNED_IN) once it has turned the
+        // link's tokens into a session. Listening covers the case where that happens
+        // after the checks below have already run.
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (!isMountedRef.current || !session) return;
+            if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
+                setErrorKey('');
+                setIsRecoveryMode(true);
+                setIsCheckingSession(false);
             }
+        });
 
+        const checkRecoverySession = async () => {
             try {
-                console.log('🔍 Checking for password recovery session...');
-                console.log('📍 Current URL:', window.location.href);
-                console.log('📍 Hash:', location.hash);
-                console.log('📍 Search:', location.search);
+                const params = readRecoveryParams();
 
-                // Parse URL hash for recovery tokens (Supabase puts tokens in hash)
-                const hash = location.hash.substring(1); // Remove the #
-                const hashParams = new URLSearchParams(hash);
+                // 1. GoTrue rejected the link (expired, already used, malformed).
+                if (params.error || params.errorCode || params.errorDescription) {
+                    window.history.replaceState(window.history.state, '', window.location.pathname);
+                    if (isMountedRef.current) {
+                        setErrorKey(
+                            params.errorCode === 'otp_expired'
+                                ? 'auth.reset.errors.invalidLinkExpired'
+                                : 'auth.reset.errors.invalidLink'
+                        );
+                    }
+                    return;
+                }
 
-                const accessToken = hashParams.get('access_token');
-                const refreshToken = hashParams.get('refresh_token');
-                const type = hashParams.get('type');
-
-                console.log('📋 Hash Params:', {
-                    hasAccessToken: !!accessToken,
-                    hasRefreshToken: !!refreshToken,
-                    type: type,
-                    hash: hash.substring(0, 100) // First 100 chars
-                });
-
-                // Method 1: Check for tokens in hash (normal Supabase flow)
-                if (accessToken && refreshToken && type === 'recovery') {
-                    console.log('✅ Recovery link detected in hash!');
-
-                    // Set the session using the tokens from the URL
-                    const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-                        access_token: accessToken,
-                        refresh_token: refreshToken,
+                // 2. Tokens still in the URL (hash normally; query on some mobile browsers).
+                if (params.accessToken && params.refreshToken && params.type === 'recovery') {
+                    const { error: sessionError } = await supabase.auth.setSession({
+                        access_token: params.accessToken,
+                        refresh_token: params.refreshToken,
                     });
 
                     if (sessionError) {
-                        console.error('❌ Session error:', sessionError);
+                        console.error('Password recovery session error:', sessionError);
                         if (isMountedRef.current) {
                             setErrorKey('auth.reset.errors.invalidLinkExpired');
                         }
                         return;
                     }
 
-                    console.log('✅ Session set successfully:', sessionData.session?.user?.email);
                     if (isMountedRef.current) {
                         setIsRecoveryMode(true);
                     }
                     return;
                 }
 
-                // Method 2: Check for tokens in query params (fallback for some mobile browsers)
-                const searchParams = new URLSearchParams(location.search);
-                const queryAccessToken = searchParams.get('access_token');
-                const queryRefreshToken = searchParams.get('refresh_token');
-                const queryType = searchParams.get('type');
-
-                if (queryAccessToken && queryRefreshToken && queryType === 'recovery') {
-                    console.log('✅ Recovery link detected in query params (mobile fallback)!');
-
-                    const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-                        access_token: queryAccessToken,
-                        refresh_token: queryRefreshToken,
-                    });
-
-                    if (sessionError) {
-                        console.error('❌ Session error:', sessionError);
-                        if (isMountedRef.current) {
-                            setErrorKey('auth.reset.errors.invalidLink');
-                        }
-                        return;
-                    }
-
-                    console.log('✅ Session set successfully:', sessionData.session?.user?.email);
-                    if (isMountedRef.current) {
-                        setIsRecoveryMode(true);
-                    }
-                    return;
-                }
-
-                // Method 3: Check if user is already logged in (allow password change)
-                console.log('📧 Checking for existing session...');
+                // 3. supabase-js already exchanged the link for a session (or the user is
+                //    logged in). getSession() waits for that URL detection to finish.
                 const { data: { session } } = await supabase.auth.getSession();
 
                 if (session) {
-                    console.log('✅ User logged in:', session.user?.email);
                     if (isMountedRef.current) {
                         setIsRecoveryMode(true);
                     }
                     return;
                 }
-
-                // No valid recovery method found
-                console.warn('❌ No recovery session found');
-                console.warn('Full URL details:', {
-                    href: window.location.href,
-                    hash: location.hash,
-                    search: location.search,
-                    pathname: location.pathname
-                });
 
                 if (isMountedRef.current) {
                     setErrorKey('auth.reset.errors.invalidResetLink');
                 }
-
             } catch (error) {
-                console.error('❌ Error checking recovery session:', error);
+                console.error('Error checking recovery session:', error);
                 if (isMountedRef.current) {
                     setErrorKey('auth.reset.errors.verifyFailed');
                 }
@@ -164,7 +147,11 @@ const ResetPassword = () => {
         };
 
         checkRecoverySession();
-    }, [location.hash, location.pathname, location.search]);
+
+        return () => {
+            subscription.unsubscribe();
+        };
+    }, []);
 
     const onSubmit = async (data) => {
         // Prevent submission if not in recovery mode
@@ -184,13 +171,13 @@ const ResetPassword = () => {
 
             if (result.success) {
                 if (isMountedRef.current) {
-                    setSuccessMessage(result.message);
+                    setSuccessMessage(t('auth.reset.success'));
                 }
 
-                // Redirect to login after 1.5 seconds
+                // The recovery session is still active, so continue to the dashboard.
                 redirectTimerRef.current = setTimeout(() => {
                     if (isMountedRef.current) {
-                        navigate('/login?reset=success', { replace: true });
+                        navigate(buildDashboardHref(), { replace: true });
                     }
                 }, 1500);
             } else {

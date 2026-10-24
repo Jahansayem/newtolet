@@ -36,6 +36,7 @@ const payments = {
       totalLabel: 'মোট পরিমাণ:',
       processing: 'প্রসেস হচ্ছে...',
       payButton: 'BDT {amount} পরিশোধ করুন',
+      payWithEps: 'কার্ড, বিকাশ, নগদ, রকেট ও অন্যান্য মাধ্যমে EPS দিয়ে পেমেন্ট করুন',
     },
     methods: {
       title: 'পেমেন্ট পদ্ধতি বেছে নিন',

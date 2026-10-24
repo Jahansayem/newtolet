@@ -36,6 +36,7 @@ const payments = {
       totalLabel: 'Total Amount:',
       processing: 'Processing...',
       payButton: 'Pay BDT {amount}',
+      payWithEps: 'Pay with EPS using cards, bKash, Nagad, Rocket and other methods',
     },
     methods: {
       title: 'Select Payment Method',

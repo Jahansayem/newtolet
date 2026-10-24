@@ -141,6 +141,14 @@ const Book = () => {
               ))}
             </div>
           )}
+
+          <img
+            src="/payments/eps-checkout-banner.webp"
+            alt={t('payments.checkout.payWithEps')}
+            className="mt-6 w-full rounded-2xl"
+            loading="lazy"
+            decoding="async"
+          />
         </div>
       </PanelCard>
     </UserPanelShell>

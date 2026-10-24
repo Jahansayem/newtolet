@@ -118,6 +118,20 @@ const Footer = () => {
                     </div>
                 </div>
 
+                {/* EPS merchant badge: the gateway asks merchants to show the accepted-methods strip. */}
+                <div className='border-b border-white/10 py-6'>
+                    <picture>
+                        <source media='(min-width: 768px)' srcSet='/payments/eps-footer-desktop-dark.webp' />
+                        <img
+                            src='/payments/eps-footer-mobile-dark.webp'
+                            alt={t('footer.payWithEps')}
+                            className='mx-auto w-full max-w-5xl'
+                            loading='lazy'
+                            decoding='async'
+                        />
+                    </picture>
+                </div>
+
                 <div className='flex flex-col gap-4 py-6 text-center text-sm text-primary-100/75 md:flex-row md:items-center md:justify-between md:text-left'>
                     <div>
                         <p>{t('footer.copyright', { year: currentYear })}</p>

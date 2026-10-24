@@ -54,7 +54,6 @@ const auth = {
       noAccount: 'Create a new account?',
       registerHere: 'Register here',
       forgotPassword: 'Forgot password?',
-      resetSuccess: 'Password reset successful! Please login with your new password.',
       failed: 'Login failed. Please try again.',
     },
     register: {
@@ -90,6 +89,7 @@ const auth = {
       noAccount: "Don't have an account?",
       registerLink: 'Register',
       failed: 'Failed to send reset email. Please try again.',
+      linkSent: 'Password reset link sent to your email. Check your inbox (and spam folder).',
     },
     reset: {
       title: 'Reset Password',
@@ -99,7 +99,8 @@ const auth = {
       submitting: 'Resetting...',
       errorTitle: 'Error',
       successTitle: 'Success!',
-      redirecting: 'Redirecting to login...',
+      success: 'Your password has been updated.',
+      redirecting: 'Taking you to your dashboard...',
       requestNewLink: 'Request a new reset link',
       rememberPassword: 'Remember your password?',
       loginLink: 'Login',

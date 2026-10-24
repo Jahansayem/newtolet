@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   BiCreditCard,
 } from 'react-icons/bi'
-import { RxCross2 } from 'react-icons/rx'
 import { FaSave } from 'react-icons/fa'
 import { MdAdd, MdSettings } from 'react-icons/md'
 import {
@@ -20,6 +19,8 @@ import {
   updateCreditPackage,
   updateUserCredits,
 } from '../../../services/adminService'
+import Dialog from '../../ui/Dialog'
+import ConfirmDialog from '../../ui/ConfirmDialog'
 
 const SITE_THEME_EVENT = 'site-theme-updated'
 
@@ -31,18 +32,11 @@ const emptyPackage = {
   popular: false,
 }
 
+// Accessible modal (focus trap, Escape, focus return) via the shared Dialog.
 const ModalShell = ({ title, onClose, children }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-    <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
-      <div className="mb-5 flex items-center justify-between">
-        <h3 className="text-xl font-semibold text-slate-900">{title}</h3>
-        <button type="button" onClick={onClose} className="text-2xl text-slate-400 transition hover:text-slate-600">
-          <RxCross2 />
-        </button>
-      </div>
-      {children}
-    </div>
-  </div>
+  <Dialog open onClose={onClose} title={title} size="sm">
+    {children}
+  </Dialog>
 )
 
 const AdminPricingSection = () => {
@@ -61,6 +55,8 @@ const AdminPricingSection = () => {
   const [selectedUserForCredit, setSelectedUserForCredit] = useState(null)
   const [creditAmount, setCreditAmount] = useState(0)
   const [creditAction, setCreditAction] = useState('add')
+  const [deletePackageTarget, setDeletePackageTarget] = useState(null)
+  const [deletingPackage, setDeletingPackage] = useState(false)
 
   const loadPricingData = async () => {
     setLoading(true)
@@ -167,14 +163,20 @@ const AdminPricingSection = () => {
     await loadPricingData()
   }
 
-  const handleDeletePackage = async (packageId) => {
-    if (!window.confirm('Are you sure you want to delete this package?')) {
-      return
-    }
+  // Opens the confirmation dialog; the actual delete runs from confirmDeletePackage.
+  const handleDeletePackage = (packageId) => {
+    const target = creditPackages.find((pkg) => pkg.id === packageId) || { id: packageId }
+    setDeletePackageTarget(target)
+  }
 
-    const { error } = await deleteCreditPackage(packageId)
+  const confirmDeletePackage = async () => {
+    if (!deletePackageTarget) return
+    setDeletingPackage(true)
+    const { error } = await deleteCreditPackage(deletePackageTarget.id)
+    setDeletingPackage(false)
+    setDeletePackageTarget(null)
     if (error) {
-      showMessage('error', 'Failed to delete package')
+      showMessage('error', error.message || 'Failed to delete package')
       return
     }
 
@@ -234,7 +236,7 @@ const AdminPricingSection = () => {
       ) : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div className="rounded-[28px] bg-gradient-to-br from-brand to-brand p-6 text-white shadow-lg shadow-blue-500/15 lg:col-span-2">
+        <div className="rounded-[var(--radius-panel)] bg-ink p-6 text-white shadow-card lg:col-span-2">
           <h2 className="text-2xl font-bold">Credit Pricing Overview</h2>
           <div className="mt-6 grid grid-cols-2 gap-4">
             <div className="rounded-2xl bg-white/10 p-4">
@@ -271,7 +273,7 @@ const AdminPricingSection = () => {
               min="0"
               className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-brand"
             />
-            <div className="rounded-2xl border border-dashed border-[#c8d1ff] bg-[#eef2ff] px-4 py-3 text-sm text-slate-700">
+            <div className="rounded-[var(--radius-card)] border border-dashed border-brand/30 bg-brand-soft px-4 py-3 text-sm text-ink">
               Shared with contact unlock, photo unlock, and legacy listing cost fields.
             </div>
             <button
@@ -335,7 +337,7 @@ const AdminPricingSection = () => {
                 className={`relative rounded-[28px] border p-5 shadow-sm ${
                   pkg.is_active !== false
                     ? pkg.popular
-                      ? 'border-[#c8d1ff] bg-[#eef2ff]'
+                      ? 'border-brand/30 bg-brand-soft'
                       : 'border-slate-200 bg-white'
                     : 'border-slate-200 bg-slate-100 opacity-70'
                 }`}
@@ -415,6 +417,17 @@ const AdminPricingSection = () => {
           ))}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(deletePackageTarget)}
+        onCancel={() => setDeletePackageTarget(null)}
+        onConfirm={confirmDeletePackage}
+        title="Delete this credit package?"
+        description={`"${deletePackageTarget?.name || deletePackageTarget?.package_name || 'This package'}" will no longer be offered. Past purchases keep their records.`}
+        confirmLabel="Delete package"
+        busy={deletingPackage}
+        busyLabel="Deleting…"
+      />
 
       {showAddPackageModal ? (
         <ModalShell title="Add Credit Package" onClose={() => setShowAddPackageModal(false)}>

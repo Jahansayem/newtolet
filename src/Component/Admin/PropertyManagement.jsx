@@ -20,6 +20,7 @@ import { PropertyThumbnailImage } from '../../components/PropertyCardMedia'
 import RentDisplay from '../../components/RentDisplay'
 import { getPropertyDisplayLabel } from '../../utils/propertyDisplaySerial'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import StatCard from '../../components/ui/StatCard'
 
 const PAGE_SIZE = 20
 const PROPERTY_FILTERS = ['all', 'pending', 'approved', 'rejected', 'duplicate_pending']
@@ -781,74 +782,19 @@ const PropertyManagement = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <FiUsers className="text-white text-xl" />
-            </div>
-            <div>
-              <p className="text-blue-100 text-xs font-medium uppercase tracking-wide">Total Users</p>
-              <p className="text-2xl font-bold leading-tight">{totalUsers}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <FiCheck className="text-white text-xl" />
-            </div>
-            <div>
-              <p className="text-green-100 text-xs font-medium uppercase tracking-wide">Approved</p>
-              <p className="text-2xl font-bold leading-tight">{stats.approved}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <FiEye className="text-white text-xl" />
-            </div>
-            <div>
-              <p className="text-yellow-100 text-xs font-medium uppercase tracking-wide">Pending</p>
-              <p className="text-2xl font-bold leading-tight">{stats.pending}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl shadow-lg p-4 text-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <FiX className="text-white text-xl" />
-            </div>
-            <div>
-              <p className="text-red-100 text-xs font-medium uppercase tracking-wide">Rejected</p>
-              <p className="text-2xl font-bold leading-tight">{stats.rejected}</p>
-            </div>
-          </div>
-        </div>
-
-        <button
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <StatCard label="Users" value={totalUsers} icon={<FiUsers />} />
+        <StatCard label="Approved" value={stats.approved} icon={<FiCheck />} />
+        <StatCard label="Pending" value={stats.pending} icon={<FiEye />} tone={stats.pending > 0 ? 'warning' : 'neutral'} />
+        <StatCard label="Rejected" value={stats.rejected} icon={<FiX />} />
+        <StatCard
+          label="Duplicate pending"
+          value={stats.duplicatePending}
+          icon={<FiFilter />}
+          hint={statusFilter === 'duplicate_pending' ? 'Showing duplicates' : 'Open the duplicate queue'}
+          tone={stats.duplicatePending > 0 ? 'danger' : 'neutral'}
           onClick={() => setStatusFilter('duplicate_pending')}
-          className={`rounded-xl shadow-lg p-4 text-white text-left transition ${
-            statusFilter === 'duplicate_pending'
-              ? 'bg-gradient-to-r from-rose-600 to-pink-600 ring-4 ring-rose-200'
-              : 'bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600'
-          }`}
-          type="button"
-        >
-          <div className="flex items-center gap-3">
-            <div className="bg-white/20 p-2 rounded-lg">
-              <FiFilter className="text-white text-xl" />
-            </div>
-            <div>
-              <p className="text-rose-100 text-xs font-medium uppercase tracking-wide">Duplicate Pending</p>
-              <p className="text-2xl font-bold leading-tight">{stats.duplicatePending}</p>
-            </div>
-          </div>
-        </button>
+        />
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
@@ -1095,7 +1041,6 @@ const PropertyManagement = () => {
                     <a
                       href={getAdminEditPropertyHref(property.id)}
                       className="px-3 py-2 bg-brand-soft text-brand-pressed rounded-lg hover:bg-primary-100 transition"
-                      title="Edit property"
                       aria-label="Edit property"
                     >
                       <FiEdit2 size={16} aria-hidden="true" />
@@ -1104,7 +1049,6 @@ const PropertyManagement = () => {
                       onClick={() => requestAction('delete', property.id)}
                       className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
                       type="button"
-                      title="Delete property"
                       aria-label="Delete property"
                     >
                       <FiTrash2 size={16} aria-hidden="true" />

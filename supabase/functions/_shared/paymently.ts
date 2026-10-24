@@ -134,5 +134,10 @@ export const getAuthenticatedContext = async (request: Request) => {
     throw new Error("User profile not found");
   }
 
+  // Deactivated (blocked) accounts keep a valid JWT until it expires; refuse them here.
+  if (profile.is_active === false) {
+    throw new Error("Account is deactivated");
+  }
+
   return { token, user, profile, adminClient };
 };

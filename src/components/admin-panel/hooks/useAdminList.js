@@ -40,6 +40,12 @@ export const useAdminList = ({
   const requestIdRef = useRef(0)
   const abortRef = useRef(null)
   const mountedRef = useRef(true)
+  // Callers often pass inline arrow fetchers; reading through a ref keeps `load`
+  // stable so a new function identity never triggers a refetch loop.
+  const fetcherRef = useRef(fetcher)
+  useEffect(() => {
+    fetcherRef.current = fetcher
+  }, [fetcher])
 
   const params = useMemo(
     () => ({ page, pageSize, sort, filters, search: debouncedSearch.trim() }),
@@ -70,7 +76,7 @@ export const useAdminList = ({
         setStatus((current) => (current === 'loading' ? 'loading' : 'refreshing'))
       }
 
-      const result = await fetcher(params, { signal: controller.signal })
+      const result = await fetcherRef.current(params, { signal: controller.signal })
       if (!mountedRef.current || requestId !== requestIdRef.current || controller.signal.aborted) return
 
       if (result.error) {
@@ -90,7 +96,7 @@ export const useAdminList = ({
       setStatus(rows.length === 0 && (result.totalCount ?? 0) === 0 ? 'empty' : 'ready')
       if (cacheKey) writeAdminSnapshot(cacheKey, { items: rows, totalCount: result.totalCount ?? rows.length, hasMore: Boolean(result.hasMore) })
     },
-    [enabled, fetcher, params, cacheKey]
+    [enabled, params, cacheKey]
   )
 
   useEffect(() => {

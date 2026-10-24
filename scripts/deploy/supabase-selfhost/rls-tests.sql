@@ -476,4 +476,88 @@ end $$;
 select 'PASS T8.1 service role can call approve_credit_payment_transaction without a session';
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- T9. lock-down follow-up (20261101090000): skipped with a notice until that
+--     migration is applied or streamed with --dry-run-lockdown.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if to_regproc('public.prevent_direct_property_moderation_changes') is null then
+    raise notice 'SKIP T9 lock-down checks: 20261101090000_lock_admin_direct_writes.sql not applied';
+  end if;
+end $$;
+
+-- T9.1 moderator cannot moderate a listing with a direct UPDATE (must use the RPC)
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'mod'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'mod'), true);
+do $$
+begin
+  if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
+  begin
+    update public.properties set status = 'rejected' where id = (select id from t_ids where k = 'prop');
+    raise exception 'TEST FAIL: moderator changed a listing status with a direct update';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error on direct status update: %', sqlerrm; end if;
+  end;
+  begin
+    update public.properties set is_featured = true where id = (select id from t_ids where k = 'prop');
+    raise exception 'TEST FAIL: moderator set is_featured with a direct update';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error on direct featured update: %', sqlerrm; end if;
+  end;
+end $$;
+select case when to_regproc('public.prevent_direct_property_moderation_changes') is null then 'SKIP T9.1' else 'PASS T9.1 moderator cannot moderate listings with direct updates' end;
+
+-- T9.2 the RPC path still works for the same moderator
+do $$
+declare r jsonb;
+begin
+  if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
+  r := public.admin_set_property_status(array[(select id from t_ids where k = 'prop')], 'rejected', 'duplicate listing', null, null);
+  if (r->>'count')::int <> 1 then raise exception 'TEST FAIL: RPC rejected % rows, expected 1', r->>'count'; end if;
+end $$;
+select case when to_regproc('public.prevent_direct_property_moderation_changes') is null then 'SKIP T9.2' else 'PASS T9.2 moderator still moderates through admin_set_property_status' end;
+
+-- T9.3 super_admin direct writes on payments / users hit no rows; blacklist insert is refused
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'super'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'super'), true);
+do $$
+declare n int;
+begin
+  if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
+  update public.payment_transactions set review_note = 'direct' where id = (select id from t_ids where k = 'pay');
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'TEST FAIL: super_admin updated a payment row directly (% rows)', n; end if;
+  update public.users set name = 'direct rename' where id = (select id from t_ids where k = 'plain');
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'TEST FAIL: super_admin updated another user''s row directly (% rows)', n; end if;
+  begin
+    insert into public.user_blacklist (user_id, reason, blacklisted_by) values ((select id from t_ids where k = 'plain'), 'direct', auth.uid());
+    raise exception 'TEST FAIL: super_admin inserted a blacklist row directly';
+  exception when others then
+    if sqlerrm like 'TEST FAIL%' then raise; end if;
+    if sqlerrm not like '%row-level security%' then raise exception 'TEST FAIL: unexpected error on direct blacklist insert: %', sqlerrm; end if;
+  end;
+end $$;
+select case when to_regproc('public.prevent_direct_property_moderation_changes') is null then 'SKIP T9.3' else 'PASS T9.3 super_admin direct writes on payments, users and blacklist are refused' end;
+
+-- T9.4 owner may still resubmit (status back to pending) but nothing else
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'plain'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'plain'), true);
+do $$
+begin
+  if to_regproc('public.prevent_direct_property_moderation_changes') is null then return; end if;
+  update public.properties set status = 'pending', reviewed_at = null where id = (select id from t_ids where k = 'prop');
+  if not found then raise exception 'TEST FAIL: owner could not resubmit their listing'; end if;
+  begin
+    update public.properties set status = 'approved' where id = (select id from t_ids where k = 'prop');
+    raise exception 'TEST FAIL: owner approved their own listing';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error on owner self-approval: %', sqlerrm; end if;
+  end;
+end $$;
+select case when to_regproc('public.prevent_direct_property_moderation_changes') is null then 'SKIP T9.4' else 'PASS T9.4 owner can resubmit but not approve their own listing' end;
+reset role;
+
 select 'RLS_TESTS_PASSED';

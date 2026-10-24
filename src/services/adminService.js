@@ -1,4 +1,5 @@
 import { isRecoverableSupabaseError, supabase } from './supabaseClient'
+import { adjustUserCredits } from './admin/users'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 const MAX_LISTING_REPORT_DAYS = 90
@@ -80,119 +81,6 @@ const normalizeReportRange = (rangeOrDays = 7) => {
   }
 }
 
-const normalizePhoneForDuplicateKey = (value) => {
-  if (typeof value !== 'string') {
-    return ''
-  }
-
-  const digits = value.replace(/\D/g, '')
-
-  if (!digits) {
-    return ''
-  }
-
-  return digits.length >= 11 ? digits.slice(-11) : digits
-}
-
-const buildDuplicatePropertyMetadata = (properties = []) => {
-  const countsByPhoneKey = {}
-
-  properties.forEach((property) => {
-    const phoneKey = normalizePhoneForDuplicateKey(property?.contact_number)
-
-    if (!phoneKey) {
-      return
-    }
-
-    countsByPhoneKey[phoneKey] = (countsByPhoneKey[phoneKey] || 0) + 1
-  })
-
-  const duplicatePhoneKeys = new Set(
-    Object.entries(countsByPhoneKey)
-      .filter(([, count]) => count > 1)
-      .map(([phoneKey]) => phoneKey)
-  )
-
-  const duplicateMetadataByPropertyId = {}
-
-  properties.forEach((property) => {
-    if (!property?.id) {
-      return
-    }
-
-    const duplicatePhoneKey = normalizePhoneForDuplicateKey(property.contact_number)
-    const duplicateCount = duplicatePhoneKey ? countsByPhoneKey[duplicatePhoneKey] || 0 : 0
-
-    duplicateMetadataByPropertyId[property.id] = {
-      duplicatePhoneKey,
-      duplicateCount,
-      isDuplicatePhone: duplicatePhoneKeys.has(duplicatePhoneKey),
-    }
-  })
-
-  return {
-    duplicateMetadataByPropertyId,
-    duplicatePhoneKeys,
-  }
-}
-
-const applyDuplicateMetadataToProperties = (properties = [], duplicateMetadataByPropertyId = {}) =>
-  (properties || []).map((property) => ({
-    ...property,
-    ...duplicateMetadataByPropertyId[property.id],
-  }))
-
-const sortPropertiesByCreatedAtDesc = (properties = []) =>
-  [...(properties || [])].sort(
-    (left, right) => new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime()
-  )
-
-const buildDuplicatePhoneGroups = (properties = []) => {
-  const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(properties)
-  const sortedProperties = sortPropertiesByCreatedAtDesc(properties)
-  const allPropertiesByPhoneKey = {}
-  const pendingDuplicateGroupsByPhoneKey = {}
-
-  sortedProperties.forEach((property) => {
-    const duplicateMeta = duplicateMetadataByPropertyId[property.id]
-    const phoneKey = duplicateMeta?.duplicatePhoneKey
-
-    if (!phoneKey) {
-      return
-    }
-
-    if (!allPropertiesByPhoneKey[phoneKey]) {
-      allPropertiesByPhoneKey[phoneKey] = []
-    }
-
-    allPropertiesByPhoneKey[phoneKey].push(property)
-
-    if (property.status !== 'pending' || !duplicateMeta?.isDuplicatePhone) {
-      return
-    }
-
-    if (!pendingDuplicateGroupsByPhoneKey[phoneKey]) {
-      pendingDuplicateGroupsByPhoneKey[phoneKey] = []
-    }
-
-    pendingDuplicateGroupsByPhoneKey[phoneKey].push(property)
-  })
-
-  return Object.entries(pendingDuplicateGroupsByPhoneKey).map(([phoneKey, pendingProperties]) => {
-    const previewProperty = pendingProperties[0]
-
-    return {
-      id: phoneKey,
-      duplicatePhoneKey: phoneKey,
-      contact_number: previewProperty?.contact_number || '',
-      pendingDuplicateCount: pendingProperties.length,
-      totalPropertiesCount: allPropertiesByPhoneKey[phoneKey]?.length || pendingProperties.length,
-      previewProperty,
-      latestPendingCreatedAt: previewProperty?.created_at || null,
-    }
-  })
-}
-
 // Helper function to handle table not found errors
 const handleTableNotFoundError = (error, tableName) => {
   if (error?.code === 'PGRST205' || error?.message?.includes('Could not find the table')) {
@@ -217,648 +105,49 @@ export {
   adjustUserCredits,
 } from './admin/users'
 
-// Get all users
-export const getAllUsers = async () => {
-  try {
-    console.log('Fetching all users from Supabase...')
-    const { data, error, count } = await supabase
-      .from('users')
-      .select('*')
-      .order('created_at', { ascending: false })
+// Direct writes to public.users from the admin UI were removed: is_active,
+// is_employee, is_admin and credits change only through the RPCs above
+// (admin_set_user_active, admin_set_employee_flag, admin_set_user_roles,
+// admin_adjust_user_credits), each of which writes an admin_audit_log row.
+// Accounts are deactivated, never hard-deleted.
 
-    console.log('getAllUsers result:', { dataCount: data?.length, error, count })
+const USER_LOOKUP_CHUNK = 200
 
-    if (error) {
-      console.error('Error in getAllUsers query:', error)
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error fetching users:', error)
-    return { data: null, error }
+const fetchUsersByIds = async (ids = [], columns = 'id, name, email') => {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  const rows = []
+  for (let index = 0; index < unique.length; index += USER_LOOKUP_CHUNK) {
+    const chunk = unique.slice(index, index + USER_LOOKUP_CHUNK)
+    const { data, error } = await supabase.from('users').select(columns).in('id', chunk)
+    if (error) return { data: null, error }
+    rows.push(...(data || []))
   }
-}
-
-// Update user status (block/unblock)
-export const updateUserStatus = async (userId, isActive) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ is_active: isActive })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating user status:', error)
-    return { data: null, error }
-  }
-}
-
-// Delete user
-export const deleteUser = async (userId) => {
-  try {
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', userId)
-
-    if (error) throw error
-    return { error: null }
-  } catch (error) {
-    console.error('Error deleting user:', error)
-    return { error }
-  }
-}
-
-// Make user admin
-export const updateUserRole = async (userId, isAdmin) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({
-        is_admin: isAdmin,
-        ...(isAdmin ? { is_employee: false } : {})
-      })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating user role:', error)
-    return { data: null, error }
-  }
-}
-
-export const updateUserEmployeeStatus = async (userId, isEmployee) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ is_employee: isEmployee })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating employee status:', error)
-    return { data: null, error }
-  }
+  return { data: rows, error: null }
 }
 
 // ==================== PROPERTY MANAGEMENT ====================
-
-const buildPropertyImageMap = (images = []) => {
-  const imageMap = new Map()
-
-  images.forEach((image) => {
-    if (!image?.property_id) {
-      return
-    }
-
-    const normalizedImageUrl = normalizePropertyImageUrl(image.image_url)
-    if (!normalizedImageUrl) {
-      return
-    }
-
-    const existingImages = imageMap.get(image.property_id) || []
-    if (!existingImages.includes(normalizedImageUrl)) {
-      existingImages.push(normalizedImageUrl)
-    }
-    imageMap.set(image.property_id, existingImages)
-  })
-
-  return imageMap
-}
-
-const normalizePropertyImageUrl = (value) => {
-  if (typeof value !== 'string') {
-    return null
-  }
-
-  const trimmedValue = value.trim()
-  if (!trimmedValue) {
-    return null
-  }
-
-  if (/^https?:\/\//i.test(trimmedValue) || trimmedValue.startsWith('data:image/')) {
-    return trimmedValue
-  }
-
-  const bucketPathMatch = trimmedValue.match(/(?:^|\/)property-images\/(.+)$/i)
-  const objectPath = (bucketPathMatch?.[1] || trimmedValue).replace(/^\/+/, '')
-
-  if (!objectPath) {
-    return null
-  }
-
-  const { data } = supabase.storage.from(PROPERTY_IMAGES_BUCKET).getPublicUrl(objectPath)
-  return data?.publicUrl || null
-}
-
-const normalizeSubmitterRecord = (userId, userMap = new Map()) => {
-  const user = userMap.get(userId)
-
-  return {
-    id: userId || null,
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    is_active: user?.is_active !== false,
-  }
-}
-
-const normalizeAdminPropertyRecord = (property, imageMap = new Map(), userMap = new Map()) => ({
-  ...property,
-  submitted_by: normalizeSubmitterRecord(property.user_id, userMap),
-  images: imageMap.get(property.id) || [],
-  primary_image: imageMap.get(property.id)?.[0] || null,
-  status: property.status || 'pending',
-  is_featured: property.is_featured || false,
-  location: {
-    area: property.area,
-    state_district: property.state_district,
-  },
-  pricing: {
-    rent_amount_bdt: property.rent_amount_bdt,
-    rent_period: property.rent_period,
-    is_rent_negotiable: Boolean(property.is_rent_negotiable),
-  },
-})
-
-const fetchPropertyImages = async (propertyIds) => {
-  if (!propertyIds?.length) {
-    return []
-  }
-
-  const { data, error } = await supabase
-    .from('property_images')
-    .select('*')
-    .in('property_id', propertyIds)
-    .order('display_order')
-
-  if (error) {
-    throw error
-  }
-
-  return data || []
-}
-
-const fetchPropertySubmitters = async (properties = []) => {
-  const userIds = Array.from(
-    new Set((properties || []).map((property) => property?.user_id).filter(Boolean))
-  )
-
-  if (!userIds.length) {
-    return new Map()
-  }
-
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, name, email, phone, is_active')
-    .in('id', userIds)
-
-  if (error) {
-    throw error
-  }
-
-  return new Map((data || []).map((user) => [user.id, user]))
-}
-
-export const getAdminPropertyCounts = async () => {
-  try {
-    const [totalResult, approvedResult, pendingResult, rejectedResult, duplicateSourceResult] = await Promise.all([
-      supabase.from('properties').select('id', { count: 'exact', head: true }),
-      supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
-      supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('properties').select('id', { count: 'exact', head: true }).eq('status', 'rejected'),
-      supabase.from('properties').select('id, status, contact_number'),
-    ])
-
-    const queryError =
-      totalResult.error ||
-      approvedResult.error ||
-      pendingResult.error ||
-      rejectedResult.error ||
-      duplicateSourceResult.error
-
-    if (queryError) {
-      throw queryError
-    }
-
-    const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(
-      duplicateSourceResult.data || []
-    )
-    const duplicatePending = (duplicateSourceResult.data || []).filter((property) => {
-      const duplicateMeta = duplicateMetadataByPropertyId[property.id]
-      return property.status === 'pending' && duplicateMeta?.isDuplicatePhone
-    }).length
-
-    return {
-      data: {
-        total: totalResult.count || 0,
-        approved: approvedResult.count || 0,
-        pending: pendingResult.count || 0,
-        rejected: rejectedResult.count || 0,
-        duplicatePending,
-      },
-      error: null,
-    }
-  } catch (error) {
-    console.error('Error fetching property counts:', error)
-    return {
-      data: {
-        total: 0,
-        approved: 0,
-        pending: 0,
-        rejected: 0,
-        duplicatePending: 0,
-      },
-      error,
-    }
-  }
-}
-
-export const getAdminDuplicatePhoneGroupsPage = async ({ page = 1, pageSize = 20 } = {}) => {
-  const safePage = Math.max(1, Number(page) || 1)
-  const safePageSize = Math.max(1, Number(pageSize) || 20)
-  const from = (safePage - 1) * safePageSize
-  const to = from + safePageSize - 1
-
-  try {
-    const { data: allProperties, error } = await supabase
-      .from('properties')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      throw error
-    }
-
-    const allGroups = buildDuplicatePhoneGroups(allProperties || [])
-    const pagedGroups = allGroups.slice(from, to + 1)
-
-    if (!pagedGroups.length) {
-      return {
-        data: [],
-        error: null,
-        page: safePage,
-        pageSize: safePageSize,
-        totalCount: allGroups.length,
-        hasMore: false,
-      }
-    }
-
-    const previewPropertyIds = pagedGroups
-      .map((group) => group.previewProperty?.id)
-      .filter(Boolean)
-    const [propertyImages, userMap] = await Promise.all([
-      fetchPropertyImages(previewPropertyIds),
-      fetchPropertySubmitters(pagedGroups.map((group) => group.previewProperty).filter(Boolean)),
-    ])
-    const imageMap = buildPropertyImageMap(propertyImages)
-    const groupsWithPreview = pagedGroups.map((group) => ({
-      ...group,
-      previewProperty: group.previewProperty
-        ? normalizeAdminPropertyRecord(group.previewProperty, imageMap, userMap)
-        : null,
-    }))
-
-    return {
-      data: groupsWithPreview,
-      error: null,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: allGroups.length,
-      hasMore: to + 1 < allGroups.length,
-    }
-  } catch (error) {
-    console.error('Error fetching duplicate phone groups:', error)
-    return {
-      data: [],
-      error,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: 0,
-      hasMore: false,
-    }
-  }
-}
-
-export const getAdminPropertiesByPhoneGroup = async ({
-  phoneKey = '',
-  page = 1,
-  pageSize = 20,
-} = {}) => {
-  const safePhoneKey = normalizePhoneForDuplicateKey(phoneKey)
-  const safePage = Math.max(1, Number(page) || 1)
-  const safePageSize = Math.max(1, Number(pageSize) || 20)
-  const from = (safePage - 1) * safePageSize
-  const to = from + safePageSize - 1
-
-  if (!safePhoneKey) {
-    return {
-      data: [],
-      error: null,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: 0,
-      hasMore: false,
-    }
-  }
-
-  try {
-    const { data: allProperties, error } = await supabase
-      .from('properties')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      throw error
-    }
-
-    const matchingProperties = sortPropertiesByCreatedAtDesc(allProperties || []).filter(
-      (property) => normalizePhoneForDuplicateKey(property?.contact_number) === safePhoneKey
-    )
-    const pagedProperties = matchingProperties.slice(from, to + 1)
-
-    if (!pagedProperties.length) {
-      return {
-        data: [],
-        error: null,
-        page: safePage,
-        pageSize: safePageSize,
-        totalCount: matchingProperties.length,
-        hasMore: false,
-      }
-    }
-
-    const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(allProperties || [])
-    const propertyIds = pagedProperties.map((property) => property.id)
-    const [propertyImages, userMap] = await Promise.all([
-      fetchPropertyImages(propertyIds),
-      fetchPropertySubmitters(pagedProperties),
-    ])
-    const imageMap = buildPropertyImageMap(propertyImages)
-    const propertiesWithImages = pagedProperties.map((property) =>
-      normalizeAdminPropertyRecord(property, imageMap, userMap)
-    )
-    const propertiesWithDuplicateMetadata = applyDuplicateMetadataToProperties(
-      propertiesWithImages,
-      duplicateMetadataByPropertyId
-    )
-
-    return {
-      data: propertiesWithDuplicateMetadata,
-      error: null,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: matchingProperties.length,
-      hasMore: to + 1 < matchingProperties.length,
-    }
-  } catch (error) {
-    console.error('Error fetching properties by duplicate phone group:', error)
-    return {
-      data: [],
-      error,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: 0,
-      hasMore: false,
-    }
-  }
-}
-
-export const getAdminPropertiesPage = async ({ page = 1, pageSize = 20, status = 'all' } = {}) => {
-  const safePage = Math.max(1, Number(page) || 1)
-  const safePageSize = Math.max(1, Number(pageSize) || 20)
-  const from = (safePage - 1) * safePageSize
-  const to = from + safePageSize - 1
-
-  try {
-    if (status === 'duplicate_pending') {
-      return getAdminDuplicatePhoneGroupsPage({ page: safePage, pageSize: safePageSize })
-    }
-
-    let query = supabase
-      .from('properties')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to)
-
-    if (status && status !== 'all') {
-      query = query.eq('status', status)
-    }
-
-    const { data: properties, error, count } = await query
-
-    if (error) {
-      throw error
-    }
-
-    if (!properties?.length) {
-      return {
-        data: [],
-        error: null,
-        page: safePage,
-        pageSize: safePageSize,
-        totalCount: count || 0,
-        hasMore: false,
-      }
-    }
-
-    const { data: duplicateSourceProperties, error: duplicateSourceError } = await supabase
-      .from('properties')
-      .select('id, contact_number')
-
-    if (duplicateSourceError) {
-      throw duplicateSourceError
-    }
-
-    const { duplicateMetadataByPropertyId } = buildDuplicatePropertyMetadata(
-      duplicateSourceProperties || []
-    )
-    const propertyIds = properties.map((property) => property.id)
-    const [propertyImages, userMap] = await Promise.all([
-      fetchPropertyImages(propertyIds),
-      fetchPropertySubmitters(properties),
-    ])
-    const imageMap = buildPropertyImageMap(propertyImages)
-    const propertiesWithImages = properties.map((property) =>
-      normalizeAdminPropertyRecord(property, imageMap, userMap)
-    )
-    const propertiesWithDuplicateMetadata = applyDuplicateMetadataToProperties(
-      propertiesWithImages,
-      duplicateMetadataByPropertyId
-    )
-
-    return {
-      data: propertiesWithDuplicateMetadata,
-      error: null,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: count || 0,
-      hasMore: from + propertiesWithDuplicateMetadata.length < (count || 0),
-    }
-  } catch (error) {
-    console.error('Error fetching paginated admin properties:', error)
-    return {
-      data: null,
-      error,
-      page: safePage,
-      pageSize: safePageSize,
-      totalCount: 0,
-      hasMore: false,
-    }
-  }
-}
-
-// Get all properties with images
-export const getAllProperties = async () => {
-  try {
-    const { data: properties, error } = await supabase
-      .from('properties')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-
-    if (!properties || properties.length === 0) {
-      return { data: [], error: null }
-    }
-
-    const propertyIds = properties.map((p) => p.id)
-    let imageMap = new Map()
-    let userMap = new Map()
-
-    try {
-      const [propertyImages, submitterMap] = await Promise.all([
-        fetchPropertyImages(propertyIds),
-        fetchPropertySubmitters(properties),
-      ])
-      imageMap = buildPropertyImageMap(propertyImages)
-      userMap = submitterMap
-    } catch (imageError) {
-      console.warn('Unable to load property images or submitters for admin property list. Continuing with partial data.', imageError)
-    }
-
-    const propertiesWithImages = properties.map((property) =>
-      normalizeAdminPropertyRecord(property, imageMap, userMap)
-    )
-
-    return { data: propertiesWithImages, error: null }
-  } catch (error) {
-    console.error('Error fetching properties:', error)
-    return { data: null, error }
-  }
-}
-
-// Update property status (approve/reject/pending)
-export const updatePropertyStatus = async (propertyId, status) => {
-  try {
-    const { data, error } = await supabase
-      .from('properties')
-      .update({
-        status: status,
-        reviewed_at: new Date().toISOString()
-      })
-      .eq('id', propertyId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error updating property status:', error)
-    return { data: null, error }
-  }
-}
-
-export const updatePropertiesStatus = async (propertyIds, status) => {
-  try {
-    const safePropertyIds = Array.isArray(propertyIds) ? propertyIds.filter(Boolean) : []
-
-    if (!safePropertyIds.length) {
-      return { data: [], error: null }
-    }
-
-    const { data, error } = await supabase
-      .from('properties')
-      .update({
-        status,
-        reviewed_at: new Date().toISOString()
-      })
-      .in('id', safePropertyIds)
-      .select('id')
-
-    if (error) throw error
-    return { data: data || [], error: null }
-  } catch (error) {
-    console.error('Error updating property statuses:', error)
-    return { data: null, error }
-  }
-}
-
-export const approveAllPendingProperties = async () => {
-  try {
-    const reviewedAt = new Date().toISOString()
-    const { data, error } = await supabase
-      .from('properties')
-      .update({
-        status: 'approved',
-        reviewed_at: reviewedAt
-      })
-      .eq('status', 'pending')
-      .select('id')
-
-    if (error) throw error
-
-    return {
-      data: {
-        approvedCount: data?.length || 0,
-        properties: data || []
-      },
-      error: null
-    }
-  } catch (error) {
-    console.error('Error approving all pending properties:', error)
-    return { data: null, error }
-  }
-}
-
-// Delete property
-export const deleteProperty = async (propertyId) => {
-  try {
-    const { error } = await supabase
-      .from('properties')
-      .delete()
-      .eq('id', propertyId)
-
-    if (error) throw error
-    return { error: null }
-  } catch (error) {
-    console.error('Error deleting property:', error)
-    return { error }
-  }
-}
-
-// Toggle property featured status
-export const togglePropertyFeatured = async (propertyId, isFeatured) => {
-  try {
-    const { data, error } = await supabase
-      .from('properties')
-      .update({ is_featured: isFeatured })
-      .eq('id', propertyId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    console.error('Error toggling featured status:', error)
-    return { data: null, error }
-  }
-}
+// Property moderation lives in src/services/admin/properties.js (indexed duplicate
+// detection via contact_phone_key + RPCs, bulk status / featured / soft delete via
+// actor-safe RPCs). Old names are kept as compatibility wrappers.
+export {
+  listProperties,
+  getProperty,
+  listDuplicatePhoneGroups,
+  getPropertyCounts,
+  setPropertyStatus,
+  approveAllPending,
+  setPropertyFeatured,
+  softDeleteProperty,
+  getAdminPropertiesPage,
+  getAdminPropertiesByPhoneGroup,
+  getAdminDuplicatePhoneGroupsPage,
+  getAdminPropertyCounts,
+  updatePropertyStatus,
+  updatePropertiesStatus,
+  approveAllPendingProperties,
+  deleteProperty,
+  togglePropertyFeatured,
+} from './admin/properties'
 
 // ==================== FEEDBACK / ORDERS / INQUIRIES / PAYMENTS ====================
 // These domains now live in src/services/admin/* (server-side pagination, RPC-backed
@@ -1029,25 +318,15 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
   const emptyReport = buildEmptySubmitterListingReport(range)
 
   try {
-    const [recentPropertiesResult, usersResult] = await Promise.all([
-      supabase
-        .from('properties')
-        .select('created_at, user_id')
-        .in('status', LISTING_REPORT_STATUSES)
-        .gte('created_at', range.startDate.toISOString())
-        .lte('created_at', range.endDate.toISOString())
-        .order('created_at', { ascending: true }),
-      getAllUsers()
-    ])
+    const recentPropertiesResult = await supabase
+      .from('properties')
+      .select('created_at, user_id')
+      .in('status', LISTING_REPORT_STATUSES)
+      .gte('created_at', range.startDate.toISOString())
+      .lte('created_at', range.endDate.toISOString())
+      .order('created_at', { ascending: true })
 
     if (recentPropertiesResult.error) throw recentPropertiesResult.error
-    if (usersResult.error) throw usersResult.error
-
-    const usersById = new Map(
-      (usersResult.data || [])
-        .filter((user) => user?.id)
-        .map((user) => [user.id, user])
-    )
 
     const submitterIds = Array.from(
       new Set(
@@ -1055,6 +334,15 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
           .map((property) => property?.user_id)
           .filter(Boolean)
       )
+    )
+
+    const usersResult = await fetchUsersByIds(submitterIds)
+    if (usersResult.error) throw usersResult.error
+
+    const usersById = new Map(
+      (usersResult.data || [])
+        .filter((user) => user?.id)
+        .map((user) => [user.id, user])
     )
 
     const submitters = submitterIds
@@ -1136,28 +424,6 @@ export const getDailySubmitterWiseListingReport = async (rangeOrDays = 7) => {
   } catch (error) {
     console.error('Error fetching daily submitter-wise listing report:', error)
     return { data: emptyReport, error }
-  }
-}
-
-export const getDailyEmployeeWiseListingReport = async (days = 7) => {
-  const result = await getDailySubmitterWiseListingReport(days)
-
-  if (!result?.data) {
-    return result
-  }
-
-  return {
-    data: {
-      ...result.data,
-      employees: result.data.submitters,
-      todayCountsByEmployeeId: result.data.todayCountsBySubmitterId,
-      totalsByEmployeeId: result.data.totalsBySubmitterId,
-      dailyRows: result.data.dailyRows.map((day) => ({
-        ...day,
-        countsByEmployeeId: day.countsBySubmitterId
-      }))
-    },
-    error: result.error
   }
 }
 
@@ -1590,25 +856,6 @@ export const getCreditPackages = async () => {
   }
 }
 
-export const saveCreditPackages = async (packages) => {
-  try {
-    const payload = packages.map((packageData) => ({
-      id: packageData.id,
-      ...buildCreditPackagePayload(packageData, true)
-    }))
-
-    const { error } = await supabase
-      .from('credit_packages')
-      .upsert(payload)
-
-    if (error) throw error
-    return { success: true, error: null }
-  } catch (error) {
-    console.error('Error saving credit packages:', error)
-    return { success: false, error }
-  }
-}
-
 export const addCreditPackage = async (packageData) => {
   try {
     let result = await supabase
@@ -1814,36 +1061,28 @@ export const saveSiteTheme = async (theme) => {
   }
 }
 
-// Update user credits manually (admin)
-export const updateUserCredits = async (userId, credits, action = 'set') => {
-  try {
-    let newCredits = credits
+// Compat wrapper for the pricing section. Credits change only through
+// admin_adjust_user_credits (credits.adjust permission, ledger row, audit row);
+// `set` is expressed as a delta guarded by the balance the admin was looking at.
+export const updateUserCredits = async (userId, credits, action = 'set', reason = '') => {
+  const amount = Number.parseInt(credits, 10)
+  const trimmedReason = String(reason || '').trim()
+  const invalid = (message) => ({ data: null, error: { code: 'VALIDATION', message, retryable: false, permissionDenied: false }, auditId: null })
+  if (!userId) return invalid('Select a user first.')
+  if (!Number.isFinite(amount) || amount < 0) return invalid('Enter a valid credit amount.')
+  if (!trimmedReason) return invalid('A reason is required for every credit adjustment.')
 
-    if (action === 'add' || action === 'subtract') {
-      const { data: user, error: fetchError } = await supabase
-        .from('users')
-        .select('credits')
-        .eq('id', userId)
-        .single()
-
-      if (fetchError) throw fetchError
-
-      const currentCredits = user?.credits || 0
-      newCredits = action === 'add' ? currentCredits + credits : Math.max(0, currentCredits - credits)
-    }
-
-    const { data, error } = await supabase
-      .from('users')
-      .update({ credits: newCredits })
-      .eq('id', userId)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    logAdminError('Error updating user credits:', error)
-    return { data: null, error }
+  let delta = amount
+  let expectedBalance = null
+  if (action === 'subtract') delta = -amount
+  if (action === 'set') {
+    const { data: user, error: fetchError } = await supabase.from('users').select('credits').eq('id', userId).single()
+    if (fetchError) return { data: null, error: fetchError, auditId: null }
+    expectedBalance = Number(user?.credits) || 0
+    delta = amount - expectedBalance
   }
+  if (delta === 0) return invalid('The balance is already at that amount.')
+  return adjustUserCredits({ userId, delta, reason: trimmedReason, expectedBalance })
 }
 
 // Get all users with credits
@@ -1863,42 +1102,6 @@ export const getAllUsersWithCredits = async () => {
 }
 
 // ==================== SITE SETTINGS ====================
-
-// Get site settings
-export const getSiteSettings = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('site_settings')
-      .select('*')
-      .single()
-
-    if (error) {
-      const handled = handleTableNotFoundError(error, 'site_settings')
-      if (handled.data !== null) return { data: {}, error: null }
-      throw error
-    }
-    return { data, error: null }
-  } catch (error) {
-    logAdminError('Error fetching site settings:', error)
-    return { data: {}, error: null }
-  }
-}
-
-// Update site settings
-export const updateSiteSettings = async (settings) => {
-  try {
-    const { data, error } = await supabase
-      .from('site_settings')
-      .upsert(settings)
-      .select()
-
-    if (error) throw error
-    return { data, error: null }
-  } catch (error) {
-    logAdminError('Error updating site settings:', error)
-    return { data: null, error }
-  }
-}
 
 // Get auto-approve properties setting
 export const getAutoApproveProperties = async () => {

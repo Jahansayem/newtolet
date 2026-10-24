@@ -9,6 +9,8 @@
 #                        (with its trailing COMMIT removed) so the whole run,
 #                        migration + tests, happens in one transaction that is
 #                        rolled back. Use this BEFORE applying for real.
+#   --dry-run-lockdown   same for 20261101090000_lock_admin_direct_writes.sql
+#                        (the Stage 3 follow-up); enables the T9 checks.
 #
 # Everything runs inside BEGIN ... ROLLBACK, so nothing persists. Identity is
 # switched with SET LOCAL ROLE + request.jwt.claims; `postgres` is a member of
@@ -25,9 +27,11 @@ TARGET="${1:?usage: run-rls-tests.sh HOST [SSH_KEY] [--dry-run-migration]}"
 shift
 SSH_KEY="$HOME/.ssh/newtolet_vps"
 DRY_RUN=0
+DRY_RUN_LOCKDOWN=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run-migration) DRY_RUN=1 ;;
+    --dry-run-lockdown) DRY_RUN_LOCKDOWN=1 ;;
     *) SSH_KEY="$arg" ;;
   esac
 done
@@ -39,6 +43,7 @@ esac
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 TESTS="$REPO/scripts/deploy/supabase-selfhost/rls-tests.sql"
 MIGRATION="$REPO/supabase/migrations/20261025090000_admin_roles_audit_rpcs.sql"
+LOCKDOWN="$REPO/supabase/migrations/20261101090000_lock_admin_direct_writes.sql"
 [[ -f "$TESTS" ]] || { echo "missing $TESTS" >&2; exit 1; }
 
 SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
@@ -48,6 +53,10 @@ build_sql() {
   if [[ "$DRY_RUN" == "1" ]]; then
     echo "-- dry run: migration body without its own begin/commit"
     tr -d '\r' < "$MIGRATION" | sed -e '/^begin;$/d' -e '/^commit;$/d'
+  fi
+  if [[ "$DRY_RUN_LOCKDOWN" == "1" ]]; then
+    echo "-- dry run: lock-down migration body without its own begin/commit"
+    tr -d '' < "$LOCKDOWN" | sed -e '/^begin;$/d' -e '/^commit;$/d'
   fi
   tr -d '\r' < "$TESTS"
   echo "rollback;"

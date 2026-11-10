@@ -1,16 +1,25 @@
-# React + Vite
+# NewTolet
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+House, flat, room and seat rentals across Bangladesh — Dhaka and all 64 districts.
 
-Currently, two official plugins are available:
+NewTolet collects rental offers, publishes them as searchable listings, and lets landlords and tenants connect directly by phone.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## What it does
+- Rental listings with area, rent (BDT), rooms, bathrooms and phone contact
+- Admin review queue for AI-collected listings
+- Search and filtering by district, area and price
 
-## React Compiler
+## Status
+Live and actively maintained. 122+ listings published by automation in November 2026, with manual admin review.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Run it
+See the setup guides in this repo. Copy `.env.local.example` to `.env.local` and fill in your own keys — never commit a real `.env.local`.
 
-## Expanding the ESLint configuration
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md). Please open an issue first for larger changes.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Security
+See [SECURITY.md](SECURITY.md). Do not post secrets, phone numbers of other people, or personal data in issues.
+
+## License
+MIT — see [LICENSE](LICENSE).

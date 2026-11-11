@@ -576,7 +576,8 @@ const EditProperty = () => {
         errors4.images = t('addProperty.validation.imagesMax', { max: 10 })
       }
 
-      const allErrors = { ...errors1, ...errors2, ...errors3, ...errors4 }
+      // Admins can save an incomplete listing: no field is required for them.
+      const allErrors = isAdminEditRequest ? {} : { ...errors1, ...errors2, ...errors3, ...errors4 }
 
       if (Object.keys(allErrors).length > 0) {
         setFormErrors(allErrors)
@@ -725,7 +726,7 @@ const EditProperty = () => {
         </div>
 
         {/* Form Content */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className='space-y-4 md:space-y-6'>
+        <form noValidate={isAdminEditRequest} onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className='space-y-4 md:space-y-6'>
           {/* Section 1: Property Details */}
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
@@ -1273,7 +1274,7 @@ const EditProperty = () => {
               {/* Image Upload */}
               <div>
                 <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>
-                  {t('addProperty.sections.propertyPhotosRequired')}
+                  {t(isAdminEditRequest ? 'addProperty.sections.propertyPhotos' : 'addProperty.sections.propertyPhotosRequired')}
                 </h3>
                 <ImageUploader
                   images={formData.images}

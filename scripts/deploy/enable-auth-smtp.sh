@@ -96,7 +96,8 @@ echo "== 4. verify (password is never printed)"
 docker exec supabase-auth env | grep -E "^GOTRUE_(SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_ADMIN_EMAIL|MAILER_URLPATHS_RECOVERY|SITE_URL)=|^API_EXTERNAL_URL=" | sort
 ANON=$(grep -E "^ANON_KEY=" "$ENV" | cut -d= -f2-)
 API=$(grep -E "^API_EXTERNAL_URL=" "$ENV" | cut -d= -f2-)
-curl -s -o /dev/null -m 15 -w "auth health: %{http_code} (want 200)\n" "$API/health" </dev/null
+# The gateway rejects /auth/v1/* without an apikey (401), so send the anon key.
+curl -s -o /dev/null -m 15 -w "auth health: %{http_code} (want 200)\n" -H "apikey: $ANON" "$API/health" </dev/null
 
 if [[ -n "${TEST_EMAIL:-}" ]]; then
   echo "== 5. smoke: request a password reset for $TEST_EMAIL"

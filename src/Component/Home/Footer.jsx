@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/fa';
 import { IoMdMail } from 'react-icons/io';
 import { FaPhone, FaLocationDot } from 'react-icons/fa6';
@@ -36,6 +36,8 @@ const socialLinks = [
 const Footer = () => {
     const { t, tv } = useLanguage();
     const currentYear = new Date().getFullYear();
+    // The home page is full width, so its footer drops the shell cap to keep edges aligned.
+    const isHomepage = useLocation().pathname === '/';
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -43,7 +45,7 @@ const Footer = () => {
 
     return (
         <footer className='mt-16 bg-ink text-white'>
-            <div className='site-shell py-12 md:py-16'>
+            <div className={`site-shell py-12 md:py-16 ${isHomepage ? 'site-shell-full' : ''}`}>
                 <div className='grid gap-10 border-b border-white/10 pb-12 md:grid-cols-2 xl:grid-cols-[1.3fr_repeat(3,minmax(0,1fr))]'>
                     <div className='space-y-5'>
                         <img

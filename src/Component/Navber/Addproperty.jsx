@@ -585,9 +585,9 @@ const AddPropertyContent = () => {
                 <CounterInput
                   label={t('addProperty.fields.rooms')}
                   ariaKey='Rooms'
-                  value={formData.dining_rooms || 0}
-                  onChange={(val) => updateFormData({ dining_rooms: val })}
-                  error={errors.dining_rooms}
+                  value={formData.total_rooms || 0}
+                  onChange={(val) => updateFormData({ total_rooms: val })}
+                  error={errors.total_rooms}
                   optional
                 />
                 <CheckboxInput

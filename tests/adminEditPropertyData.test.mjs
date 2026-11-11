@@ -19,6 +19,7 @@ test('blank NOT NULL text columns become empty strings', () => {
 
 test('blank number and date columns become null', () => {
   const result = normalizeAdminEditPropertyData({
+    total_rooms: '',
     total_bathrooms: '',
     balcony: undefined,
     room_size_sqft: 'abc',
@@ -28,7 +29,7 @@ test('blank number and date columns become null', () => {
     deadline: undefined,
   })
 
-  for (const column of ['total_bathrooms', 'balcony', 'room_size_sqft', 'lat', 'lng', 'available_from', 'deadline']) {
+  for (const column of ['total_rooms', 'total_bathrooms', 'balcony', 'room_size_sqft', 'lat', 'lng', 'available_from', 'deadline']) {
     assert.equal(result[column], null, column)
   }
 })
@@ -51,6 +52,7 @@ test('complete values pass through, with numeric strings converted', () => {
     contact_number: '01700000000',
     short_description: '',
     sub_area: null,
+    total_rooms: '3',
     total_bathrooms: '2',
     balcony: 0,
     rent_amount_bdt: '15000',
@@ -63,6 +65,6 @@ test('complete values pass through, with numeric strings converted', () => {
   }
   const result = normalizeAdminEditPropertyData(input)
 
-  assert.deepEqual(result, { ...input, total_bathrooms: 2, rent_amount_bdt: 15000 })
+  assert.deepEqual(result, { ...input, total_rooms: 3, total_bathrooms: 2, rent_amount_bdt: 15000 })
   assert.equal(input.total_bathrooms, '2', 'input is not mutated')
 })

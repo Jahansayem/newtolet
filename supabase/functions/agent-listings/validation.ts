@@ -138,6 +138,8 @@ export const REQUIRED_ON_CREATE = [
   "state_district",
   "area",
   "available_from",
+  // Bedroom count. 0 is valid for shops, offices and other listings without rooms.
+  "total_rooms",
 ] as const;
 
 const COUNT_FIELDS = [
@@ -586,6 +588,10 @@ export const validateCreateBody = (body: unknown): ValidatedListing => {
 
   for (const key of REQUIRED_ON_CREATE) {
     if (!(key in body)) ctx.errors.push(`${key} is required`);
+  }
+  // Count fields accept null (it clears them on PATCH), so "present" is not enough here.
+  if ("total_rooms" in body && ctx.fields.total_rooms === null) {
+    ctx.errors.push("total_rooms is required (send 0 when the listing has no rooms)");
   }
 
   const negotiable = ctx.fields.is_rent_negotiable === true;

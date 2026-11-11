@@ -7,7 +7,7 @@ const INITIAL_STATE = {
   // Screen 1
   category: '',
   property_type: 'Apartment', // Default property type
-  dining_rooms: 0,
+  total_rooms: 0,
   living_rooms: 0,
   total_bathrooms: 0,
   balcony: 0,

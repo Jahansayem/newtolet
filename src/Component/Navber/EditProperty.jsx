@@ -241,7 +241,7 @@ const EditProperty = () => {
   const [formData, setFormData] = useState({
     category: '',
     property_type: 'Apartment',
-    dining_rooms: 0,
+    total_rooms: 0,
     living_rooms: 0,
     total_bathrooms: 0,
     balcony: 0,
@@ -374,7 +374,7 @@ const EditProperty = () => {
           id: property.id,
           category: property.category,
           property_type: property.property_type,
-          dining_rooms: property.dining_rooms || 0,
+          total_rooms: property.total_rooms || 0,
           living_rooms: property.living_rooms || 0,
           total_bathrooms: property.total_bathrooms,
           balcony: property.balcony,
@@ -407,7 +407,7 @@ const EditProperty = () => {
         setFormData({
           category: processedProperty.category || '',
           property_type: processedProperty.property_type || 'Apartment',
-          dining_rooms: processedProperty.dining_rooms || 0,
+          total_rooms: processedProperty.total_rooms || 0,
           living_rooms: processedProperty.living_rooms || 0,
           total_bathrooms: processedProperty.total_bathrooms || 0,
           balcony: processedProperty.balcony || 0,
@@ -783,10 +783,11 @@ const EditProperty = () => {
               {/* Specifications Grid */}
               <div className='grid grid-cols-2 lg:grid-cols-6 gap-3 md:gap-4'>
                 <CounterInput
-                  label={t('addProperty.fields.diningRooms')}
-                  value={formData.dining_rooms || 0}
-                  onChange={(val) => updateFormData({ dining_rooms: val })}
-                  error={errors.dining_rooms}
+                  label={t('addProperty.fields.rooms')}
+                  value={formData.total_rooms || 0}
+                  onChange={(val) => updateFormData({ total_rooms: val })}
+                  error={errors.total_rooms}
+                  optional
                 />
                 <CheckboxInput
                   label={t('addProperty.fields.drawingRoom')}

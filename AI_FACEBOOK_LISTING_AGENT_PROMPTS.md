@@ -106,7 +106,10 @@ Required:
 - available_from: YYYY-MM-DD; "available now" → today; no date → first day
   of next month.
 - contact_number: first valid Bangladeshi mobile (01XXXXXXXXX / +8801...).
-Optional, only when stated: sub_area, sector, road, house_plot, total_rooms,
+- total_rooms: integer, always send it. Bedrooms / rooms as written ("২ রুম",
+  "2 bed", "৩ বেড" → 2, 2, 3; one room or one seat → 1). Shop, office,
+  godown or a post with no room count → 0. Never guess a number.
+Optional, only when stated: sub_area, sector, road, house_plot,
 total_bathrooms, balcony, total_kitchen, dining_rooms, living_rooms,
 room_size_sqft, floor_level ("3rd Floor"), occupancy (Only Family | Only
 Male | Only Female | No Restriction), deadline (YYYY-MM-DD), amenities
@@ -272,11 +275,15 @@ Required fields:
   No date at all → the first day of next month.
 - contact_number: the Bangladeshi mobile number from the post, in the form
   01XXXXXXXXX or +8801XXXXXXXXX. Use the first valid number only.
+- total_rooms: integer, always send it. The number of bedrooms / rooms the
+  post states: "২ রুম" / "2 bed" → 2, "৩ বেড" → 3, a single room or one
+  seat → 1. Send 0 for a shop, office, godown or factory with no rooms, and
+  when the post gives no room count. Never guess a number.
 
 Optional fields, send only when the post states them:
 - sub_area ("Mirpur 10", "Sector 7"), sector, road, house_plot
-- total_rooms (bedrooms), total_bathrooms, balcony, total_kitchen,
-  dining_rooms, living_rooms (integers)
+- total_bathrooms, balcony, total_kitchen, dining_rooms, living_rooms
+  (integers)
 - room_size_sqft (integer), floor_level ("3rd Floor", "Ground Floor")
 - occupancy: Only Family / Only Male / Only Female / No Restriction when the
   post restricts tenants

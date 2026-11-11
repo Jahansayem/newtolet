@@ -451,7 +451,8 @@ export const submitPropertyListing = async (
       user_id: userId,
       category: formData.category,
       property_type: formData.property_type || 'Apartment', // Default to Apartment if not provided
-      dining_rooms: formData.dining_rooms || 0,
+      // Room count is optional; 0 is stored as NULL so the listing shows "N/A".
+      total_rooms: formData.total_rooms > 0 ? Number(formData.total_rooms) : null,
       living_rooms: formData.living_rooms || 0,
       total_bathrooms: formData.total_bathrooms,
       balcony: formData.balcony,
@@ -841,7 +842,8 @@ export const updatePropertyWithImages = async (
     const propertyData = {
       category: formData.category,
       property_type: formData.property_type || 'Apartment',
-      dining_rooms: formData.dining_rooms || 0,
+      // dining_rooms is not on the form, so it is left out and keeps its stored value.
+      total_rooms: formData.total_rooms > 0 ? Number(formData.total_rooms) : null,
       living_rooms: formData.living_rooms || 0,
       total_bathrooms: formData.total_bathrooms,
       balcony: formData.balcony,
@@ -1026,6 +1028,7 @@ export const getPropertyForEdit = async (propertyId) => {
       id: property.id,
       category: property.category,
       property_type: property.property_type,
+      total_rooms: property.total_rooms || 0,
       dining_rooms: property.dining_rooms || 0,
       living_rooms: property.living_rooms || 0,
       total_bathrooms: property.total_bathrooms,

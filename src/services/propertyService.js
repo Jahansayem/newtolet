@@ -25,6 +25,7 @@ import {
   invalidatePropertyCatalogSnapshots,
 } from './propertyCatalogService'
 import { isPropertyActivelyPinned } from '../utils/propertyPinning'
+import { normalizeAdminEditPropertyData } from '../utils/adminEditPropertyData'
 import { getAutoApproveProperties } from './adminService'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
@@ -871,10 +872,13 @@ export const updatePropertyWithImages = async (
           : null,
     }
 
+    // Admin edits have no required fields, so reshape blanks into values the columns accept.
+    const updatePayload = allowAdminEdit ? normalizeAdminEditPropertyData(propertyData) : propertyData
+
     // Update property record
     const { error: updateError } = await supabase
       .from('properties')
-      .update(propertyData)
+      .update(updatePayload)
       .eq('id', propertyId)
 
     if (updateError) {
@@ -897,8 +901,8 @@ export const updatePropertyWithImages = async (
       allImageUrls = [...allImageUrls, ...newImageUrls]
     }
 
-    // Ensure we have at least 1 image
-    if (allImageUrls.length < 1) {
+    // Ensure we have at least 1 image (admins may save a listing with none)
+    if (allImageUrls.length < 1 && !allowAdminEdit) {
       throw new Error('Please upload at least 1 image')
     }
 
@@ -910,12 +914,14 @@ export const updatePropertyWithImages = async (
       display_order: index,
     }))
 
-    const { error: imagesError } = await supabase
-      .from('property_images')
-      .insert(propertyImagesData)
+    if (propertyImagesData.length > 0) {
+      const { error: imagesError } = await supabase
+        .from('property_images')
+        .insert(propertyImagesData)
 
-    if (imagesError) {
-      throw new Error(`Failed to save image records: ${imagesError.message}`)
+      if (imagesError) {
+        throw new Error(`Failed to save image records: ${imagesError.message}`)
+      }
     }
 
     // Update amenities - delete old and insert new

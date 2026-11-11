@@ -64,7 +64,7 @@ export const validateScreen1Codes = (data) => {
 
   // property_type validation removed - field no longer exists
 
-  // dining_rooms and living_rooms are optional, no validation needed
+  // total_rooms and living_rooms are optional, no validation needed
 
   if (!data.total_bathrooms || data.total_bathrooms < 0) {
     errors.total_bathrooms = { code: 'bathroomsInvalid' }

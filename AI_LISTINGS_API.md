@@ -349,7 +349,8 @@ All fields are optional on PATCH. Required on POST are marked.
 | `rent_amount_bdt` | integer | Required unless `is_rent_negotiable` is `true`. 1 to 100,000,000 |
 | `is_rent_negotiable` | boolean | Default `false` |
 | `occupancy` | string | One of `No Restriction`, `Only Family`, `Only Male`, `Only Female` |
-| `total_rooms`, `total_bathrooms`, `balcony`, `total_kitchen`, `dining_rooms`, `living_rooms` | integer | 0 to 1000 |
+| `total_rooms` | integer | **Required.** Bedroom / room count, 0 to 1000. Send `0` when the listing has no rooms (shop, office) or the source gives no count |
+| `total_bathrooms`, `balcony`, `total_kitchen`, `dining_rooms`, `living_rooms` | integer | 0 to 1000 |
 | `room_size_sqft` | integer | 1 to 1,000,000 |
 | `floor_level` | string | Free text up to 40 chars, e.g. `3rd Floor`, `Ground Floor` |
 | `sub_area`, `sector`, `road`, `house_plot` | string | Up to 120 chars; `null` clears |

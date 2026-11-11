@@ -16,6 +16,7 @@ const NOT_NULL_TEXT_COLUMNS = [
 ]
 
 const NUMBER_COLUMNS = [
+  'total_rooms',
   'dining_rooms',
   'living_rooms',
   'total_bathrooms',

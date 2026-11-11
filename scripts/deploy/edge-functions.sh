@@ -293,7 +293,7 @@ if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx agent-listings; then
   # Optional end-to-end image check: create a listing with one remote image, verify the
   # stored copy is served from the public base, then soft-delete the listing.
   if [[ -n "${SMOKE_IMAGE_URL:-}" ]]; then
-    BODY="$(printf '{"category":"Family","property_type":"Apartment","rent_period":"Monthly","rent_amount_bdt":1,"state_district":"Dhaka","area":"Smoke Test","available_from":"%s","contact_number":"01700000000","short_description":"Deployment smoke test listing, safe to reject.","images":[{"image_url":"%s"}]}' "$(date +%Y-%m-%d)" "$SMOKE_IMAGE_URL")"
+    BODY="$(printf '{"category":"Family","property_type":"Apartment","total_rooms":0,"rent_period":"Monthly","rent_amount_bdt":1,"state_district":"Dhaka","area":"Smoke Test","available_from":"%s","contact_number":"01700000000","short_description":"Deployment smoke test listing, safe to reject.","images":[{"image_url":"%s"}]}' "$(date +%Y-%m-%d)" "$SMOKE_IMAGE_URL")"
     CREATE="$(curl -s -o /tmp/agent-smoke-create.json -w '%{http_code}' --max-time 90 -X POST "$BASE" \
       -H "X-Agent-API-Key: $KEY" -H "Content-Type: application/json" --data "$BODY" </dev/null)"
     LISTING_ID="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("data",{}).get("id",""))' /tmp/agent-smoke-create.json 2>/dev/null </dev/null || true)"

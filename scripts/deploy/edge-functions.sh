@@ -174,7 +174,7 @@ if ! [[ "$EXTRA_COUNT" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 if (( EXTRA_COUNT > 0 )); then
-  KEY_LIST="$(get_env LISTINGS_AGENT_API_KEYS)"
+  KEY_LIST="$(get_env LISTINGS_AGENT_API_KEYS || true)"   # absent on the first run
   ADDED=""
   for n in $(seq 2 $((EXTRA_COUNT + 1))); do
     label="agent-$n"
@@ -196,7 +196,7 @@ KEYS_FILE=/root/agent-api-keys.txt
   umask 077
   {
     echo "agent-1 $(get_env LISTINGS_AGENT_API_KEY)"
-    get_env LISTINGS_AGENT_API_KEYS | tr ',' '\n' | sed 's/:/ /' | grep . || true
+    { get_env LISTINGS_AGENT_API_KEYS || true; } | tr ',' '\n' | sed 's/:/ /' | grep . || true
   } > "$KEYS_FILE"
 )
 chmod 600 "$KEYS_FILE"

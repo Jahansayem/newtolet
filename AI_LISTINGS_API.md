@@ -24,7 +24,7 @@ The VPS has no domain or TLS yet, so the URL is plain HTTP. Switch the base URL 
 
 ## Configuration and deployment
 
-Two server-only secrets are required. Never prefix them with `NEXT_PUBLIC_` and never put them in browser code, commits, or logs.
+Two server-only secrets are required (a third is optional, see "More than one agent"). Never prefix them with `NEXT_PUBLIC_` and never put them in browser code, commits, or logs.
 
 ```
 LISTINGS_AGENT_API_KEY=replace-with-a-long-random-secret
@@ -32,6 +32,33 @@ LISTINGS_AGENT_USER_ID=replace-with-the-agent-owner-user-uuid
 ```
 
 `LISTINGS_AGENT_USER_ID` is the uuid of the user that owns every listing the agent creates. Use a dedicated account (for example `ai-agent@newtolet.com`), not a personal admin.
+
+### More than one agent
+
+Give each agent its own key so one can be revoked without interrupting the others. A third, optional secret holds the additional keys as comma-separated `label:key` pairs:
+
+```
+LISTINGS_AGENT_API_KEYS=agent-2:<64-hex-secret>,agent-3:<64-hex-secret>
+```
+
+- `LISTINGS_AGENT_API_KEY` stays valid and is labelled `agent-1`.
+- Labels are letters, digits, `-` and `_` (max 32 characters) and must be unique. Each key must be at least 32 characters. A malformed entry makes every request fail with `500 Agent API is not configured`, so the mistake is noticed at deploy time.
+- All keys act as the same owner account (`LISTINGS_AGENT_USER_ID`): any key can read, edit, and delete listings created with any other key.
+- The function logs one line per write, `agent-listings <label> <METHOD> <path>`, never the key. Read it with `docker logs supabase-edge-functions 2>&1 | grep "agent-listings agent-"`.
+
+On the VPS, `AGENT_EXTRA_KEYS=<n>` makes sure `agent-2` … `agent-<n+1>` exist. Missing keys are generated; existing keys are never rotated, so the command is safe to repeat:
+
+```bash
+AGENT_EXTRA_KEYS=7 bash scripts/deploy/edge-functions.sh 138.252.125.198
+```
+
+The keys are not printed. Every deploy writes all of them, one `label key` pair per line, to `/root/agent-api-keys.txt` (chmod 600) on the server:
+
+```bash
+ssh -i ~/.ssh/newtolet_vps root@138.252.125.198 cat /root/agent-api-keys.txt
+```
+
+To revoke a key, delete its `label:key` pair from `LISTINGS_AGENT_API_KEYS` in `/opt/supabase/.env` and run `cd /opt/supabase && docker compose up -d --no-deps functions`. To replace it, revoke it and then run the `AGENT_EXTRA_KEYS` command again; the missing label gets a new key.
 
 ### Self-hosted stack on the VPS (current setup)
 
@@ -80,7 +107,7 @@ Authorization: Bearer your-long-random-secret
 X-Agent-API-Key: your-long-random-secret
 ```
 
-A missing or wrong key returns `401 {"error":"Unauthorized"}`. Keys are compared in constant time.
+A missing or wrong key returns `401 {"error":"Unauthorized"}`. Keys are compared in constant time. Any configured key is accepted (the original key or one from `LISTINGS_AGENT_API_KEYS`).
 
 ## Search listings
 

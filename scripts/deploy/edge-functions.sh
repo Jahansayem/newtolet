@@ -11,6 +11,10 @@
 # Environment (all optional once the server .env already has them):
 #   AGENT_USER_ID  value for LISTINGS_AGENT_USER_ID (from create-agent-owner.sh)
 #   AGENT_API_KEY  value for LISTINGS_AGENT_API_KEY; generated with openssl if absent
+#   AGENT_EXTRA_KEYS  number of additional agent keys that must exist (labels agent-2 ..
+#                  agent-<n+1> in LISTINGS_AGENT_API_KEYS). Missing ones are generated;
+#                  existing ones are never rotated. Keys are not printed: they are written
+#                  to /root/agent-api-keys.txt (chmod 600) on the server.
 #   SITE_URL       value for NEXT_PUBLIC_SITE_URL inside the functions container
 #   PUBLIC_URL     value for SUPABASE_PUBLIC_URL inside the functions container (the
 #                  browser-reachable Supabase URL, e.g. https://api.newtolet.com);
@@ -73,7 +77,7 @@ scp "${SSH_OPTS[@]}" -q "$ARCHIVE" "$TARGET:/tmp/$ARCHIVE"
 echo "installing on the server"
 # Values are %q-quoted so passwords with shell metacharacters survive the ssh command line.
 REMOTE_ENV=()
-for key in AGENT_USER_ID AGENT_API_KEY SMOKE_IMAGE_URL \
+for key in AGENT_USER_ID AGENT_API_KEY AGENT_EXTRA_KEYS SMOKE_IMAGE_URL \
   EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY EPS_TRANSACTION_TYPE_ID; do
   REMOTE_ENV+=("$(printf '%s=%q' "$key" "${!key:-}")")
 done
@@ -111,6 +115,8 @@ services:
   functions:
     environment:
       LISTINGS_AGENT_API_KEY: ${LISTINGS_AGENT_API_KEY}
+      # Additional agent keys as label:key,label:key (optional).
+      LISTINGS_AGENT_API_KEYS: ${LISTINGS_AGENT_API_KEYS:-}
       LISTINGS_AGENT_USER_ID: ${LISTINGS_AGENT_USER_ID}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SITE_URL}}
       # Browser-reachable Supabase URL; agent-listings builds stored image URLs from it.
@@ -125,6 +131,10 @@ services:
       EPS_TRANSACTION_TYPE_ID: ${EPS_TRANSACTION_TYPE_ID:-}
 YAML
   echo "wrote $OVERRIDE"
+elif ! grep -q "LISTINGS_AGENT_API_KEYS:" "$OVERRIDE"; then
+  # Older override: add the one new line in place so blocks other scripts added survive.
+  sed -i 's|^\( *\)LISTINGS_AGENT_API_KEY: .*|&\n\1LISTINGS_AGENT_API_KEYS: ${LISTINGS_AGENT_API_KEYS:-}|' "$OVERRIDE"
+  echo "added LISTINGS_AGENT_API_KEYS to $OVERRIDE"
 fi
 
 # 3. Secrets and COMPOSE_FILE in .env.
@@ -156,6 +166,41 @@ elif [[ -z "$(get_env LISTINGS_AGENT_API_KEY)" ]]; then
   echo "generated LISTINGS_AGENT_API_KEY (shown once, store it in your agent config):"
   echo "  $GENERATED"
 fi
+
+# Additional agent keys: make sure agent-2 .. agent-<n+1> exist, never rotate existing ones.
+EXTRA_COUNT="${AGENT_EXTRA_KEYS:-0}"
+if ! [[ "$EXTRA_COUNT" =~ ^[0-9]+$ ]]; then
+  echo "AGENT_EXTRA_KEYS must be a whole number, got '$EXTRA_COUNT'" >&2
+  exit 1
+fi
+if (( EXTRA_COUNT > 0 )); then
+  KEY_LIST="$(get_env LISTINGS_AGENT_API_KEYS)"
+  ADDED=""
+  for n in $(seq 2 $((EXTRA_COUNT + 1))); do
+    label="agent-$n"
+    case ",$KEY_LIST" in *",$label:"*) continue ;; esac
+    KEY_LIST="${KEY_LIST:+$KEY_LIST,}$label:$(openssl rand -hex 32)"
+    ADDED="$ADDED $label"
+  done
+  if [[ -n "$ADDED" ]]; then
+    set_env LISTINGS_AGENT_API_KEYS "$KEY_LIST"
+    echo "generated agent keys:$ADDED"
+  else
+    echo "agent keys agent-2..agent-$((EXTRA_COUNT + 1)) already exist; none generated"
+  fi
+fi
+
+# One "label key" line per configured key, for the operator and the smoke test below.
+KEYS_FILE=/root/agent-api-keys.txt
+(
+  umask 077
+  {
+    echo "agent-1 $(get_env LISTINGS_AGENT_API_KEY)"
+    get_env LISTINGS_AGENT_API_KEYS | tr ',' '\n' | sed 's/:/ /' | grep . || true
+  } > "$KEYS_FILE"
+)
+chmod 600 "$KEYS_FILE"
+echo "agent keys on file: $(cut -d' ' -f1 "$KEYS_FILE" | tr '\n' ' ')(read them with: cat $KEYS_FILE)"
 
 if [[ -n "${AGENT_USER_ID:-}" ]]; then
   set_env LISTINGS_AGENT_USER_ID "$AGENT_USER_ID"
@@ -228,8 +273,15 @@ if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx agent-listings; then
   BASE="http://127.0.0.1:${PORT}/functions/v1/agent-listings"
   NOKEY="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$BASE?limit=1" </dev/null)"
   WITHKEY="$(curl -s -o /tmp/agent-smoke.json -w '%{http_code}' --max-time 60 "$BASE?limit=1" -H "X-Agent-API-Key: $KEY" </dev/null)"
-  echo "smoke: no key -> $NOKEY (expect 401), with key -> $WITHKEY (expect 200)"
-  if [[ "$WITHKEY" != "200" ]]; then
+  WRONGKEY="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$BASE?limit=1" -H "X-Agent-API-Key: $(openssl rand -hex 32)" </dev/null)"
+  echo "smoke: no key -> $NOKEY (expect 401), wrong key -> $WRONGKEY (expect 401), with key -> $WITHKEY (expect 200)"
+  # Every configured key must be accepted, and nothing else.
+  while read -r label labelled_key; do
+    CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$BASE?limit=1" -H "Authorization: Bearer $labelled_key" </dev/null)"
+    echo "smoke: $label -> $CODE (expect 200)"
+    [[ "$CODE" == "200" ]] || WITHKEY="$label:$CODE"
+  done < "$KEYS_FILE"
+  if [[ "$WITHKEY" != "200" || "$NOKEY" != "401" || "$WRONGKEY" != "401" ]]; then
     head -c 600 /tmp/agent-smoke.json; echo
     echo "--- recent functions logs ---"
     docker logs supabase-edge-functions --tail 40 2>&1 </dev/null | tail -40

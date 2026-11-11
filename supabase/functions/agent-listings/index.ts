@@ -1,15 +1,17 @@
 // AI Agent Listings API.
 //
-// Read/write access to property listings for a single configured AI agent.
+// Read/write access to property listings for the configured AI agents.
 //   GET    /agent-listings          search approved, active listings
 //   GET    /agent-listings/{id}     one listing (public, or owned by the agent in any status)
 //   POST   /agent-listings          create a pending listing owned by LISTINGS_AGENT_USER_ID
 //   PATCH  /agent-listings/{id}     edit an owned listing (status returns to pending)
 //   DELETE /agent-listings/{id}     soft delete an owned listing (is_active = false)
 //
-// Authentication is a shared secret (LISTINGS_AGENT_API_KEY) sent as
-// `Authorization: Bearer <key>` or `X-Agent-API-Key: <key>`. The service-role
-// client bypasses RLS, so every write is scoped to the agent owner in code.
+// Authentication is a secret key sent as `Authorization: Bearer <key>` or
+// `X-Agent-API-Key: <key>`. LISTINGS_AGENT_API_KEY is the original key ("agent-1");
+// LISTINGS_AGENT_API_KEYS adds more as `label:key,label:key`. Every key acts as the
+// same owner account. The service-role client bypasses RLS, so every write is
+// scoped to the agent owner in code.
 //
 // Images sent as `image_url` or `image_base64` are copied into the
 // `property-images` bucket (see images.ts); `images_skipped` in the POST/PATCH
@@ -155,10 +157,47 @@ const encodeCursor = (createdAt: string) =>
 // Configuration and authentication
 // ---------------------------------------------------------------------------
 
-const getAgentApiKey = () => {
-  const value = Deno.env.get("LISTINGS_AGENT_API_KEY")?.trim();
-  if (!value) throw new ConfigError("LISTINGS_AGENT_API_KEY is not set");
-  return value;
+type AgentKey = { label: string; key: string };
+
+const PRIMARY_KEY_LABEL = "agent-1";
+const MIN_EXTRA_KEY_LENGTH = 32;
+const KEY_LABEL_REGEX = /^[a-z0-9][a-z0-9_-]{0,31}$/i;
+
+/**
+ * Every key that may call this API. LISTINGS_AGENT_API_KEY is the original key
+ * ("agent-1"); LISTINGS_AGENT_API_KEYS adds more as comma-separated `label:key`
+ * pairs. All keys act as the same owner account; the label only identifies the
+ * caller in the logs and lets one key be revoked without touching the others.
+ */
+const getAgentKeys = (): AgentKey[] => {
+  const primary = Deno.env.get("LISTINGS_AGENT_API_KEY")?.trim();
+  if (!primary) throw new ConfigError("LISTINGS_AGENT_API_KEY is not set");
+
+  const keys: AgentKey[] = [{ label: PRIMARY_KEY_LABEL, key: primary }];
+  const extras = (Deno.env.get("LISTINGS_AGENT_API_KEYS") || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  for (const entry of extras) {
+    const separator = entry.indexOf(":");
+    const label = separator > 0 ? entry.slice(0, separator).trim().toLowerCase() : "";
+    const key = separator > 0 ? entry.slice(separator + 1).trim() : "";
+    // Messages name the label only; the key must never reach the logs.
+    if (!KEY_LABEL_REGEX.test(label)) {
+      throw new ConfigError("LISTINGS_AGENT_API_KEYS has an entry that is not label:key");
+    }
+    if (key.length < MIN_EXTRA_KEY_LENGTH) {
+      throw new ConfigError(
+        `LISTINGS_AGENT_API_KEYS: key "${label}" is shorter than ${MIN_EXTRA_KEY_LENGTH} characters`,
+      );
+    }
+    if (keys.some((existing) => existing.label === label)) {
+      throw new ConfigError(`LISTINGS_AGENT_API_KEYS: label "${label}" is used twice`);
+    }
+    keys.push({ label, key });
+  }
+  return keys;
 };
 
 const getAgentUserId = () => {
@@ -206,18 +245,25 @@ const secretsMatch = async (candidate: string, expected: string) => {
   return diff === 0;
 };
 
-const isAuthorized = async (request: Request) => {
-  const configuredKey = getAgentApiKey();
+/** Returns the label of the key the request carries, or null when no configured key matches. */
+const authenticate = async (request: Request) => {
+  const agentKeys = getAgentKeys();
   const authorization = request.headers.get("authorization") || "";
   const bearer = authorization.toLowerCase().startsWith("bearer ")
     ? authorization.slice(7).trim()
     : "";
   const headerKey = (request.headers.get("x-agent-api-key") || "").trim();
 
+  // Check every key without stopping at the first match, so the response time
+  // does not show which configured key (if any) matched.
+  let matched: string | null = null;
   for (const candidate of [bearer, headerKey]) {
-    if (candidate && (await secretsMatch(candidate, configuredKey))) return true;
+    if (!candidate) continue;
+    for (const { label, key } of agentKeys) {
+      if ((await secretsMatch(candidate, key)) && matched === null) matched = label;
+    }
   }
-  return false;
+  return matched;
 };
 
 // ---------------------------------------------------------------------------
@@ -721,7 +767,12 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    if (!(await isAuthorized(request))) return json({ error: "Unauthorized" }, 401);
+    const keyLabel = await authenticate(request);
+    if (!keyLabel) return json({ error: "Unauthorized" }, 401);
+    // Audit trail for writes: which key did what. The label is logged, never the key.
+    if (request.method !== "GET") {
+      console.log(`agent-listings ${keyLabel} ${request.method} ${new URL(request.url).pathname}`);
+    }
     return await handle(request);
   } catch (error) {
     if (error instanceof ValidationError) {

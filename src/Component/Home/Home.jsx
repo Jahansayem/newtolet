@@ -59,7 +59,7 @@ const CategorySectionsFallback = () => (
                     <div className='mt-2 h-4 w-48 rounded-md bg-slate-200' />
                 </div>
                 {/* Same grid and card proportions as the real section so content does not shift in. */}
-                <div className='grid grid-cols-1 gap-4 gap-y-6 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'>
+                <div className='grid grid-cols-1 gap-4 gap-y-6 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'>
                     {Array.from({ length: 4 }).map((_, index) => (
                         <ListingCardSkeleton key={`${category}-${index}`} />
                     ))}
@@ -367,7 +367,7 @@ const Home = () => {
     }, []);
 
     return (
-        <div className='site-shell min-h-screen py-5 md:py-6'>
+        <div className='site-shell site-shell-full min-h-screen py-5 md:py-6'>
             <div ref={stickySentinelRef} className='h-0 w-full' aria-hidden='true' />
             <div
                 ref={stickyBarRef}
@@ -448,7 +448,7 @@ const Home = () => {
                                         </Link>
                                     </div>
 
-                                    <div className='grid grid-cols-1 gap-4 gap-y-6 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'>
+                                    <div className='grid grid-cols-1 gap-4 gap-y-6 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'>
                                         {items.map((item, index) => (
                                             <PropertyListingCard
                                                 key={item.id || `${category}-${index}`}

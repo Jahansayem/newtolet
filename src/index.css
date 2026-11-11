@@ -328,6 +328,11 @@ html[data-theme='dark'] .shadow-xl {
     padding-inline: clamp(1rem, 3.5vw, 2rem);
   }
   
+  /* Opt-in modifier (use with .site-shell): drop the 1280px cap but keep the gutters. Home page only. */
+  .site-shell-full {
+    width: 100%;
+  }
+
   .site-shell-narrow {
     width: min(100%, 720px);
     margin-inline: auto;
@@ -344,6 +349,12 @@ html[data-theme='dark'] .shadow-xl {
     .site-shell-bleed {
       margin-inline: 0;
       padding-inline: 0;
+    }
+
+    /* A full-width shell always touches the viewport edge, so its bars keep bleeding. */
+    .site-shell-full > .site-shell-bleed {
+      margin-inline: calc(-1 * clamp(1rem, 3.5vw, 2rem));
+      padding-inline: clamp(1rem, 3.5vw, 2rem);
     }
   }
   

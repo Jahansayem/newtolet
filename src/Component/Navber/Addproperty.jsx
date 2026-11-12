@@ -427,6 +427,7 @@ const AddPropertyContent = () => {
           result.propertyIdNumber
             ? t('addProperty.success.propertyId', { id: result.propertyIdNumber })
             : '',
+          result.warning === 'amenitiesNotSaved' ? t('addProperty.success.amenitiesNotSaved') : '',
         ]
           .filter(Boolean)
           .join(' ')

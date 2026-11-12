@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
-import { updatePropertyWithImages } from '../../services/propertyService'
+import { getPropertyForEdit, updatePropertyWithImages } from '../../services/propertyService'
 import {
   validateScreen1Codes,
   validateScreen2Codes,
@@ -10,7 +10,6 @@ import {
   localizeValidationErrors,
 } from '../../utils/formValidation'
 import { divisions, districts, areas, subAreas } from '../../utils/bangladeshLocations'
-import { supabase } from '../../services/supabaseClient'
 import RentDisplay from '../../components/RentDisplay'
 import { useLanguage } from '../../i18n/useLanguage'
 
@@ -278,6 +277,10 @@ const EditProperty = () => {
   const [showOptionalLocation, setShowOptionalLocation] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  // Amenities and image rows exactly as loaded. Saving diffs against this, and
+  // the form cannot be submitted until it exists.
+  const loadedRef = useRef(null)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   // Location hierarchy states
   const [selectedDivision, setSelectedDivision] = useState('')
@@ -310,12 +313,16 @@ const EditProperty = () => {
 
   // Load existing property data
   useEffect(() => {
+    // A superseded run (id change, StrictMode re-run, unmount) must never write
+    // state: its late result would overwrite edits made in the meantime.
+    let cancelled = false
+
     const loadProperty = async () => {
       try {
         setLoading(true)
         setLoadError(null)
-
-        console.log('Loading property with ID:', propertyId)
+        setIsLoaded(false)
+        loadedRef.current = null
 
         if (!propertyId) {
           throw keyedError('addProperty.edit.errors.missingId')
@@ -329,25 +336,20 @@ const EditProperty = () => {
           throw keyedError('addProperty.edit.errors.loginRequired')
         }
 
-        console.log('Fetching property from database...')
-
-        // Direct fetch from Supabase for better error handling
-        const { data: property, error: propertyError } = await supabase
-          .from('properties')
-          .select('*')
-          .eq('id', propertyId)
-          .single()
-
-        console.log('Supabase response:', { property, propertyError })
-
-        if (propertyError) {
-          console.error('Supabase error:', propertyError)
-          throw keyedError('addProperty.edit.errors.notFoundWithReason', { reason: propertyError.message })
+        // Property, images and amenities arrive together in one request, so the
+        // form is initialised exactly once from one consistent snapshot.
+        let loaded
+        try {
+          loaded = await getPropertyForEdit(propertyId)
+        } catch (fetchError) {
+          throw keyedError('addProperty.edit.errors.notFoundWithReason', { reason: fetchError.message })
         }
 
-        if (!property) {
-          throw keyedError('addProperty.edit.errors.notFound')
+        if (cancelled) {
+          return
         }
+
+        const { property, imageRows, amenities } = loaded
 
         const canAdminEdit = isAdminEditRequest && isAuthenticatedUser.is_admin === true
 
@@ -355,19 +357,6 @@ const EditProperty = () => {
         if (property.user_id !== isAuthenticatedUser.id && !canAdminEdit) {
           throw keyedError('addProperty.edit.errors.noPermission')
         }
-
-        // Fetch images
-        const { data: images } = await supabase
-          .from('property_images')
-          .select('*')
-          .eq('property_id', propertyId)
-          .order('display_order')
-
-        // Fetch amenities
-        const { data: amenities } = await supabase
-          .from('property_amenities')
-          .select('amenity_type')
-          .eq('property_id', propertyId)
 
         // Process the property data
         const processedProperty = {
@@ -396,12 +385,10 @@ const EditProperty = () => {
           lng: property.lng,
           available_from: property.available_from,
           deadline: property.deadline,
-          images: (images || []).map(img => img.image_url),
-          amenities: (amenities || []).map((a) => a.amenity_type),
+          images: imageRows.map(img => img.image_url),
+          amenities: [...amenities],
           status: property.status,
         }
-
-        console.log('Processed property data:', processedProperty)
 
         // Set form data
         setFormData({
@@ -467,15 +454,26 @@ const EditProperty = () => {
           setSelectedSubArea(processedProperty.sub_area)
         }
 
+        loadedRef.current = { amenities: [...amenities], imageRows }
+        setIsLoaded(true)
       } catch (error) {
+        if (cancelled) {
+          return
+        }
         console.error('Error loading property:', error)
         setLoadError(error.i18n || { message: error.message })
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
     loadProperty()
+
+    return () => {
+      cancelled = true
+    }
   }, [isAdminEditRequest, propertyId])
 
   const updateFormData = (updates) => {
@@ -517,10 +515,12 @@ const EditProperty = () => {
   const availableUpazillas = selectedDistrict ? areas[selectedDistrict] || [] : []
 
   const handleAmenityToggle = (amenity) => {
-    const updatedAmenities = formData.amenities.includes(amenity)
-      ? formData.amenities.filter((a) => a !== amenity)
-      : [...formData.amenities, amenity]
-    updateFormData({ amenities: updatedAmenities })
+    setFormData((prev) => ({
+      ...prev,
+      amenities: prev.amenities.includes(amenity)
+        ? prev.amenities.filter((a) => a !== amenity)
+        : [...prev.amenities, amenity],
+    }))
   }
 
   const handleImagesChange = (newImages, options) => {
@@ -540,6 +540,11 @@ const EditProperty = () => {
   const setFormErrors = (errorObj) => setErrors(errorObj)
 
   const handleSubmit = async () => {
+    // Never save a form whose amenities and images have not been loaded.
+    if (!loadedRef.current) {
+      return
+    }
+
     setSubmitError(null)
     setIsSubmitting(true)
     clearErrors()
@@ -610,8 +615,17 @@ const EditProperty = () => {
         {
           allowAdminEdit: isAdminEditRequest,
           preserveStatus: isAdminEditRequest,
+          loaded: loadedRef.current,
         }
       )
+
+      // A failed save may still have stored the new uploads. Treat them as
+      // existing images so a retry does not upload and insert them again.
+      if (!result.success && result.savedImageUrls?.length) {
+        setExistingImageUrls((prev) => [...prev, ...result.savedImageUrls])
+        setNewImageFiles([])
+        updateFormData({ images: [] })
+      }
 
       if (result.success) {
         setSubmitSuccess(true)
@@ -1212,7 +1226,7 @@ const EditProperty = () => {
           <div className='bg-white rounded-lg shadow-md p-4 sm:p-6'>
             <h2 className='text-lg md:text-xl font-bold text-gray-800 mb-4 flex items-center gap-2'>
               <span className='w-8 h-8 bg-brand text-white rounded-full flex items-center justify-center text-sm font-bold'>4</span>
-              {t('addProperty.sections.amenitiesUpload')}
+              {t(isAdminEditRequest ? 'addProperty.sections.facilitiesUpload' : 'addProperty.sections.amenitiesUpload')}
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
@@ -1327,7 +1341,7 @@ const EditProperty = () => {
           <div className='sticky bottom-16 md:bottom-20 bg-white border border-gray-200 rounded-lg p-4 shadow-lg'>
             <button
               type='submit'
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isLoaded}
               className='ui-btn ui-btn-primary ui-btn-lg w-full'
             >
               {isSubmitting ? t('addProperty.edit.updating') : t('addProperty.edit.updateListing')}

@@ -26,6 +26,7 @@ import {
 } from './propertyCatalogService'
 import { isPropertyActivelyPinned } from '../utils/propertyPinning'
 import { normalizeAdminEditPropertyData } from '../utils/adminEditPropertyData'
+import { diffAmenities, diffImages } from '../utils/propertyRelationsDiff'
 import { getAutoApproveProperties } from './adminService'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
@@ -519,6 +520,7 @@ export const submitPropertyListing = async (
       }
 
       // ===== STEP 8: Insert amenities =====
+      let amenitiesSaved = true
       if (formData.amenities && formData.amenities.length > 0) {
         const amenitiesData = formData.amenities.map((amenity) => ({
           property_id: propertyId,
@@ -530,7 +532,9 @@ export const submitPropertyListing = async (
           .insert(amenitiesData)
 
         if (amenitiesError) {
+          // The listing itself is saved; tell the caller so the user knows to re-add them.
           console.error('Warning: Failed to save amenities:', amenitiesError)
+          amenitiesSaved = false
         }
       }
 
@@ -573,6 +577,7 @@ export const submitPropertyListing = async (
         propertyId: propertyId,
         propertyIdNumber,
         status: propertyStatus,
+        warning: amenitiesSaved ? null : 'amenitiesNotSaved',
         message: getPropertySubmissionMessage({
           propertyStatus,
           hasDuplicatePhone,
@@ -773,7 +778,12 @@ export const updateProperty = async (propertyId, updates) => {
  * @param {Object} formData - Complete form data from all 4 screens
  * @param {File[]} newImageFiles - New image files to upload (empty array if no new images)
  * @param {string[]} existingImageUrls - Existing image URLs to keep
- * @returns {Promise<Object>} - { success: boolean, error?: string }
+ * @param {Object} options
+ * @param {{ amenities: string[], imageRows: Object[] }} [options.loaded] - What the edit form
+ *   loaded (from getPropertyForEdit). Amenities and images are diffed against it and only the
+ *   differences are written; it is advanced in place as each write succeeds so a retry after a
+ *   partial failure does not repeat it. When absent, amenities and images are not touched.
+ * @returns {Promise<Object>} - { success: boolean, error?: string, savedImageUrls?: string[] }
  */
 export const updatePropertyWithImages = async (
   propertyId,
@@ -783,6 +793,12 @@ export const updatePropertyWithImages = async (
   options = {}
 ) => {
   let currentUserId = null
+  // New uploads that already became property_images rows, reported even when a later step fails.
+  let savedImageUrls = []
+  const loaded =
+    options.loaded && Array.isArray(options.loaded.amenities) && Array.isArray(options.loaded.imageRows)
+      ? options.loaded
+      : null
 
   try {
     console.log('updatePropertyWithImages called with:', { propertyId, formDataKeys: Object.keys(formData) })
@@ -877,6 +893,12 @@ export const updatePropertyWithImages = async (
     // Admin edits have no required fields, so reshape blanks into values the columns accept.
     const updatePayload = allowAdminEdit ? normalizeAdminEditPropertyData(propertyData) : propertyData
 
+    // Ensure we have at least 1 image (admins may save a listing with none).
+    // Checked before anything is written.
+    if (loaded && existingImageUrls.length + newImageFiles.length < 1 && !allowAdminEdit) {
+      throw new Error('Please upload at least 1 image')
+    }
+
     // Update property record
     const { error: updateError } = await supabase
       .from('properties')
@@ -887,63 +909,90 @@ export const updatePropertyWithImages = async (
       throw new Error(`Failed to update property: ${updateError.message}`)
     }
 
-    // Handle images - delete old images and insert new ones
-    // Delete existing images
-    await supabase
-      .from('property_images')
-      .delete()
-      .eq('property_id', propertyId)
+    // Amenities and images are only written as a diff against what the form
+    // loaded. Without that baseline nothing is known about the stored rows, so
+    // they are left untouched rather than deleted and rebuilt.
+    if (loaded) {
+      // ----- Amenities: remove the unticked, insert the newly ticked -----
+      const amenityDiff = diffAmenities(loaded.amenities, formData.amenities)
 
-    // Combine existing URLs with new uploads
-    let allImageUrls = [...existingImageUrls]
+      if (amenityDiff.toRemove.length > 0) {
+        const { error: removeError } = await supabase
+          .from('property_amenities')
+          .delete()
+          .eq('property_id', propertyId)
+          .in('amenity_type', amenityDiff.toRemove)
 
-    // Upload new images if provided
-    if (newImageFiles.length > 0) {
-      const newImageUrls = await uploadMultipleImages(newImageFiles, propertyId)
-      allImageUrls = [...allImageUrls, ...newImageUrls]
-    }
+        if (removeError) {
+          throw new Error(`Failed to remove amenities: ${removeError.message}`)
+        }
 
-    // Ensure we have at least 1 image (admins may save a listing with none)
-    if (allImageUrls.length < 1 && !allowAdminEdit) {
-      throw new Error('Please upload at least 1 image')
-    }
-
-    // Insert all image records
-    const propertyImagesData = allImageUrls.map((url, index) => ({
-      property_id: propertyId,
-      image_url: url,
-      is_thumbnail: index === 0,
-      display_order: index,
-    }))
-
-    if (propertyImagesData.length > 0) {
-      const { error: imagesError } = await supabase
-        .from('property_images')
-        .insert(propertyImagesData)
-
-      if (imagesError) {
-        throw new Error(`Failed to save image records: ${imagesError.message}`)
+        loaded.amenities = loaded.amenities.filter((amenity) => !amenityDiff.toRemove.includes(amenity))
       }
-    }
 
-    // Update amenities - delete old and insert new
-    await supabase
-      .from('property_amenities')
-      .delete()
-      .eq('property_id', propertyId)
+      if (amenityDiff.toAdd.length > 0) {
+        const { error: addError } = await supabase
+          .from('property_amenities')
+          .insert(amenityDiff.toAdd.map((amenity) => ({ property_id: propertyId, amenity_type: amenity })))
 
-    if (formData.amenities && formData.amenities.length > 0) {
-      const amenitiesData = formData.amenities.map((amenity) => ({
-        property_id: propertyId,
-        amenity_type: amenity,
-      }))
+        if (addError) {
+          throw new Error(`Failed to save amenities: ${addError.message}`)
+        }
 
-      const { error: amenitiesError } = await supabase
-        .from('property_amenities')
-        .insert(amenitiesData)
+        loaded.amenities = [...loaded.amenities, ...amenityDiff.toAdd]
+      }
 
-      if (amenitiesError) {
-        console.error('Warning: Failed to save amenities:', amenitiesError)
+      // ----- Images: upload and insert first, delete only after that worked -----
+      const newImageUrls =
+        newImageFiles.length > 0 ? await uploadMultipleImages(newImageFiles, propertyId) : []
+      const imageDiff = diffImages(loaded.imageRows, existingImageUrls, newImageUrls)
+
+      if (imageDiff.toInsert.length > 0) {
+        const { data: insertedRows, error: imagesError } = await supabase
+          .from('property_images')
+          .insert(imageDiff.toInsert.map((row) => ({ ...row, property_id: propertyId })))
+          .select('id, image_url, is_thumbnail, display_order')
+
+        if (imagesError) {
+          throw new Error(`Failed to save image records: ${imagesError.message}`)
+        }
+
+        // From here on the uploads are stored rows; a retry must not insert them again.
+        savedImageUrls = newImageUrls
+        loaded.imageRows = [
+          ...loaded.imageRows,
+          ...(insertedRows?.length
+            ? insertedRows
+            : imageDiff.toInsert.map((row) => ({ ...row, id: null }))),
+        ]
+      }
+
+      if (imageDiff.toDeleteIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from('property_images')
+          .delete()
+          .in('id', imageDiff.toDeleteIds)
+
+        if (deleteError) {
+          throw new Error(`Failed to remove images: ${deleteError.message}`)
+        }
+
+        loaded.imageRows = loaded.imageRows.filter((row) => !imageDiff.toDeleteIds.includes(row.id))
+      }
+
+      for (const { id, display_order, is_thumbnail } of imageDiff.toUpdate) {
+        const { error: orderError } = await supabase
+          .from('property_images')
+          .update({ display_order, is_thumbnail })
+          .eq('id', id)
+
+        if (orderError) {
+          throw new Error(`Failed to reorder images: ${orderError.message}`)
+        }
+
+        loaded.imageRows = loaded.imageRows.map((row) =>
+          row.id === id ? { ...row, display_order, is_thumbnail } : row
+        )
       }
     }
 
@@ -961,6 +1010,7 @@ export const updatePropertyWithImages = async (
     return {
       success: false,
       error: error.message || 'Failed to update property',
+      savedImageUrls,
     }
   } finally {
     invalidateUserPanelCache(buildUserPanelCacheKey(currentUserId || 'guest', 'my-properties'))
@@ -972,98 +1022,46 @@ export const updatePropertyWithImages = async (
 }
 
 /**
- * Get property for editing with all related data
+ * Load a property for the edit form together with its image and amenity rows.
+ *
+ * Everything comes back in ONE request on purpose: the service worker serves
+ * standalone GETs on property_images / property_amenities stale-while-revalidate,
+ * which made the edit form show (and then save) an outdated list. An embedded
+ * read on properties is never cached and is a single consistent snapshot.
+ *
+ * Ownership is checked by the caller. Throws if the request fails.
  * @param {string} propertyId - The property ID
- * @returns {Promise<Object>} - Property data with images and amenities
+ * @returns {Promise<{ property: Object, imageRows: Object[], amenities: string[] }>}
  */
 export const getPropertyForEdit = async (propertyId) => {
-  try {
-    // Check if propertyId is provided
-    if (!propertyId) {
-      throw new Error('Property ID is missing')
-    }
+  if (!propertyId) {
+    throw new Error('Property ID is missing')
+  }
 
-    console.log('Fetching property for edit:', propertyId)
+  const { data, error } = await supabase
+    .from('properties')
+    .select(
+      '*, property_images(id, image_url, is_thumbnail, display_order), property_amenities(amenity_type)'
+    )
+    .eq('id', propertyId)
+    .single()
 
-    const { data: property, error: propertyError } = await supabase
-      .from('properties')
-      .select('*')
-      .eq('id', propertyId)
-      .single()
+  if (error) {
+    throw new Error(error.message || 'Failed to load property')
+  }
 
-    if (propertyError) {
-      console.error('Supabase error fetching property:', propertyError)
-      throw new Error('Property not found. Please check if the property exists.')
-    }
+  if (!data || !Array.isArray(data.property_images) || !Array.isArray(data.property_amenities)) {
+    throw new Error('Property images or amenities could not be loaded')
+  }
 
-    if (!property) {
-      throw new Error('Property not found')
-    }
+  const { property_images: imageRows, property_amenities: amenityRows, ...property } = data
 
-    // Verify ownership
-    const storedUser = localStorage.getItem('user')
-    const isAuthenticatedUser = storedUser ? JSON.parse(storedUser) : null
-
-    if (!isAuthenticatedUser) {
-      throw new Error('Please login to edit this property')
-    }
-
-    if (property.user_id !== isAuthenticatedUser.id) {
-      throw new Error('You do not have permission to edit this property')
-    }
-
-    const [{ data: images }, { data: amenities }] = await Promise.all([
-      supabase
-        .from('property_images')
-        .select('*')
-        .eq('property_id', propertyId)
-        .order('display_order'),
-      supabase
-        .from('property_amenities')
-        .select('amenity_type')
-        .eq('property_id', propertyId),
-    ])
-
-    return {
-      id: property.id,
-      category: property.category,
-      property_type: property.property_type,
-      total_rooms: property.total_rooms || 0,
-      dining_rooms: property.dining_rooms || 0,
-      living_rooms: property.living_rooms || 0,
-      total_bathrooms: property.total_bathrooms,
-      balcony: property.balcony,
-      kitchen: property.total_kitchen || 0,
-      floor_level: property.floor_level,
-      occupancy: property.occupancy,
-      room_size_sqft: property.room_size_sqft || '',
-      rent_amount_bdt: property.rent_amount_bdt,
-      rent_period: property.rent_period,
-      is_rent_negotiable: Boolean(property.is_rent_negotiable),
-      state_district: property.state_district,
-      area: property.area,
-      contact_number: property.contact_number,
-      short_description: property.short_description,
-      sub_area: property.sub_area || '',
-      sector: property.sector || '',
-      road: property.road || '',
-      house_plot: property.house_plot || '',
-      lat: property.lat,
-      lng: property.lng,
-      available_from: property.available_from,
-      deadline: property.deadline,
-      images: getNormalizedImages(images),
-      primary_image: getNormalizedImages(images)[0] || null,
-      amenities: (amenities || []).map((a) => a.amenity_type),
-      status: property.status,
-      is_active: property.is_active !== false,
-      pinned_at: property.pinned_at || null,
-      pinned_until: property.pinned_until || null,
-      is_pinned: isPropertyActivelyPinned(property),
-    }
-  } catch (error) {
-    console.error('Error fetching property for edit:', error)
-    throw error
+  return {
+    property,
+    imageRows: [...imageRows].sort(
+      (a, b) => (a.display_order ?? Number.MAX_SAFE_INTEGER) - (b.display_order ?? Number.MAX_SAFE_INTEGER)
+    ),
+    amenities: amenityRows.map((row) => row.amenity_type),
   }
 }
 

@@ -288,6 +288,7 @@ const addProperty = {
       created: 'Property listing ID {id} created successfully!',
       propertyId: 'Your Property ID is {id}.',
       submitted: 'Your property listing has been submitted successfully!',
+      amenitiesNotSaved: 'The amenities could not be saved. Please edit the listing and select them again.',
       redirecting: 'Redirecting to your properties...',
     },
 

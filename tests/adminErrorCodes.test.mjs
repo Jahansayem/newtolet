@@ -30,6 +30,11 @@ const cases = [
   ['invalid uuid', { code: '22P02', message: 'invalid input syntax for type uuid' }, C.INVALID_INPUT, false, false],
   ['too many requests', { status: 429, message: 'Too Many Requests' }, C.TRANSIENT, true, false],
   ['server 500', { status: 500, message: 'Internal' }, C.TRANSIENT, true, false],
+  ['server 500 with an empty body', { status: 500, message: '' }, C.TRANSIENT, true, false],
+  ['gateway timeout with an empty body', { status: 504, message: '' }, C.TIMEOUT, true, false],
+  ['request timeout', { status: 408, message: 'Request Timeout' }, C.TIMEOUT, true, false],
+  ['statement timeout', { code: '57014', message: 'canceling statement due to statement timeout', status: 500 }, C.TIMEOUT, true, false],
+  ['empty error without a status', { message: '' }, C.UNKNOWN, false, false],
   ['unknown', { message: 'what' }, C.UNKNOWN, false, false],
   ['string error', 'plain string', C.UNKNOWN, false, false],
   ['null', null, C.UNKNOWN, false, false],
@@ -56,6 +61,12 @@ test('parseHintDetails tolerates garbage', () => {
   assert.equal(parseHintDetails(null), null)
   assert.equal(parseHintDetails('no-equals'), null)
   assert.deepEqual(parseHintDetails('a=1;b=two;=skip;c='), { a: '1', b: 'two', c: '' })
+})
+
+test('a timeout is reported as a timeout, not as an unreachable server', () => {
+  const result = classifyError({ status: 504, message: '' })
+  assert.match(result.message, /timed out/i)
+  assert.doesNotMatch(result.message, /unreachable/i)
 })
 
 test('unknown errors keep their original message', () => {

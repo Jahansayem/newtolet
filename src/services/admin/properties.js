@@ -12,11 +12,13 @@ import { headCount } from './dashboard'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 
+// Only what the table, the row actions and the details dialog read. Searching
+// (sub_area) and sorting (updated_at) work on columns that are not selected.
 export const PROPERTY_LIST_COLUMNS = `
-  id, user_id, property_id_number, category, property_type, short_description, state_district, area, sub_area,
+  id, user_id, property_id_number, category, property_type, short_description, state_district, area,
   contact_number, contact_phone_key, rent_amount_bdt, rent_period, is_rent_negotiable, status, is_featured,
-  is_pinned, pinned_until, total_rooms, total_bathrooms, created_at, updated_at, reviewed_at, reviewed_by,
-  moderation_reason, internal_note, is_active, deleted_at,
+  total_rooms, total_bathrooms, created_at, reviewed_at,
+  moderation_reason, internal_note, deleted_at,
   property_images(image_url, display_order)
 `
 // properties.user_id has no foreign key to users on the deployed database, so
@@ -169,6 +171,10 @@ export const listPropertiesByIds = async (ids = [], { signal } = {}) => {
   return ok(unique.map((id) => byId[id]).filter(Boolean))
 }
 
+/**
+ * Stat-card counts. A metric that could not be read is `null`, never 0, so the
+ * caller can keep its last known value or show it as unavailable.
+ */
 export const getPropertyCounts = async () => {
   const [total, approved, pending, rejected, duplicates] = await Promise.all([
     headCount('properties', (q) => q.is('deleted_at', null)),
@@ -178,15 +184,16 @@ export const getPropertyCounts = async () => {
     callAdminRpc('admin_duplicate_phone_groups', { p_status: 'pending', p_limit: 1, p_offset: 0 }),
   ])
   const firstError = [total, approved, pending, rejected].find((entry) => entry.error)?.error || null
-  const duplicateGroups = !duplicates.error && Array.isArray(duplicates.data) && duplicates.data.length ? Number(duplicates.data[0].total_groups) : 0
+  // No rows from the RPC means there are no duplicate groups; an error means unknown.
+  const duplicateGroups = duplicates.error || !Array.isArray(duplicates.data) ? null : duplicates.data.length ? Number(duplicates.data[0].total_groups) : 0
   const data = {
-    total: total.value ?? 0,
-    approved: approved.value ?? 0,
-    pending: pending.value ?? 0,
-    rejected: rejected.value ?? 0,
+    total: total.value,
+    approved: approved.value,
+    pending: pending.value,
+    rejected: rejected.value,
     duplicatePending: duplicateGroups,
   }
-  return { ...ok(data), error: firstError, partial: Boolean(firstError || duplicates.error) }
+  return { ...ok(data), error: firstError, partial: Object.values(data).some((value) => value === null) }
 }
 
 const after = (result) => {

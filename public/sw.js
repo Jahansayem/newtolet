@@ -42,9 +42,6 @@ const SUPABASE_PUBLIC_TABLES = new Set([
   'feedback',
 ])
 
-const isCacheableResponse = (response) =>
-  response && (response.ok || response.type === 'opaque')
-
 const isBlockedDocument = (pathname) =>
   BLOCKED_DOCUMENT_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
@@ -67,8 +64,27 @@ const getSupabaseTableName = (pathname) => {
   return pathname.slice(markerIndex + marker.length).split('/')[0] || null
 }
 
+// A signed-in request carries the user's own token instead of the public key.
+// Its response depends on who is asking (owner rows, admin-only columns), so it
+// must never be stored in, or answered from, the shared data cache.
+const hasUserSession = (request) => {
+  const authorization = request.headers.get('authorization')
+
+  if (!authorization) {
+    return false
+  }
+
+  const apiKey = request.headers.get('apikey')
+
+  return !apiKey || authorization.trim() !== `Bearer ${apiKey}`
+}
+
 const isPublicSupabaseRequest = (request, url) => {
   if (request.method !== 'GET') {
+    return false
+  }
+
+  if (hasUserSession(request)) {
     return false
   }
 
@@ -129,13 +145,25 @@ const clearNewtoletCaches = async () => {
   )
 }
 
+// The Cache API rejects partial responses: PostgREST answers a paged list with
+// 206 Partial Content, and cache.put() throws a TypeError for it.
+const isCacheableResponse = (response) =>
+  response && response.status !== 206 && (response.ok || response.type === 'opaque')
+
+// Storing a copy is an optimisation. A failure here (206, quota, Vary: *) must
+// never replace the good network response the page is waiting for.
 const putInCache = async (cacheName, request, response) => {
   if (!isCacheableResponse(response)) {
     return response
   }
 
-  const cache = await caches.open(cacheName)
-  await cache.put(request, response.clone())
+  try {
+    const cache = await caches.open(cacheName)
+    await cache.put(request, response.clone())
+  } catch {
+    // keep the network response
+  }
+
   return response
 }
 
@@ -183,7 +211,9 @@ const staleWhileRevalidate = async (event, cacheName) => {
     return offlineDocumentResponse()
   }
 
-  return new Response(null, { status: 504, statusText: 'Gateway Timeout' })
+  // The network request itself failed and nothing is cached: report a network
+  // error to the page instead of inventing an HTTP status the server never sent.
+  return Response.error()
 }
 
 const cacheFirstWithRefresh = async (event, cacheName) => {
@@ -199,7 +229,7 @@ const cacheFirstWithRefresh = async (event, cacheName) => {
   try {
     return await fetchAndCache(cacheName, request)
   } catch (error) {
-    return new Response(null, { status: 504, statusText: 'Gateway Timeout' })
+    return Response.error()
   }
 }
 

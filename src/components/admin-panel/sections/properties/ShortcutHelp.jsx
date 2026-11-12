@@ -12,7 +12,7 @@ const LIST_SHORTCUTS = [
 
 const EDITOR_SHORTCUTS = [
   { keys: ['S'], also: ['Ctrl', 'S'], label: 'Save' },
-  { keys: ['Shift', 'S'], also: ['Ctrl', 'Shift', 'S'], label: 'Save and open the next pending listing' },
+  { keys: ['Shift', 'S'], also: ['Ctrl', 'Shift', 'S'], label: 'Save, approve and open the next pending listing' },
 ]
 
 const Keys = ({ keys }) => (

@@ -162,5 +162,9 @@ export const buildBookHref = (id) => buildPageHref('book', { id })
 export const buildEditPropertyHref = (propertyId, params = {}) =>
   buildPageHref('edit-property', { propertyId, ...params })
 
+/** The admin edit screen for one listing, inside the admin panel. */
+export const buildAdminEditPropertyHref = (propertyId) =>
+  buildPageHref('admin', { tab: 'properties', edit: propertyId })
+
 export const buildDashboardHref = (tab = 'dashboard') =>
   buildPageHref('dashboard', { tab })

@@ -5,6 +5,7 @@
 import { supabase } from '../supabaseClient'
 import { normalizePhoneForDuplicateKey } from '../../lib/phoneKey'
 import { resolveCountKeys } from '../../lib/propertyCounts'
+import { buildAfterInListFilter } from '../../lib/nextPendingFilter'
 import { fetchAdminRow, runAdminListQuery } from './adminQuery'
 import { callAdminRpc } from './adminRpc'
 import { fail, logAdminError, ok } from './adminResult'
@@ -18,7 +19,7 @@ const PROPERTY_IMAGES_BUCKET = 'property-images'
 export const PROPERTY_LIST_COLUMNS = `
   id, user_id, property_id_number, category, property_type, short_description, state_district, area,
   contact_number, contact_phone_key, rent_amount_bdt, rent_period, is_rent_negotiable, status, is_featured,
-  total_rooms, total_bathrooms, created_at, reviewed_at,
+  total_rooms, total_bathrooms, floor_level, created_at, reviewed_at,
   moderation_reason, internal_note, deleted_at,
   property_images(image_url, display_order)
 `
@@ -78,6 +79,9 @@ export const normalizeAdminProperty = (row, phoneCounts = null) => {
 
 const cleanSearch = (search = '') => String(search || '').replace(/^#/, '').trim()
 
+const LIST_FILTER_SPEC = { status: { op: 'eq' }, is_featured: { op: 'eq', values: (value) => value === 'true' || value === true }, contact_phone_key: { op: 'eq' } }
+const LIST_SEARCH_COLUMNS = ['property_id_number', 'short_description', 'area', 'state_district', 'sub_area', 'category', 'contact_number']
+
 /** Adds duplicateCount / isDuplicatePhone to a page of rows using one RPC call. */
 export const annotateDuplicates = async (rows = []) => {
   const keys = Array.from(new Set(rows.map((row) => row.contact_phone_key || normalizePhoneForDuplicateKey(row.contact_number)).filter(Boolean)))
@@ -106,9 +110,9 @@ export const listProperties = async ({ page = 1, pageSize = 20, sort, filters = 
     sort: sort || { column: 'created_at', dir: 'desc' },
     sortable: ['created_at', 'rent_amount_bdt', 'status', 'updated_at'],
     filters: { status: filters.status === 'all' ? '' : filters.status, is_featured: filters.featured, contact_phone_key: filters.phoneKey },
-    filterSpec: { status: { op: 'eq' }, is_featured: { op: 'eq', values: (value) => value === 'true' || value === true }, contact_phone_key: { op: 'eq' } },
+    filterSpec: LIST_FILTER_SPEC,
     search: /^\d{4,}$/.test(term) ? '' : term,
-    searchColumns: ['property_id_number', 'short_description', 'area', 'state_district', 'sub_area', 'category', 'contact_number'],
+    searchColumns: LIST_SEARCH_COLUMNS,
     apply: (query) => {
       let next = filters.archived === 'archived' ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null)
       if (/^\d{4,}$/.test(term)) next = next.eq('property_id_number', term)
@@ -119,6 +123,47 @@ export const listProperties = async ({ page = 1, pageSize = 20, sort, filters = 
   if (result.error) return result
   const rows = await annotateDuplicates(await attachSubmitters(result.data || []))
   return { ...result, data: rows }
+}
+
+const NEXT_PENDING_SORTABLE = ['created_at', 'rent_amount_bdt', 'updated_at']
+
+/**
+ * "Next pending" on the admin edit screen: the id of the pending listing that
+ * follows `current` in the list the admin came from (same sort, search and
+ * filters, status always pending), or null when there is none.
+ * getNextPendingInList({ current: { id, <sort column> }, sort, filters, search })
+ */
+export const getNextPendingInList = async ({ current = null, sort = null, filters = {}, search = '' } = {}, { signal } = {}) => {
+  const column = NEXT_PENDING_SORTABLE.includes(sort?.column) ? sort.column : 'created_at'
+  const dir = sort?.column === column && sort?.dir === 'asc' ? 'asc' : 'desc'
+  const term = cleanSearch(search)
+  const after = current?.id ? buildAfterInListFilter({ column, dir, value: current[column], id: current.id }) : ''
+  const result = await runAdminListQuery({
+    table: 'properties',
+    columns: 'id',
+    page: 1,
+    pageSize: 1,
+    sort: { column, dir },
+    sortable: NEXT_PENDING_SORTABLE,
+    filters: { status: 'pending', is_featured: filters.featured, contact_phone_key: filters.phoneKey },
+    filterSpec: LIST_FILTER_SPEC,
+    search: /^\d{4,}$/.test(term) ? '' : term,
+    searchColumns: LIST_SEARCH_COLUMNS,
+    apply: (query) => {
+      let next = query.is('deleted_at', null)
+      if (/^\d{4,}$/.test(term)) next = next.eq('property_id_number', term)
+      if (current?.id) next = next.neq('id', current.id)
+      if (after) next = next.or(after)
+      return next
+    },
+    signal,
+    count: null,
+  })
+  if (result.error) {
+    logAdminError('properties.getNextPendingInList', result.error)
+    return result
+  }
+  return ok(result.data?.[0]?.id || null)
 }
 
 export const getProperty = async (propertyId, { signal } = {}) => {

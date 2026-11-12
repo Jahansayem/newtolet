@@ -3,8 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
 import { getPropertyForEdit, updatePropertyWithImages } from '../../services/propertyService'
-import { getNextPendingPropertyId } from '../../services/admin/nextPendingProperty'
-import { buildEditPropertyHref } from '../../lib/routePaths'
+import { buildAdminEditPropertyHref } from '../../lib/routePaths'
 import { getPropertyIdNumber } from '../../utils/propertyDisplaySerial'
 import {
   validateScreen1Codes,
@@ -232,14 +231,17 @@ const SizeInput = ({ label, value, onChange }) => {
   )
 }
 
-const EditPropertyForm = () => {
+// `adminPanel` is passed only by the admin panel's listing editor, which embeds
+// this form: { propertyId, canEdit, onSaved(mode), onClose(), renderActions(state) }.
+// Without it this is the owner's edit page and behaves as it always has.
+const EditPropertyForm = ({ adminPanel = null }) => {
   const { t, tv } = useLanguage()
   const [searchParams] = useSearchParams()
   const location = useLocation()
-  // Set by "Update & next" on the previous listing.
   const arrivalNotice = location.state?.notice || ''
-  const propertyId = searchParams.get('propertyId') || ''
-  const isAdminEditRequest = searchParams.get('admin') === '1'
+  const propertyId = adminPanel ? adminPanel.propertyId || '' : searchParams.get('propertyId') || ''
+  const isAdminEditRequest = Boolean(adminPanel)
+  const adminCanEdit = adminPanel?.canEdit === true
   const returnTo = searchParams.get('returnTo') || '/my-properties'
   const navigate = useNavigate()
 
@@ -280,7 +282,8 @@ const EditPropertyForm = () => {
   const [submitError, setSubmitError] = useState(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [showLocationPicker, setShowLocationPicker] = useState(false)
-  const [showOptionalLocation, setShowOptionalLocation] = useState(false)
+  // Sector, road and house are always open for admins, who review every field.
+  const [showOptionalLocation, setShowOptionalLocation] = useState(isAdminEditRequest)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   // Amenities and image rows exactly as loaded. Saving diffs against this, and
@@ -291,7 +294,6 @@ const EditPropertyForm = () => {
   // listing that follows this one in the pending queue.
   const [listingMeta, setListingMeta] = useState({ idNumber: '', status: '', createdAt: '' })
   const [submitMode, setSubmitMode] = useState('update')
-  const [successNote, setSuccessNote] = useState('')
 
   // Location hierarchy states
   const [selectedDivision, setSelectedDivision] = useState('')
@@ -362,7 +364,7 @@ const EditPropertyForm = () => {
 
         const { property, imageRows, amenities } = loaded
 
-        const canAdminEdit = isAdminEditRequest && isAuthenticatedUser.is_admin === true
+        const canAdminEdit = isAdminEditRequest && (isAuthenticatedUser.is_admin === true || adminCanEdit)
 
         // Verify ownership
         if (property.user_id !== isAuthenticatedUser.id && !canAdminEdit) {
@@ -490,7 +492,7 @@ const EditPropertyForm = () => {
     return () => {
       cancelled = true
     }
-  }, [isAdminEditRequest, propertyId])
+  }, [isAdminEditRequest, adminCanEdit, propertyId])
 
   const updateFormData = (updates) => {
     setFormData(prev => ({ ...prev, ...updates }))
@@ -555,13 +557,15 @@ const EditPropertyForm = () => {
   const clearErrors = () => setErrors({})
   const setFormErrors = (errorObj) => setErrors(errorObj)
 
-  const handleSubmit = async ({ goToNext = false } = {}) => {
+  // mode: 'update' for everyone; the admin editor also uses 'approve' and
+  // 'next' and decides what follows a successful save.
+  const handleSubmit = async ({ mode = 'update' } = {}) => {
     // Never save a form whose amenities and images have not been loaded.
     if (!loadedRef.current) {
       return
     }
 
-    setSubmitMode(goToNext ? 'next' : 'update')
+    setSubmitMode(mode)
     setSubmitError(null)
     setIsSubmitting(true)
     clearErrors()
@@ -631,6 +635,7 @@ const EditPropertyForm = () => {
         allImages,
         {
           allowAdminEdit: isAdminEditRequest,
+          adminAccess: adminCanEdit,
           preserveStatus: isAdminEditRequest,
           loaded: loadedRef.current,
         }
@@ -644,32 +649,15 @@ const EditPropertyForm = () => {
         updateFormData({ images: [] })
       }
 
-      if (result.success && goToNext && isAdminEditRequest) {
-        const updatedNotice = listingMeta.idNumber
-          ? t('addProperty.edit.updatedNotice', { id: listingMeta.idNumber })
-          : t('addProperty.edit.updatedMessage')
-        // An admin edit keeps the status, so a pending listing is still in the
-        // queue: continue below it. Otherwise start from the top of the queue.
-        const next = await getNextPendingPropertyId({
-          excludeId: propertyId,
-          ...(listingMeta.status === 'pending'
-            ? { afterCreatedAt: listingMeta.createdAt, afterId: propertyId }
-            : {}),
-        })
-
-        if (next.data) {
-          navigate(buildEditPropertyHref(next.data, { admin: '1', returnTo }), {
-            state: { notice: updatedNotice },
-          })
-          window.scrollTo(0, 0)
-          return
+      if (result.success && adminPanel) {
+        // The admin editor stays in the panel: it approves, moves to the next
+        // pending listing or reloads this one.
+        try {
+          await adminPanel.onSaved?.(mode)
+        } finally {
+          setIsSubmitting(false)
         }
-
-        // Saved, but there is nothing to move on to (or the lookup failed):
-        // finish like a normal update and say why.
-        if (!next.error) {
-          setSuccessNote(t('addProperty.edit.noMorePending'))
-        }
+        return
       }
 
       if (result.success) {
@@ -696,7 +684,7 @@ const EditPropertyForm = () => {
 
   if (loading) {
     return (
-      <div className='min-h-screen flex items-center justify-center bg-gray-50'>
+      <div className={`${adminPanel ? 'py-16' : 'min-h-screen bg-gray-50'} flex items-center justify-center`} role='status' aria-label='Loading listing'>
         <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600'></div>
       </div>
     )
@@ -704,7 +692,7 @@ const EditPropertyForm = () => {
 
   if (loadError) {
     return (
-      <div className='min-h-screen flex items-center justify-center bg-gray-50 p-4'>
+      <div className={`${adminPanel ? 'py-10' : 'min-h-screen bg-gray-50'} flex items-center justify-center p-4`}>
         <div className='bg-white rounded-lg shadow-md p-8 text-center max-w-md'>
           <div className='mb-4'>
             <svg className='w-16 h-16 mx-auto text-red-500' fill='currentColor' viewBox='0 0 20 20'>
@@ -716,7 +704,7 @@ const EditPropertyForm = () => {
             {loadError.key ? t(loadError.key, loadError.vars) : (loadError.message || t('addProperty.edit.errors.loadFailed'))}
           </p>
           <button
-            onClick={() => navigate(returnTo)}
+            onClick={() => (adminPanel ? adminPanel.onClose?.() : navigate(returnTo))}
             className='px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700'
           >
             {isAdminEditRequest ? t('addProperty.edit.backToAdminProperties') : t('addProperty.edit.backToMyProperties')}
@@ -747,7 +735,6 @@ const EditPropertyForm = () => {
           <p className='text-green-700 mb-4'>
             {t('addProperty.edit.updated')}
           </p>
-          {successNote && <p className='text-gray-700 mb-4'>{successNote}</p>}
           <p className='text-sm text-gray-600'>
             {isAdminEditRequest ? t('addProperty.edit.redirectingAdmin') : t('addProperty.success.redirecting')}
           </p>
@@ -758,11 +745,20 @@ const EditPropertyForm = () => {
 
   const allImagesForDisplay = [...existingImageUrls, ...formData.images]
 
+  // Admin editor only (admin screens are English-only): a stored area that is
+  // not one of the dropdown options stays visible, and empty key fields are
+  // pointed out without blocking the save.
+  const storedAreaUnlisted = Boolean(adminPanel) && Boolean(formData.area) && !availableUpazillas.includes(formData.area)
+  const storedFloorUnlisted = Boolean(adminPanel) && Boolean(formData.floor_level) && !floorLevels.includes(formData.floor_level)
+  const adminWarnings = adminPanel
+    ? [!formData.occupancy && 'Occupancy is empty', !formData.floor_level && 'Floor is empty', !formData.area && 'Area is empty'].filter(Boolean)
+    : []
+
   return (
-    <div className='min-h-screen bg-gray-50 py-4 md:py-8 px-3 sm:px-4 pb-24 md:pb-28'>
-      <div className='max-w-2xl mx-auto'>
-        {/* Header */}
-        <div className='mb-4 md:mb-8'>
+    <div className={adminPanel ? 'min-w-0' : 'min-h-screen bg-gray-50 py-4 md:py-8 px-3 sm:px-4 pb-24 md:pb-28'}>
+      <div className={adminPanel ? '' : 'max-w-2xl mx-auto'}>
+        {/* Header (the admin editor shows its own) */}
+        <div className={adminPanel ? 'hidden' : 'mb-4 md:mb-8'}>
           <button
             onClick={() => navigate(-1)}
             className='text-brand hover:text-brand-hover font-medium flex items-center gap-1 mb-3 md:mb-4 text-sm md:text-base'
@@ -908,6 +904,9 @@ const EditPropertyForm = () => {
                   }`}
                 >
                   <option value=''>{t('addProperty.placeholders.selectFloorLevel')}</option>
+                  {storedFloorUnlisted && (
+                    <option value={formData.floor_level}>{formData.floor_level} (not in list)</option>
+                  )}
                   {floorLevels.map((level) => (
                     <option key={level} value={level}>{tv('floorLevels', level)}</option>
                   ))}
@@ -1061,6 +1060,14 @@ const EditPropertyForm = () => {
             </h2>
 
             <div className='space-y-4 md:space-y-5'>
+              {adminPanel && (formData.state_district || formData.area || formData.sub_area) && (
+                <p className='ui-note text-sm' data-testid='stored-location'>
+                  <strong>Stored location:</strong>{' '}
+                  {[formData.state_district, formData.area, formData.sub_area].filter(Boolean).join(' › ')}
+                  {storedAreaUnlisted ? ' — this area is not in the dropdown list. It is kept unless you choose another.' : ''}
+                </p>
+              )}
+
               {/* Division Dropdown */}
               <div>
                 <label className='ui-label text-[15px]'>
@@ -1112,7 +1119,7 @@ const EditPropertyForm = () => {
                     {t('addProperty.fields.upazilla')}
                   </label>
                   <select id='edit-upazilla'
-                    value={selectedUpazilla}
+                    value={selectedUpazilla || (storedAreaUnlisted ? formData.area : '')}
                     onChange={(e) => handleUpazillaChange(e.target.value)}
                     className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all bg-white ${
                       errors.area && !selectedUpazilla
@@ -1121,6 +1128,9 @@ const EditPropertyForm = () => {
                     }`}
                   >
                     <option value=''>{t('addProperty.placeholders.selectUpazilla')}</option>
+                    {storedAreaUnlisted && (
+                      <option value={formData.area}>{formData.area} (not in list)</option>
+                    )}
                     {availableUpazillas.map((upazilla) => (
                       <option key={upazilla} value={upazilla}>{upazilla}</option>
                     ))}
@@ -1395,26 +1405,26 @@ const EditPropertyForm = () => {
             </div>
           )}
 
-          {/* Submit Button */}
-          <div className={`sticky bottom-16 md:bottom-20 bg-white border border-gray-200 rounded-lg p-4 shadow-lg ${isAdminEditRequest ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : ''}`}>
-            <button
-              type='submit'
-              disabled={isSubmitting || !isLoaded}
-              className='ui-btn ui-btn-primary ui-btn-lg w-full'
-            >
-              {isSubmitting && submitMode === 'update' ? t('addProperty.edit.updating') : t('addProperty.edit.updateListing')}
-            </button>
-            {isAdminEditRequest && (
+          {/* Submit: the admin editor supplies its own action bar */}
+          {adminPanel ? (
+            adminPanel.renderActions({
+              submit: (mode) => handleSubmit({ mode }),
+              isSubmitting,
+              isLoaded,
+              submitMode,
+              warnings: adminWarnings,
+            })
+          ) : (
+            <div className='sticky bottom-16 md:bottom-20 bg-white border border-gray-200 rounded-lg p-4 shadow-lg'>
               <button
-                type='button'
-                onClick={() => handleSubmit({ goToNext: true })}
+                type='submit'
                 disabled={isSubmitting || !isLoaded}
-                className='ui-btn ui-btn-secondary ui-btn-lg w-full'
+                className='ui-btn ui-btn-primary ui-btn-lg w-full'
               >
-                {isSubmitting && submitMode === 'next' ? t('addProperty.edit.updating') : t('addProperty.edit.updateAndNext')}
+                {isSubmitting ? t('addProperty.edit.updating') : t('addProperty.edit.updateListing')}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </form>
       </div>
 
@@ -1435,7 +1445,24 @@ const EditPropertyForm = () => {
 // form: fresh state and a fresh load instead of leftovers from the last listing.
 const EditProperty = () => {
   const [searchParams] = useSearchParams()
-  return <EditPropertyForm key={searchParams.get('propertyId') || ''} />
+  const navigate = useNavigate()
+  const propertyId = searchParams.get('propertyId') || ''
+  // Old admin links (?admin=1) now open the editor inside the admin panel.
+  const adminHref = searchParams.get('admin') === '1' && propertyId ? buildAdminEditPropertyHref(propertyId) : ''
+
+  useEffect(() => {
+    if (adminHref) {
+      navigate(adminHref, { replace: true })
+    }
+  }, [adminHref, navigate])
+
+  if (adminHref) {
+    return null
+  }
+
+  return <EditPropertyForm key={propertyId} />
 }
+
+export { EditPropertyForm }
 
 export default EditProperty

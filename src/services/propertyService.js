@@ -807,7 +807,11 @@ export const updatePropertyWithImages = async (
     const storedUser = localStorage.getItem('user')
     const isAuthenticatedUser = storedUser ? JSON.parse(storedUser) : null
     currentUserId = isAuthenticatedUser?.id || null
-    const allowAdminEdit = Boolean(options.allowAdminEdit && isAuthenticatedUser?.is_admin === true)
+    // `adminAccess` is set by the admin panel, which knows role-based admins that
+    // the stored user object does not flag. The database policies decide either way.
+    const allowAdminEdit = Boolean(
+      options.allowAdminEdit && (isAuthenticatedUser?.is_admin === true || options.adminAccess === true)
+    )
     const preserveStatus = Boolean(options.preserveStatus && allowAdminEdit)
 
     if (!isAuthenticatedUser) {

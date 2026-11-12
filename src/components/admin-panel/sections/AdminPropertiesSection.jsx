@@ -16,7 +16,8 @@ import { getAutoApproveProperties, toggleAutoApproveProperties } from '../../../
 import { ADMIN_CACHE_PREFIX, readAdminSnapshot, writeAdminSnapshot } from '../../../services/admin/adminCache'
 import { clearSupabaseConnectionFailureMark } from '../../../services/supabaseClient'
 import { PROPERTY_COUNT_LABELS, describeFailedCounts, mergePropertyCounts } from '../../../lib/propertyCounts'
-import { buildEditPropertyHref, buildPageHref } from '../../../lib/routePaths'
+import { useSearchParams } from 'react-router-dom'
+import { buildAdminEditPropertyHref } from '../../../lib/routePaths'
 import { getPropertyDisplayLabel } from '../../../utils/propertyDisplaySerial'
 import { useAdminPermissions } from '../../../contexts/AdminAccessContext'
 import { PERMISSIONS } from '../../../lib/adminPermissions'
@@ -27,6 +28,8 @@ import { useAdminList } from '../hooks/useAdminList'
 import { useAdminMutation } from '../hooks/useAdminMutation'
 import { useDeferredApproval } from '../hooks/useDeferredApproval'
 import { useEntityParam } from '../hooks/useEntityParam'
+import AdminPropertyEditor from '../property-editor/AdminPropertyEditor'
+import { REJECT_REASONS } from '../propertyRejectReasons'
 import { useToast } from '../../ui/ToastProvider'
 import ActionMenu from '../../ui/ActionMenu'
 import Badge from '../../ui/Badge'
@@ -54,20 +57,11 @@ const TABS = [
 
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
-const editHref = (propertyId) => buildEditPropertyHref(propertyId, { admin: '1', returnTo: buildPageHref('admin', { tab: 'properties' }) })
 const pricingOf = (property = {}) => ({ rent_amount_bdt: property.rent_amount_bdt ?? property.pricing?.rent_amount_bdt, is_rent_negotiable: property.is_rent_negotiable ?? property.pricing?.is_rent_negotiable })
 const submitterLabel = (property = {}) => property.submitted_by?.name || property.submitted_by?.email || property.submitted_by?.phone || 'Unknown user'
 // Last counts that loaded, kept across reloads so a failed request still has
 // something to show. Outside the `counts:` prefix that mutations clear.
 const COUNTS_SNAPSHOT_KEY = `${ADMIN_CACHE_PREFIX}last:property-counts`
-// Preset rejection reasons; the text is what the listing owner sees.
-const REJECT_REASONS = [
-  { label: 'Duplicate', value: 'This listing duplicates another listing.' },
-  { label: 'Incomplete information', value: 'The listing is missing required information.' },
-  { label: 'Wrong location', value: 'The location details are wrong.' },
-  { label: 'Not a rental', value: 'This is not a rental listing.' },
-  { label: 'Spam', value: 'The listing was identified as spam.' },
-]
 const approveListings = (ids) => setPropertyStatus({ ids, status: 'approved' })
 const fetchDuplicateGroups = (params, options) => listDuplicatePhoneGroups({ page: params.page, pageSize: params.pageSize, status: 'pending' }, options)
 
@@ -93,14 +87,50 @@ const AdminPropertiesSection = () => {
   const [approveAll, setApproveAll] = useState(null) // { count: number|null, error, progress }
   const [autoApproveConfirm, setAutoApproveConfirm] = useState(false)
 
+  // ?edit=<listing id> shows the editor in place of the list. The list keeps
+  // its tab, filters, page and sort while the editor is open.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const editId = searchParams.get('edit') || ''
+  const listScrollRef = useRef(null)
+
   const isDuplicatesTab = tab === 'duplicates' && !phoneKey
   const list = useAdminList({
     domain: 'properties',
     fetcher: listProperties,
     initialFilters: { status: 'pending', featured: '', archived: '', phoneKey: '' },
-    enabled: !isDuplicatesTab,
+    enabled: !isDuplicatesTab && !editId,
   })
-  const groups = useAdminList({ domain: 'duplicate-groups', fetcher: fetchDuplicateGroups, enabled: isDuplicatesTab, cache: false })
+  const groups = useAdminList({ domain: 'duplicate-groups', fetcher: fetchDuplicateGroups, enabled: isDuplicatesTab && !editId, cache: false })
+
+  const openEditor = (propertyId) => {
+    const fromList = !editId
+    if (fromList) listScrollRef.current = window.scrollY
+    setSearchParams(
+      (current) => {
+        current.delete('id')
+        current.set('edit', propertyId)
+        return current
+      },
+      { replace: !fromList }
+    )
+    window.scrollTo(0, 0)
+  }
+
+  const closeEditor = () => {
+    setSearchParams((current) => {
+      current.delete('edit')
+      return current
+    })
+  }
+
+  // Back on the list: return to where the admin was before opening the editor.
+  useEffect(() => {
+    if (editId || listScrollRef.current === null) return undefined
+    const top = listScrollRef.current
+    listScrollRef.current = null
+    const timer = setTimeout(() => window.scrollTo(0, top), 60)
+    return () => clearTimeout(timer)
+  }, [editId])
 
   // refreshCounts() asks for every count; refreshCounts(keys) only for those.
   // A count that fails keeps its last known value, from this visit or an earlier one.
@@ -231,7 +261,7 @@ const AdminPropertiesSection = () => {
     ),
     [isDuplicatesTab, list, groups, canModerate, pendingCount]
   )
-  useShellHeader({ actions: headerActions })
+  useShellHeader({ actions: editId ? null : headerActions })
 
   const countUnavailable = (key) => Boolean(counts) && counts.data[key] === null
   const countIsStale = (key) => Boolean(counts) && counts.failedKeys.includes(key) && counts.data[key] !== null
@@ -321,7 +351,17 @@ const AdminPropertiesSection = () => {
           <FiStar />
         </Button>
       ) : null}
-      <Button size="sm" variant="ghost" iconOnly aria-label="Edit listing" href={editHref(property.id)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        iconOnly
+        aria-label="Edit listing"
+        href={buildAdminEditPropertyHref(property.id)}
+        onClick={(event) => {
+          event.preventDefault()
+          openEditor(property.id)
+        }}
+      >
         <FiEdit2 />
       </Button>
       {canModerate ? (
@@ -347,6 +387,19 @@ const AdminPropertiesSection = () => {
   if (phoneKey) chips.push({ key: 'phone', label: `Phone ${phoneKey}`, onRemove: () => changeTab('duplicates') })
   if (list.filters.featured) chips.push({ key: 'featured', label: 'Featured only', onRemove: () => list.setFilter('featured', '') })
   if (list.filters.archived) chips.push({ key: 'archived', label: 'Removed listings', onRemove: () => list.setFilter('archived', '') })
+
+  if (editId) {
+    return (
+      <AdminPropertyEditor
+        propertyId={editId}
+        listContext={{ sort: list.sort, filters: list.filters, search: list.search }}
+        heldIds={approval.heldIds}
+        onClose={closeEditor}
+        onOpen={openEditor}
+        approveNow={approveNow}
+      />
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -486,7 +539,15 @@ const AdminPropertiesSection = () => {
               ]}
             />
             <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-              <Button variant="secondary" icon={<FiEdit2 />} href={editHref(selected.id)}>
+              <Button
+                variant="secondary"
+                icon={<FiEdit2 />}
+                href={buildAdminEditPropertyHref(selected.id)}
+                onClick={(event) => {
+                  event.preventDefault()
+                  openEditor(selected.id)
+                }}
+              >
                 Edit listing
               </Button>
               {canModerate && selected.status === 'pending' ? (

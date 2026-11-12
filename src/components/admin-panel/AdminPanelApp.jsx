@@ -61,6 +61,7 @@ const AdminPanelApp = () => {
     const nextParams = new URLSearchParams(searchParams.toString())
     nextParams.set('tab', menuId)
     nextParams.delete('view')
+    nextParams.delete('edit')
     setSearchParams(nextParams)
   }
 

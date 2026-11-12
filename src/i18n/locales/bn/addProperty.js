@@ -306,6 +306,9 @@ const addProperty = {
       imagesMinExisting: 'কমপক্ষে 2টি ছবি আপলোড করুন (আগের ছবি রাখতে পারেন বা নতুন যোগ করতে পারেন)',
       updating: 'আপডেট হচ্ছে...',
       updateListing: 'প্রপার্টি লিস্টিং আপডেট করুন',
+      updateAndNext: 'আপডেট করে পরের পেন্ডিং লিস্টিং',
+      updatedNotice: 'লিস্টিং আইডি {id} আপডেট হয়েছে।',
+      noMorePending: 'আর কোনো পেন্ডিং লিস্টিং নেই।',
       updateFailed: 'প্রপার্টি আপডেট করা যায়নি',
       errors: {
         missingId: 'URL-এ প্রপার্টি আইডি নেই',

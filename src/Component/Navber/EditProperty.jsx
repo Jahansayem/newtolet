@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
 import { getPropertyForEdit, updatePropertyWithImages } from '../../services/propertyService'
+import { getNextPendingPropertyId } from '../../services/admin/nextPendingProperty'
+import { buildEditPropertyHref } from '../../lib/routePaths'
+import { getPropertyIdNumber } from '../../utils/propertyDisplaySerial'
 import {
   validateScreen1Codes,
   validateScreen2Codes,
@@ -229,9 +232,12 @@ const SizeInput = ({ label, value, onChange }) => {
   )
 }
 
-const EditProperty = () => {
+const EditPropertyForm = () => {
   const { t, tv } = useLanguage()
   const [searchParams] = useSearchParams()
+  const location = useLocation()
+  // Set by "Update & next" on the previous listing.
+  const arrivalNotice = location.state?.notice || ''
   const propertyId = searchParams.get('propertyId') || ''
   const isAdminEditRequest = searchParams.get('admin') === '1'
   const returnTo = searchParams.get('returnTo') || '/my-properties'
@@ -281,6 +287,11 @@ const EditProperty = () => {
   // the form cannot be submitted until it exists.
   const loadedRef = useRef(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  // Public ID shown at the top, plus what "Update & next" needs to find the
+  // listing that follows this one in the pending queue.
+  const [listingMeta, setListingMeta] = useState({ idNumber: '', status: '', createdAt: '' })
+  const [submitMode, setSubmitMode] = useState('update')
+  const [successNote, setSuccessNote] = useState('')
 
   // Location hierarchy states
   const [selectedDivision, setSelectedDivision] = useState('')
@@ -454,6 +465,11 @@ const EditProperty = () => {
           setSelectedSubArea(processedProperty.sub_area)
         }
 
+        setListingMeta({
+          idNumber: getPropertyIdNumber(property),
+          status: property.status || '',
+          createdAt: property.created_at || '',
+        })
         loadedRef.current = { amenities: [...amenities], imageRows }
         setIsLoaded(true)
       } catch (error) {
@@ -539,12 +555,13 @@ const EditProperty = () => {
   const clearErrors = () => setErrors({})
   const setFormErrors = (errorObj) => setErrors(errorObj)
 
-  const handleSubmit = async () => {
+  const handleSubmit = async ({ goToNext = false } = {}) => {
     // Never save a form whose amenities and images have not been loaded.
     if (!loadedRef.current) {
       return
     }
 
+    setSubmitMode(goToNext ? 'next' : 'update')
     setSubmitError(null)
     setIsSubmitting(true)
     clearErrors()
@@ -627,6 +644,34 @@ const EditProperty = () => {
         updateFormData({ images: [] })
       }
 
+      if (result.success && goToNext && isAdminEditRequest) {
+        const updatedNotice = listingMeta.idNumber
+          ? t('addProperty.edit.updatedNotice', { id: listingMeta.idNumber })
+          : t('addProperty.edit.updatedMessage')
+        // An admin edit keeps the status, so a pending listing is still in the
+        // queue: continue below it. Otherwise start from the top of the queue.
+        const next = await getNextPendingPropertyId({
+          excludeId: propertyId,
+          ...(listingMeta.status === 'pending'
+            ? { afterCreatedAt: listingMeta.createdAt, afterId: propertyId }
+            : {}),
+        })
+
+        if (next.data) {
+          navigate(buildEditPropertyHref(next.data, { admin: '1', returnTo }), {
+            state: { notice: updatedNotice },
+          })
+          window.scrollTo(0, 0)
+          return
+        }
+
+        // Saved, but there is nothing to move on to (or the lookup failed):
+        // finish like a normal update and say why.
+        if (!next.error) {
+          setSuccessNote(t('addProperty.edit.noMorePending'))
+        }
+      }
+
       if (result.success) {
         setSubmitSuccess(true)
         setTimeout(() => {
@@ -702,6 +747,7 @@ const EditProperty = () => {
           <p className='text-green-700 mb-4'>
             {t('addProperty.edit.updated')}
           </p>
+          {successNote && <p className='text-gray-700 mb-4'>{successNote}</p>}
           <p className='text-sm text-gray-600'>
             {isAdminEditRequest ? t('addProperty.edit.redirectingAdmin') : t('addProperty.success.redirecting')}
           </p>
@@ -737,6 +783,18 @@ const EditProperty = () => {
           <p className='text-sm md:text-base text-gray-600'>
             {t('addProperty.edit.subtitle')}
           </p>
+          {listingMeta.idNumber && (
+            <p className='mt-3'>
+              <span className='ui-id-ticket' data-testid='edit-listing-id'>
+                {t('listing.card.idLabel', { id: listingMeta.idNumber })}
+              </span>
+            </p>
+          )}
+          {arrivalNotice && (
+            <p role='status' className='mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm md:text-base text-green-800'>
+              {arrivalNotice}
+            </p>
+          )}
         </div>
 
         {/* Form Content */}
@@ -1338,14 +1396,24 @@ const EditProperty = () => {
           )}
 
           {/* Submit Button */}
-          <div className='sticky bottom-16 md:bottom-20 bg-white border border-gray-200 rounded-lg p-4 shadow-lg'>
+          <div className={`sticky bottom-16 md:bottom-20 bg-white border border-gray-200 rounded-lg p-4 shadow-lg ${isAdminEditRequest ? 'grid grid-cols-1 sm:grid-cols-2 gap-2' : ''}`}>
             <button
               type='submit'
               disabled={isSubmitting || !isLoaded}
               className='ui-btn ui-btn-primary ui-btn-lg w-full'
             >
-              {isSubmitting ? t('addProperty.edit.updating') : t('addProperty.edit.updateListing')}
+              {isSubmitting && submitMode === 'update' ? t('addProperty.edit.updating') : t('addProperty.edit.updateListing')}
             </button>
+            {isAdminEditRequest && (
+              <button
+                type='button'
+                onClick={() => handleSubmit({ goToNext: true })}
+                disabled={isSubmitting || !isLoaded}
+                className='ui-btn ui-btn-secondary ui-btn-lg w-full'
+              >
+                {isSubmitting && submitMode === 'next' ? t('addProperty.edit.updating') : t('addProperty.edit.updateAndNext')}
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -1361,6 +1429,13 @@ const EditProperty = () => {
       )}
     </div>
   )
+}
+
+// Keyed by listing so that moving to another one ("Update & next") remounts the
+// form: fresh state and a fresh load instead of leftovers from the last listing.
+const EditProperty = () => {
+  const [searchParams] = useSearchParams()
+  return <EditPropertyForm key={searchParams.get('propertyId') || ''} />
 }
 
 export default EditProperty

@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FiCheck, FiEdit2, FiRefreshCw, FiStar, FiTrash2, FiX } from 'react-icons/fi'
 import {
   approveAllPending,
+  countApprovablePending,
   getPropertyCounts,
   listDuplicatePhoneGroups,
   listProperties,
@@ -24,8 +25,10 @@ import RentDisplay from '../../RentDisplay'
 import { useShellHeader } from '../../panel/PanelShellContext'
 import { useAdminList } from '../hooks/useAdminList'
 import { useAdminMutation } from '../hooks/useAdminMutation'
+import { useDeferredApproval } from '../hooks/useDeferredApproval'
 import { useEntityParam } from '../hooks/useEntityParam'
 import { useToast } from '../../ui/ToastProvider'
+import ActionMenu from '../../ui/ActionMenu'
 import Badge from '../../ui/Badge'
 import Button from '../../ui/Button'
 import ConfirmDialog from '../../ui/ConfirmDialog'
@@ -57,6 +60,15 @@ const submitterLabel = (property = {}) => property.submitted_by?.name || propert
 // Last counts that loaded, kept across reloads so a failed request still has
 // something to show. Outside the `counts:` prefix that mutations clear.
 const COUNTS_SNAPSHOT_KEY = `${ADMIN_CACHE_PREFIX}last:property-counts`
+// Preset rejection reasons; the text is what the listing owner sees.
+const REJECT_REASONS = [
+  { label: 'Duplicate', value: 'This listing duplicates another listing.' },
+  { label: 'Incomplete information', value: 'The listing is missing required information.' },
+  { label: 'Wrong location', value: 'The location details are wrong.' },
+  { label: 'Not a rental', value: 'This is not a rental listing.' },
+  { label: 'Spam', value: 'The listing was identified as spam.' },
+]
+const approveListings = (ids) => setPropertyStatus({ ids, status: 'approved' })
 const fetchDuplicateGroups = (params, options) => listDuplicatePhoneGroups({ page: params.page, pageSize: params.pageSize, status: 'pending' }, options)
 
 const AdminPropertiesSection = () => {
@@ -78,7 +90,7 @@ const AdminPropertiesSection = () => {
   const [selectedId, setSelectedId] = useEntityParam('id')
   const [decision, setDecision] = useState(null) // { ids, status }
   const [removeTarget, setRemoveTarget] = useState(null)
-  const [approveAllOpen, setApproveAllOpen] = useState(false)
+  const [approveAll, setApproveAll] = useState(null) // { count: number|null, error, progress }
   const [autoApproveConfirm, setAutoApproveConfirm] = useState(false)
 
   const isDuplicatesTab = tab === 'duplicates' && !phoneKey
@@ -152,10 +164,34 @@ const AdminPropertiesSection = () => {
     invalidate: ['properties', 'duplicate-groups'],
     onSuccess: () => setSelectedIds(new Set()),
   })
-  const approveAllMutation = useAdminMutation((reason) => approveAllPending(reason), {
-    successMessage: (result) => `${result.count ?? 0} pending listings approved`,
-    invalidate: ['properties', 'duplicate-groups'],
-  })
+  const approveAllMutation = useAdminMutation(
+    (reason) => approveAllPending(reason, { onProgress: (done) => setApproveAll((current) => (current ? { ...current, progress: done } : current)) }),
+    {
+      successMessage: (result) => `${result.count ?? 0} pending listings approved`,
+      errorMessage: 'Approve all pending stopped',
+      invalidate: ['properties', 'duplicate-groups'],
+    }
+  )
+
+  // One-click approve: the listing leaves the list at once and the approval is
+  // sent when its Undo toast closes.
+  const approval = useDeferredApproval({ commit: approveListings, labelOf: getPropertyDisplayLabel })
+  const approveNow = (property) => {
+    approval.approve(property)
+    setSelectedIds((current) => {
+      if (!current.has(property.id)) return current
+      const next = new Set(current)
+      next.delete(property.id)
+      return next
+    })
+  }
+
+  // The count typed to confirm is read fresh, with the same filter the action uses.
+  const openApproveAll = async () => {
+    setApproveAll({ count: null, error: null, progress: 0 })
+    const result = await countApprovablePending()
+    setApproveAll((current) => (current ? { ...current, count: result.value, error: result.error } : current))
+  }
   const featuredMutation = useAdminMutation((id, featured) => setPropertyFeatured(id, featured), {
     successMessage: (result) => (result.data?.is_featured ? 'Marked as featured' : 'Removed from featured'),
     invalidate: ['properties'],
@@ -170,13 +206,30 @@ const AdminPropertiesSection = () => {
     else toast.success(enabled ? 'Auto-approve enabled' : 'Auto-approve disabled')
   }
 
+  const pendingCount = counts?.data?.pending ?? null
   const headerActions = useMemo(
     () => (
-      <Button variant="secondary" icon={<FiRefreshCw />} onClick={() => (isDuplicatesTab ? groups.refresh() : list.refresh())} busy={list.isRefreshing || groups.isRefreshing} busyLabel="Refreshing…">
-        Refresh
-      </Button>
+      <>
+        <Button variant="secondary" icon={<FiRefreshCw />} onClick={() => (isDuplicatesTab ? groups.refresh() : list.refresh())} busy={list.isRefreshing || groups.isRefreshing} busyLabel="Refreshing…">
+          Refresh
+        </Button>
+        {canModerate ? (
+          <ActionMenu
+            label="More actions"
+            items={[
+              {
+                key: 'approve-all',
+                label: pendingCount === null ? 'Approve all pending…' : `Approve all pending (${pendingCount})…`,
+                icon: <FiCheck />,
+                disabled: pendingCount === 0,
+                onSelect: () => void openApproveAll(),
+              },
+            ]}
+          />
+        ) : null}
+      </>
     ),
-    [isDuplicatesTab, list, groups]
+    [isDuplicatesTab, list, groups, canModerate, pendingCount]
   )
   useShellHeader({ actions: headerActions })
 
@@ -190,8 +243,10 @@ const AdminPropertiesSection = () => {
   const countsFailed = Boolean(counts?.failedKeys.length) && !listFailed
   const hasStaleCounts = Boolean(counts) && counts.failedKeys.some((key) => counts.data[key] !== null)
 
-  const selected = list.items.find((property) => property.id === selectedId) || null
-  const selectedPending = list.items.filter((property) => selectedIds.has(property.id) && property.status === 'pending')
+  // Listings approved here stay hidden until the list reloads them as approved.
+  const visibleItems = approval.heldIds.size ? list.items.filter((property) => property.status === 'approved' || !approval.heldIds.has(property.id)) : list.items
+  const selected = visibleItems.find((property) => property.id === selectedId) || null
+  const selectedPending = visibleItems.filter((property) => selectedIds.has(property.id) && property.status === 'pending')
 
   const columns = useMemo(
     () => [
@@ -253,7 +308,7 @@ const AdminPropertiesSection = () => {
       </Button>
       {canModerate && property.status === 'pending' ? (
         <>
-          <Button size="sm" variant="primary" icon={<FiCheck />} onClick={() => setDecision({ ids: [property.id], status: 'approved' })}>
+          <Button size="sm" variant="primary" icon={<FiCheck />} onClick={() => approveNow(property)}>
             Approve
           </Button>
           <Button size="sm" variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ ids: [property.id], status: 'rejected' })}>
@@ -357,13 +412,6 @@ const AdminPropertiesSection = () => {
             ]}
             chips={chips}
             onClearAll={() => changeTab(tab === 'duplicates' ? 'pending' : tab)}
-            actions={
-              canModerate && (tab === 'pending' || !tab) && (counts?.data?.pending ?? 0) > 0 ? (
-                <Button variant="secondary" onClick={() => setApproveAllOpen(true)}>
-                  Approve all pending ({counts?.data?.pending})
-                </Button>
-              ) : null
-            }
             resultCount={list.status === 'loading' ? null : list.totalCount}
             resultLabel="listings"
           />
@@ -388,7 +436,7 @@ const AdminPropertiesSection = () => {
           <DataTable
             caption="Property listings"
             columns={columns}
-            rows={list.items}
+            rows={visibleItems}
             loading={list.isLoading}
             error={list.status === 'error' || list.status === 'permission-denied' ? list.error : null}
             onRetry={list.retry}
@@ -443,7 +491,14 @@ const AdminPropertiesSection = () => {
               </Button>
               {canModerate && selected.status === 'pending' ? (
                 <>
-                  <Button variant="primary" icon={<FiCheck />} onClick={() => setDecision({ ids: [selected.id], status: 'approved' })}>
+                  <Button
+                    variant="primary"
+                    icon={<FiCheck />}
+                    onClick={() => {
+                      approveNow(selected)
+                      setSelectedId(null)
+                    }}
+                  >
                     Approve
                   </Button>
                   <Button variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ ids: [selected.id], status: 'rejected' })}>
@@ -457,7 +512,14 @@ const AdminPropertiesSection = () => {
                 </Button>
               ) : null}
               {canModerate && selected.status === 'rejected' ? (
-                <Button variant="primary" icon={<FiCheck />} onClick={() => setDecision({ ids: [selected.id], status: 'approved' })}>
+                <Button
+                  variant="primary"
+                  icon={<FiCheck />}
+                  onClick={() => {
+                    approveNow(selected)
+                    setSelectedId(null)
+                  }}
+                >
                   Approve
                 </Button>
               ) : null}
@@ -484,6 +546,7 @@ const AdminPropertiesSection = () => {
         description={decision?.status === 'approved' ? 'Approved listings are visible to everyone immediately.' : 'The owner sees the listing as rejected with your reason. It stays hidden from the public site.'}
         reasonRequired={decision?.status === 'rejected'}
         reasonHelp="Shown to the listing owner."
+        reasonOptions={decision?.status === 'rejected' ? REJECT_REASONS : null}
         busy={statusMutation.busy}
         error={statusMutation.error}
         onConfirm={async ({ reason, note }) => {
@@ -520,18 +583,30 @@ const AdminPropertiesSection = () => {
       />
 
       <ConfirmDialog
-        open={approveAllOpen}
-        onCancel={() => setApproveAllOpen(false)}
+        open={Boolean(approveAll)}
+        onCancel={() => setApproveAll(null)}
         onConfirm={async () => {
-          setApproveAllOpen(false)
+          if (!approveAll?.count) return
+          approval.flush()
           await approveAllMutation.run('Bulk approval of the pending queue')
+          setApproveAll(null)
         }}
-        title={`Approve all ${counts?.data?.pending ?? 0} pending listings?`}
-        description="Every pending listing becomes public immediately. Each approval is recorded in the audit log."
-        confirmLabel="Approve all"
-        tone="primary"
+        title={approveAll?.count ? `Approve all ${approveAll.count} pending listings?` : 'Approve all pending listings?'}
+        description={
+          approveAll?.error
+            ? `The pending count could not be read, so nothing can be approved. ${approveAll.error.message}`
+            : approveAll?.count === null
+              ? 'Counting the pending listings…'
+              : approveAll?.count === 0
+                ? 'There are no pending listings to approve.'
+                : 'Every pending listing becomes public immediately, without review, and this cannot be undone. Each approval is recorded in the audit log.'
+        }
+        confirmText={approveAll?.count ? String(approveAll.count) : null}
+        confirmTextLabel={approveAll?.count ? `Type ${approveAll.count} to confirm` : null}
+        confirmLabel={approveAll?.count ? `Approve ${approveAll.count} listings` : 'Approve all'}
+        tone="danger"
         busy={approveAllMutation.busy}
-        busyLabel="Approving…"
+        busyLabel={approveAll?.progress ? `Approved ${approveAll.progress} of ${approveAll.count}…` : 'Approving…'}
       />
 
       <ConfirmDialog

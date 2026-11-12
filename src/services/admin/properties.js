@@ -223,8 +223,42 @@ const after = (result) => {
 export const setPropertyStatus = async ({ ids = [], status, reason = null, note = null }) =>
   after(await callAdminRpc('admin_set_property_status', { p_property_ids: ids, p_status: status, p_reason: reason, p_internal_note: note, p_from_status: null }))
 
-export const approveAllPending = async (reason = null) =>
-  after(await callAdminRpc('admin_set_property_status', { p_property_ids: null, p_status: 'approved', p_reason: reason, p_internal_note: null, p_from_status: 'pending' }))
+// The pending queue as "Approve all" sees it: not removed, not deactivated.
+const approvablePending = (query) => query.eq('status', 'pending').is('deleted_at', null).or('is_active.is.null,is_active.eq.true')
+
+/** How many listings "Approve all pending" would approve right now. { value, error } */
+export const countApprovablePending = () => headCount('properties', approvablePending)
+
+const APPROVE_ALL_CHUNK = 200
+const APPROVE_ALL_MAX_ROUNDS = 100
+
+/**
+ * Approves the whole pending queue in batches (the RPC accepts at most 500 ids
+ * per call). Stops at the first failure; `count` is how many were approved,
+ * also when it stops early.
+ */
+export const approveAllPending = async (reason = null, { onProgress = null } = {}) => {
+  let approved = 0
+  const stop = (error) => {
+    if (approved > 0) after({ error: null })
+    const failed = fail(error)
+    const message = approved > 0 ? `${approved} listings were approved, then it stopped: ${failed.error.message}` : failed.error.message
+    return { ...failed, error: { ...failed.error, message }, count: approved }
+  }
+  for (let round = 0; round < APPROVE_ALL_MAX_ROUNDS; round += 1) {
+    const { data, error } = await approvablePending(supabase.from('properties').select('id')).order('created_at', { ascending: true }).limit(APPROVE_ALL_CHUNK)
+    if (error) return stop(error)
+    const ids = (data || []).map((row) => row.id)
+    if (ids.length === 0) break
+    const result = await callAdminRpc('admin_set_property_status', { p_property_ids: ids, p_status: 'approved', p_reason: reason, p_internal_note: null, p_from_status: null })
+    if (result.error) return stop(result.error)
+    const done = result.count ?? ids.length
+    if (done === 0) break
+    approved += done
+    onProgress?.(approved)
+  }
+  return after(ok(null, { count: approved }))
+}
 
 export const setPropertyFeatured = async (propertyId, isFeatured) =>
   after(await callAdminRpc('admin_set_property_featured', { p_property_id: propertyId, p_is_featured: isFeatured }))

@@ -306,6 +306,9 @@ const addProperty = {
       imagesMinExisting: 'Please upload at least 2 images (you can keep existing ones or add new ones)',
       updating: 'Updating...',
       updateListing: 'Update Property Listing',
+      updateAndNext: 'Update & Next Pending',
+      updatedNotice: 'Listing ID {id} updated.',
+      noMorePending: 'There are no more pending listings.',
       updateFailed: 'Failed to update property',
       errors: {
         missingId: 'Property ID is missing from URL',

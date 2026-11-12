@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { FiAlertTriangle, FiArrowLeft, FiCheck, FiTrash2, FiX } from 'react-icons/fi'
+import { FiArrowLeft } from 'react-icons/fi'
 import { EditPropertyForm } from '../../../Component/Navber/EditProperty'
 import { getNextPendingInList, getProperty, setPropertyStatus, softDeleteProperty } from '../../../services/admin/properties'
 import { useAdminPermissions } from '../../../contexts/AdminAccessContext'
@@ -15,6 +15,7 @@ import Button from '../../ui/Button'
 import InlineAlert from '../../ui/InlineAlert'
 import ReasonDialog from '../../ui/ReasonDialog'
 import StatusPill from '../../ui/StatusPill'
+import EditorActionBar from './EditorActionBar'
 import SamePhonePanel from './SamePhonePanel'
 
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
@@ -95,44 +96,17 @@ export default function AdminPropertyEditor({ propertyId, listContext = {}, held
   })
   const removeMutation = useAdminMutation((id, reason) => softDeleteProperty(id, reason), { successMessage: 'Listing removed', invalidate: ['properties', 'duplicate-groups'] })
 
-  const renderActions = ({ submit, isSubmitting, isLoaded, submitMode, warnings }) => {
-    const disabled = isSubmitting || !isLoaded
-    return (
-      <div className="ui-card sticky bottom-0 z-30 p-3 shadow-raised" role="toolbar" aria-label="Listing actions" data-testid="editor-action-bar">
-        {warnings.length > 0 ? (
-          <p className="mb-2 flex items-start gap-2 text-sm text-ink" role="status" data-testid="editor-warnings">
-            <FiAlertTriangle className="mt-0.5 shrink-0 text-marigold-700" aria-hidden="true" />
-            <span>
-              <strong>Check before saving:</strong> {warnings.join(' · ')}. You can still save.
-            </span>
-          </p>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" disabled={disabled} busy={isSubmitting && submitMode === 'update'} busyLabel="Saving…" onClick={() => submit('update')}>
-            Save
-          </Button>
-          {canModerate && status !== 'approved' ? (
-            <Button variant="primary" icon={<FiCheck />} disabled={disabled || !current} busy={isSubmitting && submitMode === 'approve'} busyLabel="Saving…" onClick={() => submit('approve')}>
-              Save &amp; approve
-            </Button>
-          ) : null}
-          <Button variant="secondary" disabled={disabled} busy={isSubmitting && submitMode === 'next'} busyLabel="Saving…" onClick={() => submit('next')}>
-            Save &amp; next pending
-          </Button>
-          {canModerate && current && status !== 'rejected' ? (
-            <Button variant="danger-outline" icon={<FiX />} disabled={isSubmitting} onClick={() => setRejectTarget(current)}>
-              Reject
-            </Button>
-          ) : null}
-          {canModerate && current && !current.deleted_at ? (
-            <Button variant="danger-outline" icon={<FiTrash2 />} disabled={isSubmitting} onClick={() => setRemoveOpen(true)}>
-              Remove
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    )
-  }
+  const renderActions = (formState) => (
+    <EditorActionBar
+      {...formState}
+      canModerate={canModerate}
+      status={status}
+      hasListing={Boolean(current)}
+      removed={Boolean(current?.deleted_at)}
+      onReject={() => setRejectTarget(current)}
+      onRemove={() => setRemoveOpen(true)}
+    />
+  )
 
   return (
     <div className="space-y-4" data-testid="admin-property-editor">

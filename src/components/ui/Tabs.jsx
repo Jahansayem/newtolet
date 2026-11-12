@@ -5,11 +5,12 @@ import Badge from './Badge'
 
 /**
  * WAI-ARIA tabs with automatic activation. Arrow Left/Right, Home and End
- * move focus and select. Render the active panel yourself with
- * `tabPanelProps(key)` so the panel is labelled by its tab.
+ * move focus and select. Pass `idBase` and render the active panel with
+ * `tabPanelProps(idBase, key)` so the tab and its panel point at each other.
  */
-export default function Tabs({ tabs = [], value, onChange, ariaLabel, variant = 'underline', className = '' }) {
-  const baseId = useId()
+export default function Tabs({ tabs = [], value, onChange, ariaLabel, variant = 'underline', className = '', idBase = null }) {
+  const generatedId = useId()
+  const baseId = idBase || generatedId
   const refs = useRef([])
   const enabled = tabs.filter((tab) => !tab.disabled)
 
@@ -76,6 +77,9 @@ export default function Tabs({ tabs = [], value, onChange, ariaLabel, variant = 
     </div>
   )
 }
+
+/** Props for the panel that belongs to tab `key` of the Tabs rendered with the same `idBase`. */
+export const tabPanelProps = (idBase, key) => ({ role: 'tabpanel', id: `${idBase}-panel-${key}`, 'aria-labelledby': `${idBase}-tab-${key}` })
 
 /** Props for the panel element that belongs to `key` within a Tabs instance. */
 export const useTabPanelProps = () => {

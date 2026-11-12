@@ -30,9 +30,11 @@ import { useAdminMutation } from '../hooks/useAdminMutation'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useDeferredApproval } from '../hooks/useDeferredApproval'
 import { useEntityParam } from '../hooks/useEntityParam'
+import { useHotkeys } from '../hooks/useHotkeys'
 import AdminPropertyEditor from '../property-editor/AdminPropertyEditor'
 import CompletenessBadge from './properties/CompletenessBadge'
 import DuplicateCompare from './properties/DuplicateCompare'
+import ShortcutHelp from './properties/ShortcutHelp'
 import PropertyDetailsDialog from './properties/PropertyDetailsDialog'
 import { REJECT_REASONS } from '../propertyRejectReasons'
 import { useToast } from '../../ui/ToastProvider'
@@ -48,7 +50,7 @@ import Pagination from '../../ui/Pagination'
 import ReasonDialog from '../../ui/ReasonDialog'
 import StatCard from '../../ui/StatCard'
 import StatusPill from '../../ui/StatusPill'
-import Tabs from '../../ui/Tabs'
+import Tabs, { tabPanelProps } from '../../ui/Tabs'
 
 const TABS = [
   { key: 'pending', label: 'Pending' },
@@ -124,6 +126,10 @@ const AdminPropertiesSection = () => {
   const [compare, setCompare] = useState(null) // { phoneKey, phoneNumber }
   const [compareVersion, setCompareVersion] = useState(0)
   const openCompare = (key, number = '') => setCompare({ phoneKey: key, phoneNumber: number })
+  // Keyboard: the row J/K moved to, and the "?" help.
+  const [activeId, setActiveId] = useState(null)
+  const lastActiveIndexRef = useRef(0)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // ?edit=<listing id> shows the editor in place of the list. The list keeps
   // its tab, filters, page and sort while the editor is open.
@@ -483,6 +489,48 @@ const AdminPropertiesSection = () => {
     list.setFilters({ ...LIST_FILTER_DEFAULTS, status: nextTab })
   }
 
+  // J/K move a highlight through the rows on screen; Enter, A, R and E act on
+  // the highlighted row. After a row leaves the list the highlight continues
+  // from the same position.
+  const activeIndex = visibleItems.findIndex((property) => property.id === activeId)
+  const activeRow = activeIndex >= 0 ? visibleItems[activeIndex] : null
+  useEffect(() => {
+    if (activeIndex >= 0) lastActiveIndexRef.current = activeIndex
+  }, [activeIndex])
+  useEffect(() => {
+    if (activeId) document.querySelector(`[data-row-key="${activeId}"]`)?.scrollIntoView({ block: 'nearest' })
+  }, [activeId])
+  const moveActive = (delta) => {
+    if (visibleItems.length === 0) return
+    const last = visibleItems.length - 1
+    const target = activeIndex >= 0 ? activeIndex + delta : delta > 0 ? lastActiveIndexRef.current : lastActiveIndexRef.current - 1
+    setActiveId(visibleItems[Math.min(Math.max(target, 0), last)].id)
+  }
+  const canDecide = (property) => Boolean(property) && canModerate && property.status === 'pending'
+  const listKeysOn = !editId && !isDuplicatesTab
+  useHotkeys([
+    { combo: '?', run: () => setHelpOpen(true) },
+    ...(listKeysOn
+      ? [
+          { combo: 'j', run: () => moveActive(1) },
+          { combo: 'k', run: () => moveActive(-1) },
+          { combo: 'enter', run: () => activeRow && openDetails(activeRow.id) },
+          {
+            combo: 'a',
+            run: () => {
+              if (!canDecide(activeRow)) return
+              const next = visibleItems[activeIndex + 1] || visibleItems[activeIndex - 1] || null
+              approveNow(activeRow)
+              setActiveId(next ? next.id : null)
+            },
+          },
+          { combo: 'r', run: () => canDecide(activeRow) && setDecision({ ids: [activeRow.id], status: 'rejected' }) },
+          { combo: 'e', run: () => activeRow && openEditor(activeRow.id) },
+        ]
+      : []),
+  ])
+  const helpDialog = <ShortcutHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+
   const compareDialog = (
     <DuplicateCompare
       phoneKey={compare?.phoneKey || ''}
@@ -521,6 +569,7 @@ const AdminPropertiesSection = () => {
           onCompare={openCompare}
         />
         {compareDialog}
+        {helpDialog}
       </>
     )
   }
@@ -557,8 +606,9 @@ const AdminPropertiesSection = () => {
         </InlineAlert>
       ) : null}
 
-      <Tabs tabs={TABS} value={phoneKey ? '' : tab} onChange={changeTab} ariaLabel="Listing status" />
+      <Tabs tabs={TABS} value={phoneKey ? '' : tab} onChange={changeTab} ariaLabel="Listing status" idBase="properties-tabs" />
 
+      <div {...tabPanelProps('properties-tabs', phoneKey ? '' : tab)} className="space-y-4">
       {isDuplicatesTab ? (
         <>
           <DataTable
@@ -615,9 +665,14 @@ const AdminPropertiesSection = () => {
                 : []),
             ]}
             footerActions={
-              <Button variant="ghost" size="sm" aria-expanded={showMoreFilters} disabled={moreFilterCount > 0} onClick={() => setMoreFiltersOpen((open) => !open)}>
-                {showMoreFilters ? 'Fewer filters' : 'More filters'}
-              </Button>
+              <>
+                <Button variant="ghost" size="sm" aria-expanded={showMoreFilters} disabled={moreFilterCount > 0} onClick={() => setMoreFiltersOpen((open) => !open)}>
+                  {showMoreFilters ? 'Fewer filters' : 'More filters'}
+                </Button>
+                <Button variant="ghost" size="sm" aria-keyshortcuts="?" aria-haspopup="dialog" onClick={() => setHelpOpen(true)}>
+                  Keyboard shortcuts
+                </Button>
+              </>
             }
             chips={chips}
             onClearAll={clearFilters}
@@ -648,6 +703,7 @@ const AdminPropertiesSection = () => {
             rows={visibleItems}
             density="dense"
             stickyActions
+            activeKey={activeId}
             loading={list.isLoading}
             error={list.status === 'error' || list.status === 'permission-denied' ? list.error : null}
             onRetry={list.retry}
@@ -656,15 +712,17 @@ const AdminPropertiesSection = () => {
             selectable={canModerate}
             selectedKeys={selectedIds}
             onSelectionChange={setSelectedIds}
-            getRowLabel={(property) => property.short_description || getPropertyDisplayLabel(property)}
+            getRowLabel={(property) => getPropertyDisplayLabel(property) || property.short_description}
             sort={{ key: list.sort.column, direction: list.sort.dir }}
             onSortChange={(next) => list.setSort({ column: next.key, dir: next.direction })}
           />
           <Pagination page={list.page} pageSize={list.pageSize} total={list.totalCount} onPageChange={list.setPage} onPageSizeChange={list.setPageSize} />
         </>
       )}
+      </div>
 
       {compareDialog}
+      {helpDialog}
 
       <PropertyDetailsDialog
         propertyId={detailsId}

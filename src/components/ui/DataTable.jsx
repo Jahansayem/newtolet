@@ -16,6 +16,10 @@ import InlineAlert from './InlineAlert'
  * selection: selectable, selectedKeys (Set), onSelectionChange(Set), getRowLabel(row)
  * states: loading, error ({message, retryable}), onRetry, empty (node)
  * stickyActions: keeps the actions column in view while the table scrolls sideways
+ * activeKey: key of the row highlighted for keyboard use (aria-current)
+ *
+ * Rows that are already on screen stay in the document while the list
+ * refreshes or a request fails; the error is then shown above them.
  */
 export default function DataTable({
   columns = [],
@@ -36,10 +40,11 @@ export default function DataTable({
   rowActions = null,
   density = 'comfortable',
   stickyActions = false,
+  activeKey = null,
   className = '',
 }) {
   const actionsCellClass = stickyActions ? 'sticky right-0 z-[1] bg-surface shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]' : ''
-  const isDesktop = useMediaQuery('(min-width: 768px)')
+  const isDesktop = useMediaQuery('(min-width: 768px)', { eager: true })
   const captionId = useId()
   const selectAllRef = useRef(null)
   const keyOf = (row) => (typeof rowKey === 'function' ? rowKey(row) : row?.[rowKey])
@@ -76,17 +81,17 @@ export default function DataTable({
 
   const renderCell = (column, row) => (column.render ? column.render(row) : row?.[column.key] ?? '—')
 
+  const hasRows = rows.length > 0
+  const errorAlert = error ? (
+    <InlineAlert variant={error.permissionDenied ? 'permission' : 'danger'} action={onRetry && error.retryable !== false && !error.permissionDenied ? { label: 'Try again', onClick: onRetry } : null}>
+      {error.message}
+    </InlineAlert>
+  ) : null
+  // Shown in place of the rows only when there are none to show.
   const stateBlock = (() => {
+    if (hasRows) return null
     if (loading) return <div className="p-4" aria-hidden="true"><SkeletonRows rows={skeletonRows} cols={Math.min(columns.length || 3, 5)} /></div>
-    if (error) {
-      return (
-        <div className="p-4">
-          <InlineAlert variant={error.permissionDenied ? 'permission' : 'danger'} action={onRetry && error.retryable !== false && !error.permissionDenied ? { label: 'Try again', onClick: onRetry } : null}>
-            {error.message}
-          </InlineAlert>
-        </div>
-      )
-    }
+    if (error) return <div className="p-4">{errorAlert}</div>
     if (rows.length === 0) return <div className="p-6 text-center text-sm text-muted">{empty || 'Nothing to show.'}</div>
     return null
   })()
@@ -128,12 +133,13 @@ export default function DataTable({
             {sortControl}
           </div>
         ) : null}
+        {hasRows && errorAlert ? errorAlert : null}
         {stateBlock || (
           <ul className="space-y-3">
             {rows.map((row) => {
               const key = keyOf(row)
               return (
-                <li key={key} className={`ui-card p-4 ${selected.has(key) ? 'ring-2 ring-brand' : ''}`}>
+                <li key={key} data-row-key={key} aria-current={activeKey === key ? 'true' : undefined} className={`ui-card p-4 ${selected.has(key) || activeKey === key ? 'ring-2 ring-brand' : ''}`}>
                   {(selectable && onSelectionChange) || rowActions ? (
                     <div className="mb-3 flex items-center justify-between gap-3">
                       {selectable && onSelectionChange ? (
@@ -164,6 +170,7 @@ export default function DataTable({
 
   return (
     <div className={`ui-card overflow-hidden ${className}`.trim()} aria-busy={loading || undefined}>
+      {hasRows && errorAlert ? <div className="p-3">{errorAlert}</div> : null}
       <div className="overflow-x-auto">
         <table className={`ui-table ${density === 'compact' ? 'ui-table-compact' : density === 'dense' ? 'ui-table-dense' : ''}`}>
           <caption className="sr-only">{caption}</caption>
@@ -204,7 +211,12 @@ export default function DataTable({
               {rows.map((row) => {
                 const key = keyOf(row)
                 return (
-                  <tr key={key} className={selected.has(key) ? 'bg-brand-soft/40' : ''}>
+                  <tr
+                    key={key}
+                    data-row-key={key}
+                    aria-current={activeKey === key ? 'true' : undefined}
+                    className={`${selected.has(key) ? 'bg-brand-soft/40' : ''} ${activeKey === key ? 'outline outline-2 -outline-offset-2 outline-[var(--color-brand)]' : ''}`.trim()}
+                  >
                     {selectable && onSelectionChange ? (
                       <td>
                         <input type="checkbox" className="h-5 w-5 accent-brand" checked={selected.has(key)} onChange={() => toggleOne(row)} aria-label={`Select ${getRowLabel(row)}`} />

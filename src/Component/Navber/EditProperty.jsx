@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useId, useRef } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import ImageUploader from '../../components/AddProperty/ImageUploader'
 import LocationPicker from '../../components/AddProperty/LocationPicker'
@@ -104,7 +104,9 @@ const amenitiesList = [
   'With Furniture',
 ]
 
-const CounterInput = ({ label, value, onChange, error, optional = false }) => {
+const CounterInput = ({ label, value, onChange, error, optional = false, ariaKey = '' }) => {
+  const { t } = useLanguage()
+  const inputId = useId()
   const handleDecrement = () => {
     onChange(Math.max(0, value - 1))
   }
@@ -120,13 +122,14 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
 
   return (
     <div>
-      <label className='ui-label'>
+      <label htmlFor={inputId} className='ui-label'>
         {label} {!optional && '*'}
       </label>
       <div className='flex items-center overflow-hidden rounded-[var(--radius-input)] border border-[#cbd5e1] bg-white'>
         <button
           type='button'
           onClick={handleDecrement}
+          aria-label={ariaKey ? t(`addProperty.aria.decrease${ariaKey}`) : undefined}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
@@ -135,17 +138,20 @@ const CounterInput = ({ label, value, onChange, error, optional = false }) => {
         <button
           type='button'
           onClick={handleIncrement}
+          aria-label={ariaKey ? t(`addProperty.aria.increase${ariaKey}`) : undefined}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
           +
         </button>
         <input
+          id={inputId}
           type='text'
           inputMode='numeric'
           pattern='[0-9]*'
           value={value}
           onChange={handleChange}
+          aria-invalid={error ? 'true' : undefined}
           className='flex-1 min-w-0 text-center py-2 text-sm md:text-base focus:outline-none bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'
         />
       </div>
@@ -167,6 +173,7 @@ const CheckboxInput = ({ label, checked, onChange, error, optional = false }) =>
         type='checkbox'
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
+        aria-label={label}
         className='h-4 w-4 rounded border-gray-300 text-brand focus:ring-brand'
       />
       <span className='text-sm md:text-base text-gray-700'>
@@ -180,6 +187,7 @@ const CheckboxInput = ({ label, checked, onChange, error, optional = false }) =>
 
 const SizeInput = ({ label, value, onChange }) => {
   const { t } = useLanguage()
+  const inputId = useId()
   const handleDecrement = () => {
     const currentValue = parseInt(value) || 0
     onChange(Math.max(0, currentValue - 50).toString())
@@ -197,13 +205,14 @@ const SizeInput = ({ label, value, onChange }) => {
 
   return (
     <div>
-      <label className='ui-label'>
+      <label htmlFor={inputId} className='ui-label'>
         {label}
       </label>
       <div className='flex items-center overflow-hidden rounded-[var(--radius-input)] border border-[#cbd5e1] bg-white'>
         <button
           type='button'
           onClick={handleDecrement}
+          aria-label={t('addProperty.aria.decreaseRoomSize')}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
@@ -212,12 +221,14 @@ const SizeInput = ({ label, value, onChange }) => {
         <button
           type='button'
           onClick={handleIncrement}
+          aria-label={t('addProperty.aria.increaseRoomSize')}
           className='px-1.5 sm:px-2 lg:px-2.5 py-2 text-base lg:text-lg font-bold text-gray-700 bg-white hover:bg-gray-100 active:bg-gray-200 cursor-pointer transition-all flex-shrink-0 select-none border-r border-gray-300'
           tabIndex={0}
         >
           +
         </button>
         <input
+          id={inputId}
           type='text'
           inputMode='numeric'
           pattern='[0-9]*'
@@ -805,14 +816,15 @@ const EditPropertyForm = ({ adminPanel = null }) => {
             <div className='space-y-4 md:space-y-5'>
               {/* Category Selection */}
               <div>
-                <label className='ui-label text-[15px]'>
+                <span id='edit-category-label' className='ui-label text-[15px]'>
                   {t('addProperty.fields.selectCategory')}
-                </label>
-                <div className='grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3'>
+                </span>
+                <div role='group' aria-labelledby='edit-category-label' className='grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3'>
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
                       type='button'
+                      aria-pressed={formData.category === cat.label}
                       onClick={() => updateFormData({ category: cat.label })}
                       className={`p-3 md:p-4 rounded-lg border-2 transition-all text-center ${
                         formData.category === cat.label
@@ -820,7 +832,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                           : 'border-gray-300 bg-white hover:border-brand/40'
                       }`}
                     >
-                      <div className='text-2xl md:text-3xl mb-1 md:mb-2'>{cat.icon}</div>
+                      <div aria-hidden='true' className='text-2xl md:text-3xl mb-1 md:mb-2'>{cat.icon}</div>
                       <p className='font-medium text-xs md:text-sm'>{tv('categories', cat.label)}</p>
                     </button>
                   ))}
@@ -830,10 +842,10 @@ const EditPropertyForm = ({ adminPanel = null }) => {
 
               {/* Property Type Selection */}
               <div>
-                <label className='ui-label text-[15px]'>
+                <label htmlFor='edit-propertyType' className='ui-label text-[15px]'>
                   {t('addProperty.fields.propertyType')}
                 </label>
-                <select
+                <select id='edit-propertyType'
                   value={formData.property_type || ''}
                   onChange={(e) => updateFormData({ property_type: e.target.value })}
                   className='ui-field'
@@ -855,6 +867,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                   value={formData.total_rooms || 0}
                   onChange={(val) => updateFormData({ total_rooms: val })}
                   error={errors.total_rooms}
+                  ariaKey='Rooms'
                   optional
                 />
                 <CheckboxInput
@@ -869,18 +882,21 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                   value={formData.total_bathrooms}
                   onChange={(val) => updateFormData({ total_bathrooms: val })}
                   error={errors.total_bathrooms}
+                  ariaKey='Bathrooms'
                 />
                 <CounterInput
                   label={t('addProperty.fields.balcony')}
                   value={formData.balcony}
                   onChange={(val) => updateFormData({ balcony: val })}
                   error={errors.balcony}
+                  ariaKey='Balconies'
                 />
                 <CounterInput
                   label={t('addProperty.fields.kitchen')}
                   value={formData.kitchen || 0}
                   onChange={(val) => updateFormData({ kitchen: val })}
                   error={errors.kitchen}
+                  ariaKey='Kitchen'
                 />
                 <SizeInput
                   label={t('addProperty.fields.roomSize')}
@@ -897,6 +913,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                 <select id='edit-floorLevel'
                   value={formData.floor_level}
                   onChange={(e) => updateFormData({ floor_level: e.target.value })}
+                  aria-invalid={errors.floor_level ? 'true' : undefined}
                   className={`w-full px-3 md:px-4 py-2 md:py-2.5 text-sm md:text-base border rounded-lg focus:outline-none focus:ring-2 ${
                     errors.floor_level
                       ? 'border-red-500 focus:ring-red-500'
@@ -916,10 +933,10 @@ const EditPropertyForm = ({ adminPanel = null }) => {
 
               {/* Occupancy Restrictions */}
               <div>
-                <label className='ui-label text-[15px]'>
+                <span id='edit-occupancy-label' className='ui-label text-[15px]'>
                   {t('addProperty.fields.occupancy')}
-                </label>
-                <div className='space-y-2 md:space-y-3'>
+                </span>
+                <div role='radiogroup' aria-labelledby='edit-occupancy-label' aria-invalid={errors.occupancy ? 'true' : undefined} className='space-y-2 md:space-y-3'>
                   {occupancies.map((occ) => (
                     <label
                       key={occ}
@@ -963,6 +980,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                     type='number'
                     value={formData.rent_amount_bdt}
                     onChange={(e) => updateFormData({ rent_amount_bdt: parseInt(e.target.value) || '' })}
+                    aria-invalid={errors.rent_amount_bdt ? 'true' : undefined}
                     className={`w-full pl-8 md:pl-10 pr-3 md:pr-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
                       errors.rent_amount_bdt
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
@@ -990,14 +1008,15 @@ const EditPropertyForm = ({ adminPanel = null }) => {
 
               {/* Rent Period */}
               <div>
-                <label className='ui-label text-[15px]'>
+                <span id='edit-rentPeriod-label' className='ui-label text-[15px]'>
                   {t('addProperty.fields.rentalPeriod')}
-                </label>
-                <div className='grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3'>
+                </span>
+                <div role='group' aria-labelledby='edit-rentPeriod-label' className='grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3'>
                   {rentPeriods.map((period) => (
                     <button
                       key={period}
                       type='button'
+                      aria-pressed={formData.rent_period === period}
                       onClick={() => updateFormData({ rent_period: period })}
                       className={`p-3 md:p-4 rounded-lg border-2 transition-all font-semibold text-center ${
                         formData.rent_period === period
@@ -1005,7 +1024,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                           : 'border-gray-300 bg-white text-gray-700 hover:border-brand/40'
                       }`}
                     >
-                      <span className='text-xl md:text-2xl'>
+                      <span aria-hidden='true' className='text-xl md:text-2xl'>
                         {period === 'Daily' && '📅'}
                         {period === 'Weekly' && '📆'}
                         {period === 'Monthly' && '📊'}
@@ -1070,10 +1089,10 @@ const EditPropertyForm = ({ adminPanel = null }) => {
 
               {/* Division Dropdown */}
               <div>
-                <label className='ui-label text-[15px]'>
+                <label htmlFor='edit-division' className='ui-label text-[15px]'>
                   {t('addProperty.fields.division')}
                 </label>
-                <select
+                <select id='edit-division'
                   value={selectedDivision}
                   onChange={(e) => handleDivisionChange(e.target.value)}
                   className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all bg-white ${
@@ -1188,6 +1207,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                     type='tel'
                     value={formData.contact_number.replace('+88', '')}
                     onChange={(e) => updateFormData({ contact_number: '+88' + e.target.value })}
+                    aria-invalid={errors.contact_number ? 'true' : undefined}
                     className={`flex-1 px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 border-l-0 rounded-r-lg focus:outline-none transition-all ${
                       errors.contact_number
                         ? 'border-red-500 focus:ring-2 focus:ring-red-500'
@@ -1207,6 +1227,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                 <textarea id='edit-shortDescription'
                   value={formData.short_description}
                   onChange={(e) => updateFormData({ short_description: e.target.value })}
+                  aria-invalid={errors.short_description ? 'true' : undefined}
                   className={`w-full px-3 md:px-4 py-2.5 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all resize-none ${
                     errors.short_description
                       ? 'border-red-500 focus:ring-2 focus:ring-red-500'
@@ -1243,16 +1264,18 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                 <button
                   type='button'
                   onClick={() => setShowOptionalLocation(!showOptionalLocation)}
+                  aria-expanded={showOptionalLocation}
+                  aria-controls='edit-optional-details'
                   className='flex items-center gap-2 text-brand font-semibold hover:text-brand-hover'
                 >
-                  <svg className={`w-5 h-5 transition-transform ${showOptionalLocation ? 'rotate-90' : ''}`} fill='currentColor' viewBox='0 0 20 20'>
+                  <svg aria-hidden='true' className={`w-5 h-5 transition-transform ${showOptionalLocation ? 'rotate-90' : ''}`} fill='currentColor' viewBox='0 0 20 20'>
                     <path fillRule='evenodd' d='M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z' clipRule='evenodd' />
                   </svg>
                   {t('addProperty.fields.optionalDetails')}
                 </button>
 
                 {showOptionalLocation && (
-                  <div className='mt-4 space-y-4 p-4 bg-gray-50 rounded-lg'>
+                  <div id='edit-optional-details' className='mt-4 space-y-4 p-4 bg-gray-50 rounded-lg'>
                     <div>
                       <label htmlFor='edit-sector' className='ui-label'>{t('addProperty.fields.sector')}</label>
                       <input id='edit-sector'
@@ -1300,8 +1323,8 @@ const EditPropertyForm = ({ adminPanel = null }) => {
             <div className='space-y-4 md:space-y-5'>
               {/* Amenities */}
               <div>
-                <h3 className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>{t('addProperty.sections.amenities')}</h3>
-                <div className='grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3'>
+                <h3 id='edit-amenities-label' className='text-base md:text-lg font-semibold text-gray-800 mb-3 md:mb-4'>{t('addProperty.sections.amenities')}</h3>
+                <div role='group' aria-labelledby='edit-amenities-label' className='grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3'>
                   {amenitiesList.map((amenity) => (
                     <label
                       key={amenity}
@@ -1309,6 +1332,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                     >
                       <input
                         type='checkbox'
+                        value={amenity}
                         checked={formData.amenities.includes(amenity)}
                         onChange={() => handleAmenityToggle(amenity)}
                         className='w-4 h-4 md:w-5 md:h-5 text-brand rounded cursor-pointer'
@@ -1329,6 +1353,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                       type='date'
                       value={formData.available_from}
                       onChange={(e) => updateFormData({ available_from: e.target.value })}
+                      aria-invalid={errors.available_from ? 'true' : undefined}
                       className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
                         errors.available_from
                           ? 'border-red-500 focus:ring-2 focus:ring-red-500'
@@ -1343,6 +1368,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                       type='date'
                       value={formData.deadline}
                       onChange={(e) => updateFormData({ deadline: e.target.value })}
+                      aria-invalid={errors.deadline ? 'true' : undefined}
                       className={`w-full px-3 md:px-4 py-2 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-all ${
                         errors.deadline
                           ? 'border-red-500 focus:ring-2 focus:ring-red-500'

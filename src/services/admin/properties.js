@@ -4,6 +4,7 @@
 
 import { supabase } from '../supabaseClient'
 import { normalizePhoneForDuplicateKey } from '../../lib/phoneKey'
+import { resolveCountKeys } from '../../lib/propertyCounts'
 import { fetchAdminRow, runAdminListQuery } from './adminQuery'
 import { callAdminRpc } from './adminRpc'
 import { fail, logAdminError, ok } from './adminResult'
@@ -171,29 +172,43 @@ export const listPropertiesByIds = async (ids = [], { signal } = {}) => {
   return ok(unique.map((id) => byId[id]).filter(Boolean))
 }
 
+// Stat-card counts. A metric that could not be read is `null`, never 0, so the
+// caller can keep its last known value or show it as unavailable.
+const countDuplicateGroups = async () => {
+  const result = await callAdminRpc('admin_duplicate_phone_groups', { p_status: 'pending', p_limit: 1, p_offset: 0 })
+  if (result.error) return { value: null, error: result.error }
+  // No rows from the RPC means there are no duplicate groups.
+  if (!Array.isArray(result.data)) return { value: null, error: null }
+  return { value: result.data.length ? Number(result.data[0].total_groups) : 0, error: null }
+}
+
+const COUNT_FETCHERS = {
+  total: () => headCount('properties', (q) => q.is('deleted_at', null)),
+  approved: () => headCount('properties', (q) => q.eq('status', 'approved').is('deleted_at', null)),
+  pending: () => headCount('properties', (q) => q.eq('status', 'pending').is('deleted_at', null)),
+  rejected: () => headCount('properties', (q) => q.eq('status', 'rejected').is('deleted_at', null)),
+  duplicatePending: countDuplicateGroups,
+}
+
 /**
- * Stat-card counts. A metric that could not be read is `null`, never 0, so the
- * caller can keep its last known value or show it as unavailable.
+ * getPropertyCounts({ only }) — `only` limits the requests to those counts, so
+ * a retry asks again only for the ones that failed. `data` holds the requested
+ * keys; `failedKeys` lists the ones that could not be read and `error` is the
+ * first of their errors.
  */
-export const getPropertyCounts = async () => {
-  const [total, approved, pending, rejected, duplicates] = await Promise.all([
-    headCount('properties', (q) => q.is('deleted_at', null)),
-    headCount('properties', (q) => q.eq('status', 'approved').is('deleted_at', null)),
-    headCount('properties', (q) => q.eq('status', 'pending').is('deleted_at', null)),
-    headCount('properties', (q) => q.eq('status', 'rejected').is('deleted_at', null)),
-    callAdminRpc('admin_duplicate_phone_groups', { p_status: 'pending', p_limit: 1, p_offset: 0 }),
-  ])
-  const firstError = [total, approved, pending, rejected].find((entry) => entry.error)?.error || null
-  // No rows from the RPC means there are no duplicate groups; an error means unknown.
-  const duplicateGroups = duplicates.error || !Array.isArray(duplicates.data) ? null : duplicates.data.length ? Number(duplicates.data[0].total_groups) : 0
-  const data = {
-    total: total.value,
-    approved: approved.value,
-    pending: pending.value,
-    rejected: rejected.value,
-    duplicatePending: duplicateGroups,
-  }
-  return { ...ok(data), error: firstError, partial: Object.values(data).some((value) => value === null) }
+export const getPropertyCounts = async ({ only = null } = {}) => {
+  const keys = resolveCountKeys(only)
+  const settled = await Promise.all(keys.map((key) => COUNT_FETCHERS[key]()))
+  const data = {}
+  const failedKeys = []
+  let firstError = null
+  keys.forEach((key, index) => {
+    const { value, error } = settled[index]
+    data[key] = value
+    if (value === null) failedKeys.push(key)
+    if (error && !firstError) firstError = error
+  })
+  return { ...ok(data), error: firstError, partial: failedKeys.length > 0, failedKeys }
 }
 
 const after = (result) => {

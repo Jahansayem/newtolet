@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FiCheck, FiEdit2, FiRefreshCw, FiStar, FiTrash2, FiX } from 'react-icons/fi'
 import {
   approveAllPending,
@@ -12,6 +12,9 @@ import {
   softDeleteProperty,
 } from '../../../services/admin/properties'
 import { getAutoApproveProperties, toggleAutoApproveProperties } from '../../../services/adminService'
+import { ADMIN_CACHE_PREFIX, readAdminSnapshot, writeAdminSnapshot } from '../../../services/admin/adminCache'
+import { clearSupabaseConnectionFailureMark } from '../../../services/supabaseClient'
+import { PROPERTY_COUNT_LABELS, describeFailedCounts, mergePropertyCounts } from '../../../lib/propertyCounts'
 import { buildEditPropertyHref, buildPageHref } from '../../../lib/routePaths'
 import { getPropertyDisplayLabel } from '../../../utils/propertyDisplaySerial'
 import { useAdminPermissions } from '../../../contexts/AdminAccessContext'
@@ -51,9 +54,9 @@ const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-GB
 const editHref = (propertyId) => buildEditPropertyHref(propertyId, { admin: '1', returnTo: buildPageHref('admin', { tab: 'properties' }) })
 const pricingOf = (property = {}) => ({ rent_amount_bdt: property.rent_amount_bdt ?? property.pricing?.rent_amount_bdt, is_rent_negotiable: property.is_rent_negotiable ?? property.pricing?.is_rent_negotiable })
 const submitterLabel = (property = {}) => property.submitted_by?.name || property.submitted_by?.email || property.submitted_by?.phone || 'Unknown user'
-// A count that failed to load arrives as null: keep the value already on screen.
-const COUNT_KEYS = ['total', 'approved', 'pending', 'rejected', 'duplicatePending']
-const mergeCounts = (previous, next) => Object.fromEntries(COUNT_KEYS.map((key) => [key, next?.[key] ?? previous?.[key] ?? null]))
+// Last counts that loaded, kept across reloads so a failed request still has
+// something to show. Outside the `counts:` prefix that mutations clear.
+const COUNTS_SNAPSHOT_KEY = `${ADMIN_CACHE_PREFIX}last:property-counts`
 const fetchDuplicateGroups = (params, options) => listDuplicatePhoneGroups({ page: params.page, pageSize: params.pageSize, status: 'pending' }, options)
 
 const AdminPropertiesSection = () => {
@@ -65,7 +68,11 @@ const AdminPropertiesSection = () => {
 
   const [tab, setTab] = useState('pending')
   const [phoneKey, setPhoneKey] = useState('')
-  const [counts, setCounts] = useState(null)
+  const [counts, setCounts] = useState(null) // { data, failedKeys, error }
+  const [countsBusy, setCountsBusy] = useState(false)
+  const countsRequestRef = useRef(0)
+  const lastKnownCountsRef = useRef(null)
+  const failedCountKeysRef = useRef([])
   const [autoApprove, setAutoApprove] = useState({ enabled: false, fallback: false, loaded: false })
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [selectedId, setSelectedId] = useEntityParam('id')
@@ -83,22 +90,38 @@ const AdminPropertiesSection = () => {
   })
   const groups = useAdminList({ domain: 'duplicate-groups', fetcher: fetchDuplicateGroups, enabled: isDuplicatesTab, cache: false })
 
-  const refreshCounts = useCallback(async () => {
-    const result = await getPropertyCounts()
-    setCounts((previous) => ({ data: mergeCounts(previous?.data, result.data), partial: Boolean(result.partial) }))
+  // refreshCounts() asks for every count; refreshCounts(keys) only for those.
+  // A count that fails keeps its last known value, from this visit or an earlier one.
+  const refreshCounts = useCallback(async (only = null) => {
+    const requestId = ++countsRequestRef.current
+    if (!lastKnownCountsRef.current) lastKnownCountsRef.current = readAdminSnapshot(COUNTS_SNAPSHOT_KEY)
+    setCountsBusy(true)
+    const result = await getPropertyCounts({ only })
+    if (requestId !== countsRequestRef.current) return
+    const data = mergePropertyCounts(lastKnownCountsRef.current, result.data)
+    lastKnownCountsRef.current = data
+    if (Object.values(data).some((value) => value !== null)) writeAdminSnapshot(COUNTS_SNAPSHOT_KEY, data)
+    failedCountKeysRef.current = result.failedKeys || []
+    setCounts({ data, failedKeys: result.failedKeys || [], error: result.error })
+    setCountsBusy(false)
   }, [])
 
   // Counts that failed are fetched again once a list request succeeds; a failed
   // list request never re-runs (or clears) the counts.
-  const retryCounts = Boolean(counts?.partial) && (list.status === 'ready' || groups.status === 'ready')
+  const retryCounts = Boolean(counts?.failedKeys.length) && (list.status === 'ready' || groups.status === 'ready')
 
   useEffect(() => {
     void refreshCounts()
   }, [refreshCounts, list.totalCount, groups.totalCount])
 
   useEffect(() => {
-    if (retryCounts) void refreshCounts()
+    if (retryCounts) void refreshCounts(failedCountKeysRef.current)
   }, [retryCounts, refreshCounts])
+
+  const retryFailedCounts = () => {
+    clearSupabaseConnectionFailureMark?.()
+    void refreshCounts(failedCountKeysRef.current)
+  }
 
   useEffect(() => {
     let active = true
@@ -158,6 +181,14 @@ const AdminPropertiesSection = () => {
   useShellHeader({ actions: headerActions })
 
   const countUnavailable = (key) => Boolean(counts) && counts.data[key] === null
+  const countIsStale = (key) => Boolean(counts) && counts.failedKeys.includes(key) && counts.data[key] !== null
+  const staleHint = (key, hint = null) => (countIsStale(key) ? 'Last known value' : hint)
+  // One message at a time: while the list itself shows an error, that message
+  // stands for the outage and its "Try again" brings the counts back too.
+  const activeList = isDuplicatesTab ? groups : list
+  const listFailed = activeList.status === 'error' || activeList.status === 'permission-denied'
+  const countsFailed = Boolean(counts?.failedKeys.length) && !listFailed
+  const hasStaleCounts = Boolean(counts) && counts.failedKeys.some((key) => counts.data[key] !== null)
 
   const selected = list.items.find((property) => property.id === selectedId) || null
   const selectedPending = list.items.filter((property) => selectedIds.has(property.id) && property.status === 'pending')
@@ -276,12 +307,23 @@ const AdminPropertiesSection = () => {
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <StatCard label="Listings" value={counts?.data?.total} loading={!counts} error={countUnavailable('total')} />
-        <StatCard label="Approved" value={counts?.data?.approved} loading={!counts} error={countUnavailable('approved')} />
-        <StatCard label="Pending" value={counts?.data?.pending} loading={!counts} error={countUnavailable('pending')} tone={counts?.data?.pending > 0 ? 'warning' : 'neutral'} onClick={() => changeTab('pending')} />
-        <StatCard label="Rejected" value={counts?.data?.rejected} loading={!counts} error={countUnavailable('rejected')} />
-        <StatCard label="Duplicate groups" value={counts?.data?.duplicatePending} loading={!counts} error={countUnavailable('duplicatePending')} tone={counts?.data?.duplicatePending > 0 ? 'danger' : 'neutral'} hint="Pending listings sharing a phone" onClick={() => changeTab('duplicates')} />
+        <StatCard label={PROPERTY_COUNT_LABELS.total} value={counts?.data?.total} loading={!counts} error={countUnavailable('total')} hint={staleHint('total')} />
+        <StatCard label={PROPERTY_COUNT_LABELS.approved} value={counts?.data?.approved} loading={!counts} error={countUnavailable('approved')} hint={staleHint('approved')} />
+        <StatCard label={PROPERTY_COUNT_LABELS.pending} value={counts?.data?.pending} loading={!counts} error={countUnavailable('pending')} hint={staleHint('pending')} tone={counts?.data?.pending > 0 ? 'warning' : 'neutral'} onClick={() => changeTab('pending')} />
+        <StatCard label={PROPERTY_COUNT_LABELS.rejected} value={counts?.data?.rejected} loading={!counts} error={countUnavailable('rejected')} hint={staleHint('rejected')} />
+        <StatCard label={PROPERTY_COUNT_LABELS.duplicatePending} value={counts?.data?.duplicatePending} loading={!counts} error={countUnavailable('duplicatePending')} tone={counts?.data?.duplicatePending > 0 ? 'danger' : 'neutral'} hint={staleHint('duplicatePending', 'Pending listings sharing a phone')} onClick={() => changeTab('duplicates')} />
       </div>
+
+      {countsFailed ? (
+        <InlineAlert
+          variant="warning"
+          title={`Couldn't refresh ${describeFailedCounts(counts.failedKeys)}`}
+          action={counts.error?.retryable === false || counts.error?.permissionDenied ? null : { label: 'Try again', onClick: retryFailedCounts, busy: countsBusy }}
+        >
+          {counts.error?.message || 'The request failed.'}
+          {hasStaleCounts ? ' The cards show the last known values.' : ''}
+        </InlineAlert>
+      ) : null}
 
       <Tabs tabs={TABS} value={phoneKey ? '' : tab} onChange={changeTab} ariaLabel="Listing status" />
 

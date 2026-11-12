@@ -26,6 +26,17 @@ export const normalizeSupabaseError = (error) => {
   return adminError
 }
 
+/**
+ * postgrest-js reports the HTTP status on the response, not on `error`; a
+ * failure with an empty body arrives as `{ message: '' }`. Copying the status
+ * onto the error lets classifyError tell a timeout from a server error.
+ */
+export const withHttpStatus = (error, status) => {
+  if (!error || typeof error !== 'object' || typeof status !== 'number' || status < 400) return error
+  if (error.status ?? error.statusCode ?? error.httpStatus) return error
+  return { ...error, message: error.message, name: error.name, status }
+}
+
 export const ok = (data, { auditId = null, ...paging } = {}) => ({ data, error: null, auditId, ...paging })
 
 export const fail = (error, { paging = {} } = {}) => ({ data: null, error: normalizeSupabaseError(error), auditId: null, ...paging })

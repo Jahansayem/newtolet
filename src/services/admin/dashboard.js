@@ -2,7 +2,7 @@
 // fetches, with per-metric error reporting.
 
 import { supabase } from '../supabaseClient'
-import { fail, logAdminError, normalizeSupabaseError, ok } from './adminResult'
+import { fail, logAdminError, normalizeSupabaseError, ok, withHttpStatus } from './adminResult'
 import { ADMIN_QUEUE_COUNTS_KEY, readAdminSnapshot, writeAdminSnapshot } from './adminCache'
 
 const PAYMENT_AWAITING_RAW = ['awaiting_admin_approval']
@@ -14,8 +14,8 @@ export const headCount = async (table, apply = (q) => q, { signal } = {}) => {
     let query = supabase.from(table).select('id', { count: 'exact', head: true })
     query = apply(query) || query
     if (signal && typeof query.abortSignal === 'function') query = query.abortSignal(signal)
-    const { count, error } = await query
-    if (error) return { value: null, error: normalizeSupabaseError(error) }
+    const { count, error, status } = await query
+    if (error) return { value: null, error: normalizeSupabaseError(withHttpStatus(error, status)) }
     return { value: count ?? 0, error: null }
   } catch (error) {
     return { value: null, error: normalizeSupabaseError(error) }

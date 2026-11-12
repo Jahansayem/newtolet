@@ -51,6 +51,9 @@ const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-GB
 const editHref = (propertyId) => buildEditPropertyHref(propertyId, { admin: '1', returnTo: buildPageHref('admin', { tab: 'properties' }) })
 const pricingOf = (property = {}) => ({ rent_amount_bdt: property.rent_amount_bdt ?? property.pricing?.rent_amount_bdt, is_rent_negotiable: property.is_rent_negotiable ?? property.pricing?.is_rent_negotiable })
 const submitterLabel = (property = {}) => property.submitted_by?.name || property.submitted_by?.email || property.submitted_by?.phone || 'Unknown user'
+// A count that failed to load arrives as null: keep the value already on screen.
+const COUNT_KEYS = ['total', 'approved', 'pending', 'rejected', 'duplicatePending']
+const mergeCounts = (previous, next) => Object.fromEntries(COUNT_KEYS.map((key) => [key, next?.[key] ?? previous?.[key] ?? null]))
 const fetchDuplicateGroups = (params, options) => listDuplicatePhoneGroups({ page: params.page, pageSize: params.pageSize, status: 'pending' }, options)
 
 const AdminPropertiesSection = () => {
@@ -82,12 +85,20 @@ const AdminPropertiesSection = () => {
 
   const refreshCounts = useCallback(async () => {
     const result = await getPropertyCounts()
-    if (result.data) setCounts(result)
+    setCounts((previous) => ({ data: mergeCounts(previous?.data, result.data), partial: Boolean(result.partial) }))
   }, [])
+
+  // Counts that failed are fetched again once a list request succeeds; a failed
+  // list request never re-runs (or clears) the counts.
+  const retryCounts = Boolean(counts?.partial) && (list.status === 'ready' || groups.status === 'ready')
 
   useEffect(() => {
     void refreshCounts()
   }, [refreshCounts, list.totalCount, groups.totalCount])
+
+  useEffect(() => {
+    if (retryCounts) void refreshCounts()
+  }, [retryCounts, refreshCounts])
 
   useEffect(() => {
     let active = true
@@ -145,6 +156,8 @@ const AdminPropertiesSection = () => {
     [isDuplicatesTab, list, groups]
   )
   useShellHeader({ actions: headerActions })
+
+  const countUnavailable = (key) => Boolean(counts) && counts.data[key] === null
 
   const selected = list.items.find((property) => property.id === selectedId) || null
   const selectedPending = list.items.filter((property) => selectedIds.has(property.id) && property.status === 'pending')
@@ -263,11 +276,11 @@ const AdminPropertiesSection = () => {
       ) : null}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <StatCard label="Listings" value={counts?.data?.total} loading={!counts} />
-        <StatCard label="Approved" value={counts?.data?.approved} loading={!counts} />
-        <StatCard label="Pending" value={counts?.data?.pending} loading={!counts} tone={counts?.data?.pending > 0 ? 'warning' : 'neutral'} onClick={() => changeTab('pending')} />
-        <StatCard label="Rejected" value={counts?.data?.rejected} loading={!counts} />
-        <StatCard label="Duplicate groups" value={counts?.data?.duplicatePending} loading={!counts} tone={counts?.data?.duplicatePending > 0 ? 'danger' : 'neutral'} hint="Pending listings sharing a phone" onClick={() => changeTab('duplicates')} />
+        <StatCard label="Listings" value={counts?.data?.total} loading={!counts} error={countUnavailable('total')} />
+        <StatCard label="Approved" value={counts?.data?.approved} loading={!counts} error={countUnavailable('approved')} />
+        <StatCard label="Pending" value={counts?.data?.pending} loading={!counts} error={countUnavailable('pending')} tone={counts?.data?.pending > 0 ? 'warning' : 'neutral'} onClick={() => changeTab('pending')} />
+        <StatCard label="Rejected" value={counts?.data?.rejected} loading={!counts} error={countUnavailable('rejected')} />
+        <StatCard label="Duplicate groups" value={counts?.data?.duplicatePending} loading={!counts} error={countUnavailable('duplicatePending')} tone={counts?.data?.duplicatePending > 0 ? 'danger' : 'neutral'} hint="Pending listings sharing a phone" onClick={() => changeTab('duplicates')} />
       </div>
 
       <Tabs tabs={TABS} value={phoneKey ? '' : tab} onChange={changeTab} ariaLabel="Listing status" />

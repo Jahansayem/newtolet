@@ -5,7 +5,7 @@
 
 import { supabase } from '../supabaseClient'
 import { buildIlikeOrFilter } from '../../lib/postgrestSearch'
-import { emptyList, fail, normalizeSupabaseError, ok } from './adminResult'
+import { emptyList, fail, normalizeSupabaseError, ok, withHttpStatus } from './adminResult'
 
 const clamp = (value, min, max) => Math.min(Math.max(Number(value) || min, min), max)
 
@@ -96,8 +96,8 @@ export const runAdminListQuery = async ({
     query = query.range(from, to)
     if (signal && typeof query.abortSignal === 'function') query = query.abortSignal(signal)
 
-    const { data, error, count: total } = await query
-    if (error) return fail(error, { paging })
+    const { data, error, count: total, status } = await query
+    if (error) return fail(withHttpStatus(error, status), { paging })
     const rows = (data || []).map((row) => (map ? map(row) : row))
     const totalCount = typeof total === 'number' ? total : from + rows.length
     if (rows.length === 0 && totalCount === 0) return emptyList(safePage, safePageSize)
@@ -131,8 +131,8 @@ export const fetchAdminRow = async ({ table, columns, id, map = null, signal = n
   try {
     let query = supabase.from(table).select(columns).eq('id', id).maybeSingle()
     if (signal && typeof query.abortSignal === 'function') query = query.abortSignal(signal)
-    const { data, error } = await query
-    if (error) return fail(error)
+    const { data, error, status } = await query
+    if (error) return fail(withHttpStatus(error, status))
     if (!data) return fail({ code: 'PGRST116', message: 'Row not found' })
     return ok(map ? map(data) : data)
   } catch (error) {

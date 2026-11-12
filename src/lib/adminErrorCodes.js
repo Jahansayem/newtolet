@@ -24,6 +24,7 @@ export const ADMIN_ERROR_CODES = Object.freeze({
   MISSING_COLUMN: 'MISSING_COLUMN',
   MISSING_RPC: 'MISSING_RPC',
   INVALID_INPUT: 'INVALID_INPUT',
+  TIMEOUT: 'TIMEOUT',
   TRANSIENT: 'TRANSIENT',
   RPC_ERROR: 'RPC_ERROR',
   UNKNOWN: 'UNKNOWN',
@@ -31,7 +32,7 @@ export const ADMIN_ERROR_CODES = Object.freeze({
 
 const C = ADMIN_ERROR_CODES
 
-const RETRYABLE = new Set([C.UNAVAILABLE, C.TRANSIENT])
+const RETRYABLE = new Set([C.UNAVAILABLE, C.TIMEOUT, C.TRANSIENT])
 const PERMISSION = new Set([C.AUTH_EXPIRED, C.PERMISSION_DENIED])
 
 export const CONNECTION_UNAVAILABLE_MESSAGE =
@@ -56,6 +57,7 @@ const DEFAULT_MESSAGES = Object.freeze({
   [C.MISSING_COLUMN]: 'A required database column is missing. Apply the latest migration.',
   [C.MISSING_RPC]: 'A required database function is missing. Apply the latest migration.',
   [C.INVALID_INPUT]: 'The request contained an invalid value.',
+  [C.TIMEOUT]: 'The request took too long and timed out. Please try again.',
   [C.TRANSIENT]: 'A temporary server error occurred. Please try again.',
   [C.RPC_ERROR]: 'The operation failed.',
   [C.UNKNOWN]: 'Something went wrong. Please try again.',
@@ -163,7 +165,11 @@ export const classifyError = (err) => {
     resolved = { code: C.MISSING_RPC }
   } else if (code === '22P02' || (status === 400 && /^PGRST1/.test(code))) {
     resolved = { code: C.INVALID_INPUT }
-  } else if (['57014', '40001', '40P01'].includes(code) || status === 429 || (status !== null && status >= 500)) {
+  } else if (code === '57014' || status === 504 || status === 408) {
+    // statement_timeout cancelled the query, or a gateway gave up waiting: the
+    // server was reached, so this is not a connectivity problem.
+    resolved = { code: C.TIMEOUT }
+  } else if (['40001', '40P01'].includes(code) || status === 429 || (status !== null && status >= 500)) {
     resolved = { code: C.TRANSIENT }
   } else if (/admin access required/.test(lower)) {
     resolved = { code: C.PERMISSION_DENIED }

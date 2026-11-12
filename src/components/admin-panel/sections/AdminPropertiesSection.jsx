@@ -16,19 +16,23 @@ import { getAutoApproveProperties, toggleAutoApproveProperties } from '../../../
 import { ADMIN_CACHE_PREFIX, readAdminSnapshot, writeAdminSnapshot } from '../../../services/admin/adminCache'
 import { clearSupabaseConnectionFailureMark } from '../../../services/supabaseClient'
 import { PROPERTY_COUNT_LABELS, describeFailedCounts, mergePropertyCounts } from '../../../lib/propertyCounts'
+import { LIST_FILTER_DEFAULTS, applyListUrlState, parseListUrlState } from '../../../lib/adminListUrlState'
+import { districts } from '../../../utils/bangladeshLocations'
 import { useSearchParams } from 'react-router-dom'
 import { buildAdminEditPropertyHref } from '../../../lib/routePaths'
 import { getPropertyDisplayLabel } from '../../../utils/propertyDisplaySerial'
 import { useAdminPermissions } from '../../../contexts/AdminAccessContext'
 import { PERMISSIONS } from '../../../lib/adminPermissions'
-import { PropertyThumbnailImage } from '../../PropertyCardMedia'
 import RentDisplay from '../../RentDisplay'
 import { useShellHeader } from '../../panel/PanelShellContext'
 import { useAdminList } from '../hooks/useAdminList'
 import { useAdminMutation } from '../hooks/useAdminMutation'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { useDeferredApproval } from '../hooks/useDeferredApproval'
 import { useEntityParam } from '../hooks/useEntityParam'
 import AdminPropertyEditor from '../property-editor/AdminPropertyEditor'
+import CompletenessBadge from './properties/CompletenessBadge'
+import PropertyDetailsDialog from './properties/PropertyDetailsDialog'
 import { REJECT_REASONS } from '../propertyRejectReasons'
 import { useToast } from '../../ui/ToastProvider'
 import ActionMenu from '../../ui/ActionMenu'
@@ -36,11 +40,9 @@ import Badge from '../../ui/Badge'
 import Button from '../../ui/Button'
 import ConfirmDialog from '../../ui/ConfirmDialog'
 import DataTable from '../../ui/DataTable'
-import Dialog from '../../ui/Dialog'
 import EmptyState from '../../ui/EmptyState'
 import FilterBar from '../../ui/FilterBar'
 import InlineAlert from '../../ui/InlineAlert'
-import KeyValueList from '../../ui/KeyValueList'
 import Pagination from '../../ui/Pagination'
 import ReasonDialog from '../../ui/ReasonDialog'
 import StatCard from '../../ui/StatCard'
@@ -56,7 +58,21 @@ const TABS = [
 ]
 
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')
-const formatDateTime = (value) => (value ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+const CATEGORY_OPTIONS = ['Family', 'Office', 'Sublet', 'Bachelor', 'Hostel', 'Shop'].map((value) => ({ value, label: value }))
+const DISTRICT_OPTIONS = Array.from(new Set(Object.values(districts).flat()))
+  .sort((a, b) => a.localeCompare(b))
+  .map((value) => ({ value, label: value }))
+const SOURCE_LABELS = { ai: 'AI agent', users: 'People' }
+// Filters behind "More filters"; they stay open while any of them is set.
+const MORE_FILTER_KEYS = ['district', 'photos', 'from', 'to', 'featured', 'archived']
+const SORT_OPTIONS = [
+  { value: 'created_at.desc', label: 'Newest first' },
+  { value: 'created_at.asc', label: 'Oldest first' },
+  { value: 'rent_amount_bdt.desc', label: 'Rent: high to low' },
+  { value: 'rent_amount_bdt.asc', label: 'Rent: low to high' },
+  { value: 'updated_at.desc', label: 'Recently updated' },
+]
+const PHOTO_LABELS = { yes: 'Has photos', no: 'No photos' }
 const pricingOf = (property = {}) => ({ rent_amount_bdt: property.rent_amount_bdt ?? property.pricing?.rent_amount_bdt, is_rent_negotiable: property.is_rent_negotiable ?? property.pricing?.is_rent_negotiable })
 const submitterLabel = (property = {}) => property.submitted_by?.name || property.submitted_by?.email || property.submitted_by?.phone || 'Unknown user'
 // Last counts that loaded, kept across reloads so a failed request still has
@@ -72,8 +88,12 @@ const AdminPropertiesSection = () => {
   const canSettings = hasPermission(PERMISSIONS.SETTINGS_MANAGE)
   const toast = useToast()
 
-  const [tab, setTab] = useState('pending')
-  const [phoneKey, setPhoneKey] = useState('')
+  // The list view (tab, filters, search, sort, page) lives in the URL; this is
+  // what the address said when the screen opened.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [initialUrl] = useState(() => parseListUrlState(searchParams))
+  const [tab, setTab] = useState(initialUrl.tab)
+  const [phoneKey, setPhoneKey] = useState(initialUrl.phoneKey)
   const [counts, setCounts] = useState(null) // { data, failedKeys, error }
   const [countsBusy, setCountsBusy] = useState(false)
   const countsRequestRef = useRef(0)
@@ -82,14 +102,26 @@ const AdminPropertiesSection = () => {
   const [autoApprove, setAutoApprove] = useState({ enabled: false, fallback: false, loaded: false })
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [selectedId, setSelectedId] = useEntityParam('id')
+  // The address changes a moment after a click; `dismissedId` closes the
+  // details at once instead of waiting for it.
+  const [dismissedId, setDismissedId] = useState(null)
+  const detailsId = selectedId && selectedId !== dismissedId ? selectedId : null
+  const openDetails = (propertyId) => {
+    setDismissedId(null)
+    setSelectedId(propertyId)
+  }
+  const closeDetails = () => {
+    setDismissedId(selectedId)
+    setSelectedId(null)
+  }
   const [decision, setDecision] = useState(null) // { ids, status }
   const [removeTarget, setRemoveTarget] = useState(null)
   const [approveAll, setApproveAll] = useState(null) // { count: number|null, error, progress }
   const [autoApproveConfirm, setAutoApproveConfirm] = useState(false)
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
 
   // ?edit=<listing id> shows the editor in place of the list. The list keeps
   // its tab, filters, page and sort while the editor is open.
-  const [searchParams, setSearchParams] = useSearchParams()
   const editId = searchParams.get('edit') || ''
   const listScrollRef = useRef(null)
 
@@ -97,10 +129,30 @@ const AdminPropertiesSection = () => {
   const list = useAdminList({
     domain: 'properties',
     fetcher: listProperties,
-    initialFilters: { status: 'pending', featured: '', archived: '', phoneKey: '' },
+    initialFilters: {
+      ...Object.fromEntries(Object.keys(LIST_FILTER_DEFAULTS).map((key) => [key, initialUrl[key]])),
+      status: initialUrl.phoneKey || initialUrl.tab === 'duplicates' ? '' : initialUrl.tab,
+    },
+    initialSort: initialUrl.sort,
+    initialPageSize: initialUrl.pageSize,
+    initialPage: initialUrl.page,
+    initialSearch: initialUrl.search,
     enabled: !isDuplicatesTab && !editId,
   })
   const groups = useAdminList({ domain: 'duplicate-groups', fetcher: fetchDuplicateGroups, enabled: isDuplicatesTab && !editId, cache: false })
+
+  // Keep the address in step with the view, so a reload or a copied link opens
+  // the same tab, filters, search, sort and page.
+  const { filters: listFilters, page: listPage, pageSize: listPageSize, sort: listSort } = list
+  const urlSearch = useDebouncedValue(list.search, 400)
+  useEffect(() => {
+    setSearchParams((current) => applyListUrlState(current, { ...listFilters, tab, phoneKey, page: listPage, pageSize: listPageSize, sort: listSort, search: urlSearch }))
+  }, [setSearchParams, tab, phoneKey, listFilters, listPage, listPageSize, listSort, urlSearch])
+
+  // A selection belongs to the rows on screen: drop it when they change.
+  useEffect(() => {
+    setSelectedIds((current) => (current.size ? new Set() : current))
+  }, [listFilters, listPage, listPageSize, listSort, urlSearch])
 
   const openEditor = (propertyId) => {
     const fromList = !editId
@@ -275,102 +327,121 @@ const AdminPropertiesSection = () => {
 
   // Listings approved here stay hidden until the list reloads them as approved.
   const visibleItems = approval.heldIds.size ? list.items.filter((property) => property.status === 'approved' || !approval.heldIds.has(property.id)) : list.items
-  const selected = visibleItems.find((property) => property.id === selectedId) || null
+  const selectedRow = visibleItems.find((property) => property.id === selectedId) || null
   const selectedPending = visibleItems.filter((property) => selectedIds.has(property.id) && property.status === 'pending')
 
-  const columns = useMemo(
-    () => [
+  const columns = [
       {
         key: 'listing',
         header: 'Listing',
+        render: (property) => {
+          const label = getPropertyDisplayLabel(property) || 'Listing'
+          return (
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-[var(--radius-chip)] bg-canvas">
+                {property.primary_image ? <img src={property.primary_image} alt="" className="h-full w-full object-cover" loading="lazy" /> : null}
+              </div>
+              <div className="min-w-[12rem] flex-1">
+                <div className="mb-0.5 flex items-center gap-x-2">
+                  <button type="button" className="ui-id-ticket hover:underline" aria-label={`Details of ${label}`} onClick={() => openDetails(property.id)}>
+                    {label}
+                  </button>
+                  <StatusPill status={property.status} />
+                  {property.isDuplicatePhone ? (
+                    <button type="button" className="ui-badge ui-badge-danger hover:underline" onClick={() => openPhoneGroup(property.duplicatePhoneKey)} aria-label={`Show ${property.duplicateCount} listings with phone ${property.contact_number}`}>
+                      Duplicate phone ×{property.duplicateCount}
+                    </button>
+                  ) : null}
+                  {property.is_featured ? <Badge variant="promoted" icon={<FiStar />}>Featured</Badge> : null}
+                  <p className="line-clamp-1 min-w-0 flex-1 break-all text-caption text-muted">
+                    {[property.category, property.property_type, property.isAiSubmitted ? 'AI agent' : submitterLabel(property), formatDate(property.created_at), property.contact_number].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <p className="line-clamp-2 text-sm font-medium text-ink">{property.short_description || 'No description'}</p>
+              </div>
+            </div>
+          )
+        },
+      },
+      {
+        key: 'area',
+        header: 'Area',
         render: (property) => (
-          <div className="flex items-start gap-3">
-            <div className="h-14 w-20 shrink-0 overflow-hidden rounded-[var(--radius-chip)] bg-canvas">
-              <PropertyThumbnailImage src={property.primary_image} alt="" propertyType={property.property_type} category={property.category} pricing={pricingOf(property)} />
-            </div>
-            <div className="min-w-0">
-              <p className="ui-id-ticket mb-1">{getPropertyDisplayLabel(property)}</p>
-              <p className="line-clamp-1 font-medium text-ink">{property.short_description || property.category || 'Untitled listing'}</p>
-              <p className="text-caption text-muted">{[property.category, property.area, property.state_district].filter(Boolean).join(' · ')}</p>
-            </div>
+          <div className="max-w-[9rem]">
+            <p className="text-ink">{property.area || <span className="text-danger">No area</span>}</p>
+            <p className="line-clamp-1 text-caption text-muted">{[property.sub_area, property.state_district].filter(Boolean).join(' · ')}</p>
           </div>
         ),
       },
       {
-        key: 'submitter',
-        header: 'Submitted by',
-        hideBelow: 'lg',
+        key: 'rooms',
+        header: 'Rooms/baths',
         render: (property) => (
-          <div className="min-w-0">
-            <p className="font-medium text-ink">{submitterLabel(property)}</p>
-            <p className="truncate text-caption text-muted">{property.contact_number || property.submitted_by?.phone || '—'}</p>
-          </div>
+          <span className="whitespace-nowrap">
+            {property.total_rooms ?? '—'} / {property.total_bathrooms ?? '—'}
+          </span>
         ),
       },
-      { key: 'rent_amount_bdt', header: 'Rent', sortable: true, align: 'right', render: (property) => <RentDisplay pricing={pricingOf(property)} fallback="—" suffix={property.rent_amount_bdt ? `/${property.rent_period || 'month'}` : ''} /> },
+      { key: 'floor', header: 'Floor', render: (property) => (property.floor_level ? <span className="whitespace-nowrap">{String(property.floor_level).replace(/\s*floor$/i, '')}</span> : <span className="text-muted">—</span>) },
       {
-        key: 'status',
-        header: 'Status',
+        key: 'rent_amount_bdt',
+        header: 'Rent',
         sortable: true,
+        align: 'right',
         render: (property) => (
-          <div className="flex flex-wrap gap-1">
-            <StatusPill status={property.status} />
-            {property.isDuplicatePhone ? (
-              <button type="button" className="ui-badge ui-badge-danger hover:underline" onClick={() => openPhoneGroup(property.duplicatePhoneKey)} aria-label={`Show ${property.duplicateCount} listings with phone ${property.contact_number}`}>
-                Duplicate phone ×{property.duplicateCount}
-              </button>
-            ) : null}
-            {property.is_featured ? <Badge variant="promoted" icon={<FiStar />}>Featured</Badge> : null}
+          <div className="whitespace-nowrap">
+            <RentDisplay pricing={pricingOf(property)} fallback="—" />
+            {property.rent_amount_bdt ? <p className="text-caption text-muted">{property.rent_period || 'month'}</p> : null}
           </div>
         ),
       },
-      { key: 'reviewed_at', header: 'Reviewed', hideBelow: 'lg', render: (property) => (property.reviewed_at ? formatDate(property.reviewed_at) : <span className="text-muted">—</span>) },
-      { key: 'created_at', header: 'Submitted', sortable: true, hideBelow: 'lg', render: (property) => formatDate(property.created_at) },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  )
+      { key: 'photos', header: 'Photos', align: 'right', render: (property) => property.photoCount ?? '—' },
+      { key: 'check', header: 'Check', render: (property) => <CompletenessBadge listing={property} /> },
+  ]
 
-  const rowActions = (property) => (
-    <>
-      <Button size="sm" variant="secondary" onClick={() => setSelectedId(property.id)}>
-        Details
-      </Button>
-      {canModerate && property.status === 'pending' ? (
-        <>
-          <Button size="sm" variant="primary" icon={<FiCheck />} onClick={() => approveNow(property)}>
-            Approve
+  // One horizontal group of icon buttons, each named after the listing it acts
+  // on. Details open from the listing's ID.
+  const rowActions = (property) => {
+    const label = getPropertyDisplayLabel(property) || 'listing'
+    return (
+      <div className="flex flex-nowrap items-center justify-end gap-1">
+        {canModerate && property.status === 'pending' ? (
+          <>
+            <Button size="sm" variant="primary" iconOnly title="Approve" aria-label={`Approve ${label}`} onClick={() => approveNow(property)}>
+              <FiCheck />
+            </Button>
+            <Button size="sm" variant="danger-outline" iconOnly title="Reject" aria-label={`Reject ${label}`} onClick={() => setDecision({ ids: [property.id], status: 'rejected' })}>
+              <FiX />
+            </Button>
+          </>
+        ) : null}
+        {canFeature && property.status === 'approved' ? (
+          <Button size="sm" variant="ghost" iconOnly title={property.is_featured ? 'Remove from featured' : 'Mark as featured'} aria-label={property.is_featured ? `Remove ${label} from featured` : `Mark ${label} as featured`} aria-pressed={property.is_featured} busy={featuredMutation.busy && featuredMutation.busyKey === property.id} onClick={() => void featuredMutation.run(property.id, !property.is_featured)}>
+            <FiStar />
           </Button>
-          <Button size="sm" variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ ids: [property.id], status: 'rejected' })}>
-            Reject
+        ) : null}
+        <Button
+          size="sm"
+          variant="ghost"
+          iconOnly
+          title="Edit"
+          aria-label={`Edit ${label}`}
+          href={buildAdminEditPropertyHref(property.id)}
+          onClick={(event) => {
+            event.preventDefault()
+            openEditor(property.id)
+          }}
+        >
+          <FiEdit2 />
+        </Button>
+        {canModerate ? (
+          <Button size="sm" variant="ghost" iconOnly title="Remove" aria-label={`Remove ${label}`} onClick={() => setRemoveTarget(property)}>
+            <FiTrash2 />
           </Button>
-        </>
-      ) : null}
-      {canFeature && property.status === 'approved' ? (
-        <Button size="sm" variant="ghost" iconOnly aria-label={property.is_featured ? 'Remove from featured' : 'Mark as featured'} aria-pressed={property.is_featured} busy={featuredMutation.busy && featuredMutation.busyKey === property.id} onClick={() => void featuredMutation.run(property.id, !property.is_featured)}>
-          <FiStar />
-        </Button>
-      ) : null}
-      <Button
-        size="sm"
-        variant="ghost"
-        iconOnly
-        aria-label="Edit listing"
-        href={buildAdminEditPropertyHref(property.id)}
-        onClick={(event) => {
-          event.preventDefault()
-          openEditor(property.id)
-        }}
-      >
-        <FiEdit2 />
-      </Button>
-      {canModerate ? (
-        <Button size="sm" variant="ghost" iconOnly aria-label="Remove listing" onClick={() => setRemoveTarget(property)}>
-          <FiTrash2 />
-        </Button>
-      ) : null}
-    </>
-  )
+        ) : null}
+      </div>
+    )
+  }
 
   const groupColumns = useMemo(
     () => [
@@ -383,10 +454,29 @@ const AdminPropertiesSection = () => {
     []
   )
 
+  const setFilter = list.setFilter
+  const moreFilterCount = MORE_FILTER_KEYS.filter((key) => list.filters[key]).length
+  const showMoreFilters = moreFiltersOpen || moreFilterCount > 0
   const chips = []
   if (phoneKey) chips.push({ key: 'phone', label: `Phone ${phoneKey}`, onRemove: () => changeTab('duplicates') })
-  if (list.filters.featured) chips.push({ key: 'featured', label: 'Featured only', onRemove: () => list.setFilter('featured', '') })
-  if (list.filters.archived) chips.push({ key: 'archived', label: 'Removed listings', onRemove: () => list.setFilter('archived', '') })
+  if (list.filters.category) chips.push({ key: 'category', label: `Category: ${list.filters.category}`, onRemove: () => setFilter('category', '') })
+  if (list.filters.district) chips.push({ key: 'district', label: `District: ${list.filters.district}`, onRemove: () => setFilter('district', '') })
+  if (list.filters.source) chips.push({ key: 'source', label: `Submitted by: ${SOURCE_LABELS[list.filters.source]}`, onRemove: () => setFilter('source', '') })
+  if (list.filters.photos) chips.push({ key: 'photos', label: PHOTO_LABELS[list.filters.photos], onRemove: () => setFilter('photos', '') })
+  if (list.filters.incomplete) chips.push({ key: 'incomplete', label: 'Incomplete only', onRemove: () => setFilter('incomplete', '') })
+  if (list.filters.from) chips.push({ key: 'from', label: `From ${list.filters.from}`, onRemove: () => setFilter('from', '') })
+  if (list.filters.to) chips.push({ key: 'to', label: `To ${list.filters.to}`, onRemove: () => setFilter('to', '') })
+  if (list.filters.featured) chips.push({ key: 'featured', label: 'Featured only', onRemove: () => setFilter('featured', '') })
+  if (list.filters.archived) chips.push({ key: 'archived', label: 'Removed listings', onRemove: () => setFilter('archived', '') })
+
+  // "Clear all" resets every filter and the search, and keeps the status tab.
+  const clearFilters = () => {
+    const nextTab = tab === 'duplicates' ? 'pending' : tab
+    setTab(nextTab)
+    setPhoneKey('')
+    list.setSearch('')
+    list.setFilters({ ...LIST_FILTER_DEFAULTS, status: nextTab })
+  }
 
   if (editId) {
     return (
@@ -460,11 +550,38 @@ const AdminPropertiesSection = () => {
           <FilterBar
             search={{ value: list.search, onChange: list.setSearch, label: 'Search listings', placeholder: 'Listing ID, title, area, category or phone…' }}
             filters={[
-              { key: 'featured', label: 'Featured', type: 'select', value: list.filters.featured, onChange: (value) => list.setFilter('featured', value), options: [{ value: 'true', label: 'Featured only' }], placeholder: 'Any' },
-              { key: 'archived', label: 'Show', type: 'select', value: list.filters.archived, onChange: (value) => list.setFilter('archived', value), options: [{ value: 'archived', label: 'Removed only' }], placeholder: 'Active listings' },
+              { key: 'category', label: 'Category', type: 'select', value: list.filters.category, onChange: (value) => setFilter('category', value), options: CATEGORY_OPTIONS, placeholder: 'Any' },
+              { key: 'source', label: 'Submitted by', type: 'select', value: list.filters.source, onChange: (value) => setFilter('source', value), options: [{ value: 'ai', label: SOURCE_LABELS.ai }, { value: 'users', label: SOURCE_LABELS.users }], placeholder: 'Anyone' },
+              { key: 'incomplete', label: 'Completeness', type: 'select', value: list.filters.incomplete, onChange: (value) => setFilter('incomplete', value), options: [{ value: '1', label: 'Incomplete only' }], placeholder: 'Any' },
+              {
+                key: 'sort',
+                label: 'Sort by',
+                type: 'select',
+                value: `${list.sort.column}.${list.sort.dir}`,
+                onChange: (value) => {
+                  const [column, dir] = value.split('.')
+                  list.setSort({ column, dir })
+                },
+                options: SORT_OPTIONS.some((option) => option.value === `${list.sort.column}.${list.sort.dir}`) ? SORT_OPTIONS : [...SORT_OPTIONS, { value: `${list.sort.column}.${list.sort.dir}`, label: 'Custom' }],
+              },
+              ...(showMoreFilters
+                ? [
+                    { key: 'district', label: 'District', type: 'select', value: list.filters.district, onChange: (value) => setFilter('district', value), options: DISTRICT_OPTIONS, placeholder: 'Any' },
+                    { key: 'photos', label: 'Photos', type: 'select', value: list.filters.photos, onChange: (value) => setFilter('photos', value), options: [{ value: 'yes', label: PHOTO_LABELS.yes }, { value: 'no', label: PHOTO_LABELS.no }], placeholder: 'Any' },
+                    { key: 'from', label: 'Submitted from', type: 'date', value: list.filters.from, onChange: (value) => setFilter('from', value) },
+                    { key: 'to', label: 'Submitted to', type: 'date', value: list.filters.to, onChange: (value) => setFilter('to', value) },
+                    { key: 'featured', label: 'Featured', type: 'select', value: list.filters.featured, onChange: (value) => setFilter('featured', value), options: [{ value: 'true', label: 'Featured only' }], placeholder: 'Any' },
+                    { key: 'archived', label: 'Show', type: 'select', value: list.filters.archived, onChange: (value) => setFilter('archived', value), options: [{ value: 'archived', label: 'Removed only' }], placeholder: 'Active listings' },
+                  ]
+                : []),
             ]}
+            footerActions={
+              <Button variant="ghost" size="sm" aria-expanded={showMoreFilters} disabled={moreFilterCount > 0} onClick={() => setMoreFiltersOpen((open) => !open)}>
+                {showMoreFilters ? 'Fewer filters' : 'More filters'}
+              </Button>
+            }
             chips={chips}
-            onClearAll={() => changeTab(tab === 'duplicates' ? 'pending' : tab)}
+            onClearAll={clearFilters}
             resultCount={list.status === 'loading' ? null : list.totalCount}
             resultLabel="listings"
           />
@@ -490,6 +607,8 @@ const AdminPropertiesSection = () => {
             caption="Property listings"
             columns={columns}
             rows={visibleItems}
+            density="dense"
+            stickyActions
             loading={list.isLoading}
             error={list.status === 'error' || list.status === 'permission-denied' ? list.error : null}
             onRetry={list.retry}
@@ -506,98 +625,23 @@ const AdminPropertiesSection = () => {
         </>
       )}
 
-      <Dialog open={Boolean(selected)} onClose={() => setSelectedId(null)} title={selected?.short_description || selected?.category || 'Listing'} description={selected ? `${getPropertyDisplayLabel(selected)} · ${[selected.category, selected.area, selected.state_district].filter(Boolean).join(', ')}` : null} size="xl" fullScreenOnMobile>
-        {selected ? (
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusPill status={selected.status} />
-              {selected.is_featured ? <Badge variant="promoted">Featured</Badge> : null}
-              {selected.isDuplicatePhone ? <Badge variant="danger">Duplicate phone ×{selected.duplicateCount}</Badge> : null}
-              {selected.deleted_at ? <Badge variant="neutral">Removed</Badge> : null}
-            </div>
-            {selected.images?.length ? (
-              <div className="flex gap-2 overflow-x-auto">
-                {selected.images.slice(0, 6).map((src, index) => (
-                  <img key={src} src={src} alt={`Listing photo ${index + 1}`} className="h-32 w-44 shrink-0 rounded-[var(--radius-card)] object-cover" loading="lazy" />
-                ))}
-              </div>
-            ) : null}
-            <KeyValueList
-              columns={2}
-              items={[
-                { key: 'rent', label: 'Rent', value: selected.rent_amount_bdt ? `৳${Number(selected.rent_amount_bdt).toLocaleString()} / ${selected.rent_period || 'month'}` : selected.is_rent_negotiable ? 'Negotiable' : null },
-                { key: 'type', label: 'Type', value: selected.property_type },
-                { key: 'rooms', label: 'Rooms', value: selected.total_rooms },
-                { key: 'baths', label: 'Bathrooms', value: selected.total_bathrooms },
-                { key: 'contact', label: 'Contact number', value: selected.contact_number },
-                { key: 'submitter', label: 'Submitted by', value: submitterLabel(selected) },
-                { key: 'submitterEmail', label: 'Submitter email', value: selected.submitted_by?.email },
-                { key: 'submitted', label: 'Submitted', value: formatDateTime(selected.created_at) },
-                { key: 'reviewed', label: 'Reviewed', value: selected.reviewed_at ? formatDateTime(selected.reviewed_at) : null },
-                { key: 'reason', label: 'Moderation reason', value: selected.moderation_reason },
-                { key: 'note', label: 'Internal note', value: selected.internal_note },
-              ]}
-            />
-            <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-              <Button
-                variant="secondary"
-                icon={<FiEdit2 />}
-                href={buildAdminEditPropertyHref(selected.id)}
-                onClick={(event) => {
-                  event.preventDefault()
-                  openEditor(selected.id)
-                }}
-              >
-                Edit listing
-              </Button>
-              {canModerate && selected.status === 'pending' ? (
-                <>
-                  <Button
-                    variant="primary"
-                    icon={<FiCheck />}
-                    onClick={() => {
-                      approveNow(selected)
-                      setSelectedId(null)
-                    }}
-                  >
-                    Approve
-                  </Button>
-                  <Button variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ ids: [selected.id], status: 'rejected' })}>
-                    Reject
-                  </Button>
-                </>
-              ) : null}
-              {canModerate && selected.status === 'approved' ? (
-                <Button variant="danger-outline" icon={<FiX />} onClick={() => setDecision({ ids: [selected.id], status: 'rejected' })}>
-                  Reject
-                </Button>
-              ) : null}
-              {canModerate && selected.status === 'rejected' ? (
-                <Button
-                  variant="primary"
-                  icon={<FiCheck />}
-                  onClick={() => {
-                    approveNow(selected)
-                    setSelectedId(null)
-                  }}
-                >
-                  Approve
-                </Button>
-              ) : null}
-              {canFeature && selected.status === 'approved' ? (
-                <Button variant="secondary" icon={<FiStar />} busy={featuredMutation.busy} onClick={() => void featuredMutation.run(selected.id, !selected.is_featured)}>
-                  {selected.is_featured ? 'Remove from featured' : 'Mark as featured'}
-                </Button>
-              ) : null}
-              {canModerate && !selected.deleted_at ? (
-                <Button variant="danger-outline" icon={<FiTrash2 />} onClick={() => setRemoveTarget(selected)}>
-                  Remove listing
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
-      </Dialog>
+      <PropertyDetailsDialog
+        propertyId={detailsId}
+        fallback={selectedRow}
+        heldIds={approval.heldIds}
+        canModerate={canModerate}
+        canFeature={canFeature}
+        featuredBusy={featuredMutation.busy}
+        onClose={closeDetails}
+        onApprove={(listing) => {
+          approveNow(listing)
+          closeDetails()
+        }}
+        onReject={(listing) => setDecision({ ids: [listing.id], status: 'rejected' })}
+        onEdit={openEditor}
+        onRemove={setRemoveTarget}
+        onToggleFeatured={(listing) => void featuredMutation.run(listing.id, !listing.is_featured)}
+      />
 
       <ReasonDialog
         open={Boolean(decision)}
@@ -615,7 +659,7 @@ const AdminPropertiesSection = () => {
           const result = await statusMutation.run(ids, status, reason, note)
           if (!result.error) {
             setDecision(null)
-            setSelectedId(null)
+            closeDetails()
           }
         }}
       />
@@ -638,7 +682,7 @@ const AdminPropertiesSection = () => {
           const result = await removeMutation.run(target.id, reason)
           if (!result.error) {
             setRemoveTarget(null)
-            setSelectedId(null)
+            closeDetails()
           }
         }}
       />

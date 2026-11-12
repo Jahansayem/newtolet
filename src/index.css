@@ -795,6 +795,11 @@ html[data-theme='dark'] .shadow-xl {
   .ui-table-compact td {
     padding: 0.5rem 0.75rem;
   }
+
+  .ui-table-dense th,
+  .ui-table-dense td {
+    padding: 0.45rem 0.5rem;
+  }
   
   /* Horizontal chip rails fade at the edges instead of hiding the scrollbar silently. */
   .ui-scroll-fade {

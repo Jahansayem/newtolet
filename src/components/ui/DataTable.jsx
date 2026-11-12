@@ -15,6 +15,7 @@ import InlineAlert from './InlineAlert'
  * sort: { key, direction: 'asc'|'desc' }, onSortChange(nextSort)
  * selection: selectable, selectedKeys (Set), onSelectionChange(Set), getRowLabel(row)
  * states: loading, error ({message, retryable}), onRetry, empty (node)
+ * stickyActions: keeps the actions column in view while the table scrolls sideways
  */
 export default function DataTable({
   columns = [],
@@ -34,8 +35,10 @@ export default function DataTable({
   getRowLabel = (row) => row?.name || row?.title || row?.id,
   rowActions = null,
   density = 'comfortable',
+  stickyActions = false,
   className = '',
 }) {
+  const actionsCellClass = stickyActions ? 'sticky right-0 z-[1] bg-surface shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]' : ''
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const captionId = useId()
   const selectAllRef = useRef(null)
@@ -162,7 +165,7 @@ export default function DataTable({
   return (
     <div className={`ui-card overflow-hidden ${className}`.trim()} aria-busy={loading || undefined}>
       <div className="overflow-x-auto">
-        <table className={`ui-table ${density === 'compact' ? 'ui-table-compact' : ''}`}>
+        <table className={`ui-table ${density === 'compact' ? 'ui-table-compact' : density === 'dense' ? 'ui-table-dense' : ''}`}>
           <caption className="sr-only">{caption}</caption>
           <thead>
             <tr>
@@ -193,7 +196,7 @@ export default function DataTable({
                   </th>
                 )
               })}
-              {rowActions ? <th scope="col" className="text-right"><span className="sr-only">Actions</span></th> : null}
+              {rowActions ? <th scope="col" className={`text-right ${actionsCellClass}`.trim()}><span className="sr-only">Actions</span></th> : null}
             </tr>
           </thead>
           {stateBlock ? null : (
@@ -212,7 +215,7 @@ export default function DataTable({
                         {renderCell(column, row)}
                       </td>
                     ))}
-                    {rowActions ? <td className="text-right"><div className="flex flex-wrap justify-end gap-2">{rowActions(row)}</div></td> : null}
+                    {rowActions ? <td className={`text-right ${actionsCellClass}`.trim()}><div className="flex flex-wrap justify-end gap-2">{rowActions(row)}</div></td> : null}
                   </tr>
                 )
               })}

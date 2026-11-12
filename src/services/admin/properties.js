@@ -6,6 +6,8 @@ import { supabase } from '../supabaseClient'
 import { normalizePhoneForDuplicateKey } from '../../lib/phoneKey'
 import { resolveCountKeys } from '../../lib/propertyCounts'
 import { buildAfterInListFilter } from '../../lib/nextPendingFilter'
+import { AI_AGENT_USER_IDS, isAiAgentUser } from '../../lib/agentAccounts'
+import { INCOMPLETE_OR_FILTER } from '../../lib/listingCompleteness'
 import { fetchAdminRow, runAdminListQuery } from './adminQuery'
 import { callAdminRpc } from './adminRpc'
 import { fail, logAdminError, ok } from './adminResult'
@@ -17,11 +19,11 @@ const PROPERTY_IMAGES_BUCKET = 'property-images'
 // Only what the table, the row actions and the details dialog read. Searching
 // (sub_area) and sorting (updated_at) work on columns that are not selected.
 export const PROPERTY_LIST_COLUMNS = `
-  id, user_id, property_id_number, category, property_type, short_description, state_district, area,
+  id, user_id, property_id_number, category, property_type, short_description, state_district, area, sub_area,
   contact_number, contact_phone_key, rent_amount_bdt, rent_period, is_rent_negotiable, status, is_featured,
-  total_rooms, total_bathrooms, floor_level, created_at, reviewed_at,
+  total_rooms, total_bathrooms, floor_level, occupancy, available_from, deadline, created_at, reviewed_at,
   moderation_reason, internal_note, deleted_at,
-  property_images(image_url, display_order)
+  property_images(image_url, display_order), property_amenities(amenity_type)
 `
 // properties.user_id has no foreign key to users on the deployed database, so
 // PostgREST cannot embed the submitter; it is fetched in one extra query per page.
@@ -64,6 +66,10 @@ export const normalizeAdminProperty = (row, phoneCounts = null) => {
     submitted_by: { id: submitter.id || row.user_id || null, name: submitter.name || '', email: submitter.email || '', phone: submitter.phone || '', is_active: submitter.is_active !== false },
     images,
     primary_image: images[0] || null,
+    photoCount: images.length,
+    // null when the amenities were not part of the query
+    amenities: Array.isArray(row.property_amenities) ? row.property_amenities.map((entry) => entry.amenity_type).filter(Boolean) : null,
+    isAiSubmitted: isAiAgentUser(row.user_id),
     status: row.status || 'pending',
     is_featured: Boolean(row.is_featured),
     bedrooms: row.total_rooms,
@@ -82,6 +88,34 @@ const cleanSearch = (search = '') => String(search || '').replace(/^#/, '').trim
 const LIST_FILTER_SPEC = { status: { op: 'eq' }, is_featured: { op: 'eq', values: (value) => value === 'true' || value === true }, contact_phone_key: { op: 'eq' } }
 const LIST_SEARCH_COLUMNS = ['property_id_number', 'short_description', 'area', 'state_district', 'sub_area', 'category', 'contact_number']
 
+// Filters that are plain column comparisons.
+const listColumnFilters = (filters = {}, status) => ({
+  status,
+  is_featured: filters.featured,
+  contact_phone_key: filters.phoneKey,
+  category: filters.category,
+  state_district: filters.district,
+})
+
+// Filters that need more than one comparison: removed listings, exact id
+// search, submitted by (AI agent or people), photos, incomplete fields and the
+// submitted date range.
+const applyListFilters = (query, filters = {}, term = '') => {
+  let next = filters.archived === 'archived' ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null)
+  if (/^\d{4,}$/.test(term)) next = next.eq('property_id_number', term)
+  if (filters.source === 'ai') next = next.in('user_id', [...AI_AGENT_USER_IDS])
+  else if (filters.source === 'users') next = next.or(`user_id.is.null,user_id.not.in.(${AI_AGENT_USER_IDS.join(',')})`)
+  // "No photos" keeps the rows whose embedded photo list is empty; "has
+  // photos" is an inner join, set in the select (see withPhotoJoin).
+  if (filters.photos === 'no') next = next.is('property_images', null)
+  if (filters.incomplete) next = next.or(INCOMPLETE_OR_FILTER)
+  if (filters.from) next = next.gte('created_at', `${filters.from}T00:00:00`)
+  if (filters.to) next = next.lte('created_at', `${filters.to}T23:59:59.999`)
+  return next
+}
+
+const withPhotoJoin = (columns, photos) => (photos === 'yes' ? columns.replace('property_images(', 'property_images!inner(') : columns)
+
 /** Adds duplicateCount / isDuplicatePhone to a page of rows using one RPC call. */
 export const annotateDuplicates = async (rows = []) => {
   const keys = Array.from(new Set(rows.map((row) => row.contact_phone_key || normalizePhoneForDuplicateKey(row.contact_number)).filter(Boolean)))
@@ -97,27 +131,25 @@ export const annotateDuplicates = async (rows = []) => {
 }
 
 /**
- * listProperties({ page, pageSize, sort, filters: { status, featured, phoneKey, archived }, search })
+ * listProperties({ page, pageSize, sort, filters, search })
+ * filters: { status, featured, phoneKey, archived, category, district, source: 'ai'|'users',
+ *            photos: 'yes'|'no', incomplete, from, to } (from/to are yyyy-mm-dd submitted dates)
  * search matches the listing id number exactly or title/area/district/category/phone.
  */
 export const listProperties = async ({ page = 1, pageSize = 20, sort, filters = {}, search = '' } = {}, { signal } = {}) => {
   const term = cleanSearch(search)
   const result = await runAdminListQuery({
     table: 'properties',
-    columns: PROPERTY_LIST_COLUMNS,
+    columns: withPhotoJoin(PROPERTY_LIST_COLUMNS, filters.photos),
     page,
     pageSize,
     sort: sort || { column: 'created_at', dir: 'desc' },
     sortable: ['created_at', 'rent_amount_bdt', 'status', 'updated_at'],
-    filters: { status: filters.status === 'all' ? '' : filters.status, is_featured: filters.featured, contact_phone_key: filters.phoneKey },
+    filters: listColumnFilters(filters, filters.status === 'all' ? '' : filters.status),
     filterSpec: LIST_FILTER_SPEC,
     search: /^\d{4,}$/.test(term) ? '' : term,
     searchColumns: LIST_SEARCH_COLUMNS,
-    apply: (query) => {
-      let next = filters.archived === 'archived' ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null)
-      if (/^\d{4,}$/.test(term)) next = next.eq('property_id_number', term)
-      return next
-    },
+    apply: (query) => applyListFilters(query, filters, term),
     signal,
   })
   if (result.error) return result
@@ -140,18 +172,17 @@ export const getNextPendingInList = async ({ current = null, sort = null, filter
   const after = current?.id ? buildAfterInListFilter({ column, dir, value: current[column], id: current.id }) : ''
   const result = await runAdminListQuery({
     table: 'properties',
-    columns: 'id',
+    columns: filters.photos === 'yes' ? 'id, property_images!inner(id)' : filters.photos === 'no' ? 'id, property_images(id)' : 'id',
     page: 1,
     pageSize: 1,
     sort: { column, dir },
     sortable: NEXT_PENDING_SORTABLE,
-    filters: { status: 'pending', is_featured: filters.featured, contact_phone_key: filters.phoneKey },
+    filters: listColumnFilters(filters, 'pending'),
     filterSpec: LIST_FILTER_SPEC,
     search: /^\d{4,}$/.test(term) ? '' : term,
     searchColumns: LIST_SEARCH_COLUMNS,
     apply: (query) => {
-      let next = query.is('deleted_at', null)
-      if (/^\d{4,}$/.test(term)) next = next.eq('property_id_number', term)
+      let next = applyListFilters(query, { ...filters, archived: '' }, term)
       if (current?.id) next = next.neq('id', current.id)
       if (after) next = next.or(after)
       return next
@@ -167,7 +198,7 @@ export const getNextPendingInList = async ({ current = null, sort = null, filter
 }
 
 export const getProperty = async (propertyId, { signal } = {}) => {
-  const result = await fetchAdminRow({ table: 'properties', columns: `*, property_images(image_url, display_order)`, id: propertyId, signal })
+  const result = await fetchAdminRow({ table: 'properties', columns: `*, property_images(image_url, display_order), property_amenities(amenity_type)`, id: propertyId, signal })
   if (result.error) return result
   const [row] = await annotateDuplicates(await attachSubmitters([result.data]))
   return ok(row)

@@ -11,8 +11,9 @@ import Button from './Button'
  * search:   { value, onChange, label, placeholder }
  * filters:  [{ key, label, type: 'select'|'date', options?: [{value,label}], value, onChange, placeholder? }]
  * chips:    [{ key, label, onRemove }]
+ * footerActions: node shown at the start of the bottom row (e.g. a "More filters" toggle)
  */
-export default function FilterBar({ search = null, filters = [], chips = [], onClearAll = null, actions = null, resultCount = null, resultLabel = 'results', className = '' }) {
+export default function FilterBar({ search = null, filters = [], chips = [], onClearAll = null, actions = null, footerActions = null, resultCount = null, resultLabel = 'results', className = '' }) {
   const baseId = useId()
   return (
     <form role="search" onSubmit={(event) => event.preventDefault()} className={`ui-card flex flex-col gap-3 p-4 ${className}`.trim()}>
@@ -52,8 +53,9 @@ export default function FilterBar({ search = null, filters = [], chips = [], onC
         })}
         {actions ? <div className="flex flex-wrap gap-2 lg:ml-auto">{actions}</div> : null}
       </div>
-      {chips.length > 0 || resultCount !== null ? (
+      {chips.length > 0 || resultCount !== null || footerActions ? (
         <div className="flex flex-wrap items-center gap-2">
+          {footerActions}
           {chips.map((chip) => (
             <span key={chip.key} className="ui-chip min-h-9 py-1 pr-1">
               {chip.label}

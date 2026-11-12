@@ -14,7 +14,8 @@ const SIZE_CLASS = { sm: 'ui-btn-sm', md: '', lg: 'ui-btn-lg' }
 /**
  * Thin wrapper over the .ui-btn CSS primitives.
  * - `busy` disables the control, sets aria-busy and shows a spinner + busyLabel
- * - `iconOnly` switches to the round icon button and requires an aria-label
+ * - `iconOnly` switches to the round icon button and requires an aria-label;
+ *   the icon comes from `icon` or, when that is not set, from the children
  * - `to` renders a router Link, `href` an anchor, otherwise a <button>
  */
 const Button = forwardRef(function Button(
@@ -57,7 +58,13 @@ const Button = forwardRef(function Button(
       ) : icon ? (
         <span aria-hidden="true" className="inline-flex shrink-0">{icon}</span>
       ) : null}
-      {iconOnly ? null : busy ? <span>{busyLabel}</span> : children}
+      {iconOnly ? (
+        busy || icon ? null : <span aria-hidden="true" className="inline-flex shrink-0">{children}</span>
+      ) : busy ? (
+        <span>{busyLabel}</span>
+      ) : (
+        children
+      )}
       {iconOnly && busy ? <span className="sr-only">{busyLabel}</span> : null}
     </>
   )

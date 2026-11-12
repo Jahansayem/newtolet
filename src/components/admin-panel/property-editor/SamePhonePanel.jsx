@@ -17,7 +17,7 @@ const rentText = (listing) => {
  * Other listings that share the edited listing's phone number, so duplicates
  * can be compared and decided without leaving the editor.
  */
-export default function SamePhonePanel({ phoneKey, phoneNumber, excludeId, refreshKey = 0, heldIds = null, canModerate = false, onOpen, onApprove, onReject }) {
+export default function SamePhonePanel({ phoneKey, phoneNumber, excludeId, refreshKey = 0, heldIds = null, canModerate = false, onOpen, onApprove, onReject, onCompare }) {
   const [state, setState] = useState({ status: 'loading', items: [], error: null })
 
   useEffect(() => {
@@ -54,6 +54,11 @@ export default function SamePhonePanel({ phoneKey, phoneNumber, excludeId, refre
         </InlineAlert>
       ) : null}
       {status === 'ready' && items.length === 0 ? <p className="mt-3 text-sm text-muted">No other listing uses this phone number.</p> : null}
+      {items.length > 0 && onCompare ? (
+        <Button size="sm" variant="secondary" className="mt-3" onClick={() => onCompare(phoneKey, phoneNumber)}>
+          Compare side by side
+        </Button>
+      ) : null}
 
       {items.length > 0 ? (
         <ul className="mt-3 divide-y divide-line">

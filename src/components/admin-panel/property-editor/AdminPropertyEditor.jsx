@@ -28,7 +28,7 @@ const submitterLabel = (listing) => listing?.submitted_by?.name || listing?.subm
  * listContext: { sort, filters, search } of the list the admin came from;
  * "next pending" continues in that order.
  */
-export default function AdminPropertyEditor({ propertyId, listContext = {}, heldIds = null, onClose, onOpen, approveNow }) {
+export default function AdminPropertyEditor({ propertyId, listContext = {}, heldIds = null, refreshToken = 0, onClose, onOpen, approveNow, onCompare }) {
   const { isAdmin, hasPermission } = useAdminPermissions()
   const canModerate = hasPermission(PERMISSIONS.PROPERTIES_MODERATE)
   const toast = useToast()
@@ -52,7 +52,7 @@ export default function AdminPropertyEditor({ propertyId, listContext = {}, held
       setListing(result.data)
     })
     return () => controller.abort()
-  }, [propertyId, reloadKey])
+  }, [propertyId, reloadKey, refreshToken])
 
   const current = listing && listing.id === propertyId ? listing : null
   const label = current ? getPropertyDisplayLabel(current) || 'this listing' : 'this listing'
@@ -101,7 +101,7 @@ export default function AdminPropertyEditor({ propertyId, listContext = {}, held
       <div className="ui-card sticky bottom-0 z-30 p-3 shadow-raised" role="toolbar" aria-label="Listing actions" data-testid="editor-action-bar">
         {warnings.length > 0 ? (
           <p className="mb-2 flex items-start gap-2 text-sm text-ink" role="status" data-testid="editor-warnings">
-            <FiAlertTriangle className="mt-0.5 shrink-0 text-marigold-600" aria-hidden="true" />
+            <FiAlertTriangle className="mt-0.5 shrink-0 text-marigold-700" aria-hidden="true" />
             <span>
               <strong>Check before saving:</strong> {warnings.join(' · ')}. You can still save.
             </span>
@@ -170,12 +170,13 @@ export default function AdminPropertyEditor({ propertyId, listContext = {}, held
               phoneKey={current.duplicatePhoneKey}
               phoneNumber={current.contact_number}
               excludeId={current.id}
-              refreshKey={siblingsKey}
+              refreshKey={siblingsKey + refreshToken}
               heldIds={heldIds}
               canModerate={canModerate}
               onOpen={onOpen}
               onApprove={approveNow}
               onReject={setRejectTarget}
+              onCompare={onCompare}
             />
           ) : null}
         </aside>

@@ -32,6 +32,7 @@ import { useDeferredApproval } from '../hooks/useDeferredApproval'
 import { useEntityParam } from '../hooks/useEntityParam'
 import AdminPropertyEditor from '../property-editor/AdminPropertyEditor'
 import CompletenessBadge from './properties/CompletenessBadge'
+import DuplicateCompare from './properties/DuplicateCompare'
 import PropertyDetailsDialog from './properties/PropertyDetailsDialog'
 import { REJECT_REASONS } from '../propertyRejectReasons'
 import { useToast } from '../../ui/ToastProvider'
@@ -119,6 +120,10 @@ const AdminPropertiesSection = () => {
   const [approveAll, setApproveAll] = useState(null) // { count: number|null, error, progress }
   const [autoApproveConfirm, setAutoApproveConfirm] = useState(false)
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
+  // Side-by-side comparison of one phone group, opened over whatever is on screen.
+  const [compare, setCompare] = useState(null) // { phoneKey, phoneNumber }
+  const [compareVersion, setCompareVersion] = useState(0)
+  const openCompare = (key, number = '') => setCompare({ phoneKey: key, phoneNumber: number })
 
   // ?edit=<listing id> shows the editor in place of the list. The list keeps
   // its tab, filters, page and sort while the editor is open.
@@ -348,7 +353,7 @@ const AdminPropertiesSection = () => {
                   </button>
                   <StatusPill status={property.status} />
                   {property.isDuplicatePhone ? (
-                    <button type="button" className="ui-badge ui-badge-danger hover:underline" onClick={() => openPhoneGroup(property.duplicatePhoneKey)} aria-label={`Show ${property.duplicateCount} listings with phone ${property.contact_number}`}>
+                    <button type="button" className="ui-badge ui-badge-danger hover:underline" onClick={() => openCompare(property.duplicatePhoneKey, property.contact_number)} aria-label={`Compare ${property.duplicateCount} listings with phone ${property.contact_number}`}>
                       Duplicate phone ×{property.duplicateCount}
                     </button>
                   ) : null}
@@ -478,16 +483,45 @@ const AdminPropertiesSection = () => {
     list.setFilters({ ...LIST_FILTER_DEFAULTS, status: nextTab })
   }
 
+  const compareDialog = (
+    <DuplicateCompare
+      phoneKey={compare?.phoneKey || ''}
+      phoneNumber={compare?.phoneNumber || ''}
+      heldIds={approval.heldIds}
+      canModerate={canModerate}
+      onClose={() => setCompare(null)}
+      onEdit={(propertyId) => {
+        setCompare(null)
+        openEditor(propertyId)
+      }}
+      onViewList={
+        editId
+          ? undefined
+          : () => {
+              const key = compare?.phoneKey
+              setCompare(null)
+              if (key) openPhoneGroup(key)
+            }
+      }
+      onChanged={() => setCompareVersion((version) => version + 1)}
+    />
+  )
+
   if (editId) {
     return (
-      <AdminPropertyEditor
-        propertyId={editId}
-        listContext={{ sort: list.sort, filters: list.filters, search: list.search }}
-        heldIds={approval.heldIds}
-        onClose={closeEditor}
-        onOpen={openEditor}
-        approveNow={approveNow}
-      />
+      <>
+        <AdminPropertyEditor
+          propertyId={editId}
+          listContext={{ sort: list.sort, filters: list.filters, search: list.search }}
+          heldIds={approval.heldIds}
+          refreshToken={compareVersion}
+          onClose={closeEditor}
+          onOpen={openEditor}
+          approveNow={approveNow}
+          onCompare={openCompare}
+        />
+        {compareDialog}
+      </>
     )
   }
 
@@ -537,9 +571,14 @@ const AdminPropertiesSection = () => {
             onRetry={groups.retry}
             empty={<EmptyState title="No duplicate phone numbers" description="No pending listings share a contact number right now." />}
             rowActions={(group) => (
-              <Button size="sm" variant="secondary" onClick={() => openPhoneGroup(group.duplicatePhoneKey)}>
-                View listings
-              </Button>
+              <>
+                <Button size="sm" variant="primary" aria-label={`Compare listings with phone ${group.contact_number}`} onClick={() => openCompare(group.duplicatePhoneKey, group.contact_number)}>
+                  Compare
+                </Button>
+                <Button size="sm" variant="secondary" aria-label={`View listings with phone ${group.contact_number} in the list`} onClick={() => openPhoneGroup(group.duplicatePhoneKey)}>
+                  View listings
+                </Button>
+              </>
             )}
             getRowLabel={(group) => `phone ${group.contact_number}`}
           />
@@ -624,6 +663,8 @@ const AdminPropertiesSection = () => {
           <Pagination page={list.page} pageSize={list.pageSize} total={list.totalCount} onPageChange={list.setPage} onPageSizeChange={list.setPageSize} />
         </>
       )}
+
+      {compareDialog}
 
       <PropertyDetailsDialog
         propertyId={detailsId}

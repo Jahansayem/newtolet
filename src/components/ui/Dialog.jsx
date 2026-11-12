@@ -12,7 +12,7 @@ const FOCUSABLE_SELECTOR =
  * initial focus, Tab trap and focus return. Labels come in as props so admin (English) and
  * user-facing callers (t()) can both use it.
  *
- * Props: open, onClose, title, description?, children, footer?, size ('sm'|'md'|'lg'),
+ * Props: open, onClose, title, description?, children, footer?, size ('sm'|'md'|'lg'|'xl'|'2xl'),
  * closeLabel, dismissible (false while a request is running), initialFocusRef?
  */
 const SIZE_CLASS = {
@@ -20,6 +20,7 @@ const SIZE_CLASS = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  '2xl': 'max-w-7xl',
 }
 
 const Dialog = ({

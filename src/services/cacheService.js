@@ -247,3 +247,37 @@ export const removeSnapshotsByPrefix = (prefix) => {
 
   keysToRemove.forEach((storageKey) => localStorage.removeItem(storageKey))
 }
+
+/**
+ * Keep only the `maxEntries` most recently saved snapshots under `prefix`. Search results write
+ * one snapshot per filter/page combination, which otherwise grows until localStorage is full.
+ */
+export const pruneSnapshotsByPrefix = (prefix, maxEntries = 30) => {
+  if (!prefix || !canUseStorage()) {
+    return
+  }
+
+  try {
+    const scopedPrefix = getStorageKey(prefix)
+    const entries = []
+
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const storageKey = localStorage.key(index)
+      if (!storageKey || !storageKey.startsWith(scopedPrefix)) continue
+      let savedAt = 0
+      try {
+        savedAt = Number(JSON.parse(localStorage.getItem(storageKey) || '{}')?.savedAt) || 0
+      } catch {
+        savedAt = 0
+      }
+      entries.push({ storageKey, savedAt })
+    }
+
+    entries
+      .sort((left, right) => right.savedAt - left.savedAt)
+      .slice(maxEntries)
+      .forEach(({ storageKey }) => localStorage.removeItem(storageKey))
+  } catch {
+    // Storage unavailable (private mode, quota): nothing to prune.
+  }
+}

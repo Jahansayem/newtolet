@@ -218,6 +218,9 @@ export const isRecoverableSupabaseError = (error) => {
   )
 }
 
+// Deadline for GET/HEAD requests to Supabase (REST, auth, storage reads).
+const READ_TIMEOUT_MS = 15000
+
 const supabaseFetch = async (input, init) => {
   if (isSupabaseProjectRestricted()) {
     return createSupabaseRestrictionResponse()
@@ -228,10 +231,27 @@ const supabaseFetch = async (input, init) => {
   }
 
   let response
+  const method = String(init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase()
+  // Reads get a deadline so a hung request ends in an error + Retry state instead of an endless
+  // skeleton. Writes and uploads are left alone: a large photo upload can legitimately be slow.
+  const timeoutController = method === 'GET' || method === 'HEAD' ? new AbortController() : null
+  const timeoutId = timeoutController
+    ? setTimeout(() => timeoutController.abort(new DOMException('Request timed out', 'TimeoutError')), READ_TIMEOUT_MS)
+    : null
+  const callerSignal = init?.signal
+  if (timeoutController && callerSignal) {
+    if (callerSignal.aborted) timeoutController.abort(callerSignal.reason)
+    else callerSignal.addEventListener('abort', () => timeoutController.abort(callerSignal.reason), { once: true })
+  }
 
   try {
-    response = await globalThis.fetch(input, init)
+    response = await globalThis.fetch(input, timeoutController ? { ...init, signal: timeoutController.signal } : init)
   } catch (error) {
+    if (timeoutController?.signal.aborted && !callerSignal?.aborted) {
+      // Our deadline, not the caller's: report "unavailable" so the UI shows Retry, but do not
+      // mark the backend down for 30 s; the next attempt may well be fast.
+      return createSupabaseConnectionFailureResponse(error)
+    }
     // A cancelled request (AbortController, React effect cleanup, navigation)
     // says nothing about connectivity: surface it unchanged instead of marking
     // the backend unreachable for the next 30 seconds.
@@ -240,6 +260,8 @@ const supabaseFetch = async (input, init) => {
     }
     markSupabaseConnectionUnavailable()
     return createSupabaseConnectionFailureResponse(error)
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
   }
 
   if (response.status === 402) {

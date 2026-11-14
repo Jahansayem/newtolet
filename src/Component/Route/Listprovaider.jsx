@@ -11,11 +11,13 @@ export const listcontext = createContext('');
 
 const inFlightPropertyRequests = new Map();
 
+// mode: 'home' (category rows), 'all' (newest catalog, optionally limited), 'none' (no preload:
+// pages that run their own paged search, e.g. the listing page, only need the context state).
 const Listprovaider = ({ children, queryOptions, mode = 'all' }) => {
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [selectedPriceRange, setSelectedPriceRange] = useState('All');
     const [list, setList] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(mode !== 'none');
     const hasInitializedRef = useRef(false);
     const lastFetchKeyRef = useRef('');
     const isMountedRef = useRef(false);
@@ -35,6 +37,12 @@ const Listprovaider = ({ children, queryOptions, mode = 'all' }) => {
     // Single data loading effect - only runs when fetchKey changes
     useEffect(() => {
         isMountedRef.current = true;
+
+        if (mode === 'none') {
+            return () => {
+                isMountedRef.current = false;
+            };
+        }
 
         // Skip if we've already fetched with this exact configuration
         if (hasInitializedRef.current && lastFetchKeyRef.current === fetchKey) {

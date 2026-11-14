@@ -60,6 +60,8 @@ const listing = {
     },
 
     browse: {
+      titleAll: 'বাংলাদেশে ভাড়ার প্রপার্টি',
+      titleDivision: '{division} বিভাগে ভাড়ার প্রপার্টি',
       kicker: 'ভাড়া খুঁজুন',
       title: 'ভাড়াটিয়ারা যেভাবে খোঁজেন, সেভাবেই প্রপার্টি খুঁজুন',
       subtitle:

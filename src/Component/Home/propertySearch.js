@@ -12,17 +12,25 @@ import {
   matchesKeywordSearch,
 } from './propertySearchCore'
 import { compareActivePinnedFirst } from '../../utils/propertyPinning'
+import { placeKey } from '../../lib/search/normalize.js'
+import {
+  BATHROOM_FILTER_OPTIONS,
+  OCCUPANCY_FILTER_KEYS,
+  parseAmenityList,
+} from '../../lib/search/filterOptions.js'
 export { DEFAULT_SEARCH_FILTERS } from './propertySearchCore'
 export { normalizeSearchQuery } from './propertySearchCore'
 
 export { PROPERTY_TYPE_OPTIONS }
 
 export const ROOM_FILTER_OPTIONS = ['1', '2', '3', '4', '5']
+export { BATHROOM_FILTER_OPTIONS, AMENITY_FILTER_KEYS, OCCUPANCY_FILTER_KEYS } from '../../lib/search/filterOptions.js'
 
 export const SORT_OPTIONS = [
   { value: 'newest', labelKey: 'search.sort.newest' },
   { value: 'price_low', labelKey: 'search.sort.priceLow' },
   { value: 'price_high', labelKey: 'search.sort.priceHigh' },
+  { value: 'oldest', labelKey: 'search.sort.oldest' },
 ]
 
 const LEGACY_PROPERTY_LIST_PATH = '/bd/property-listing'
@@ -57,8 +65,26 @@ const SEARCH_PARAM_KEYS = [
   'minPrice',
   'maxPrice',
   'rooms',
+  'baths',
+  'amenities',
+  'occupancy',
+  'includeNegotiable',
   'sort',
+  // Pagination lives in the URL too; any filter change drops it (back to page 1).
+  'page',
 ]
+
+const subAreaListKey = (district, upazilla) => `${district}|${upazilla}`
+
+/** Case/punctuation-insensitive dedupe ('Bashundhara R.A' = 'Bashundhara R/A'), sorted. */
+const uniquePlaceNames = (names = []) => {
+  const byKey = new Map()
+  names.forEach((name) => {
+    const key = placeKey(name)
+    if (key && !byKey.has(key)) byKey.set(key, name)
+  })
+  return [...byKey.values()].sort((left, right) => left.localeCompare(right))
+}
 
 const LOCATION_INDEX = (() => {
   const divisions = []
@@ -90,20 +116,22 @@ const LOCATION_INDEX = (() => {
 
       district.upazillas.forEach((upazilla) => {
         upazillaByKey[upazilla.name.toLowerCase()] = upazilla.name
-        upazillaToDistrict[upazilla.name.toLowerCase()] = district.name
-        upazillaToDivision[upazilla.name.toLowerCase()] = division.name
+        // First match wins for names shared by several districts (Mirpur: Dhaka before Kushtia).
+        upazillaToDistrict[upazilla.name.toLowerCase()] ||= district.name
+        upazillaToDivision[upazilla.name.toLowerCase()] ||= division.name
         ;(upazillaCandidates[upazilla.name.toLowerCase()] ||= []).push({
           division: division.name,
           district: district.name,
         })
-        subAreasByUpazilla[upazilla.name] = upazilla.sub_areas || []
+        // Keyed by district too: Kushtia's empty "Mirpur" used to overwrite Dhaka's 24 sub-areas.
+        subAreasByUpazilla[subAreaListKey(district.name, upazilla.name)] = upazilla.sub_areas || []
         ;(upazilla.sub_areas || []).forEach((subArea) => {
           const subAreaKey = subArea.toLowerCase()
 
           subAreaByKey[subAreaKey] = subArea
-          subAreaToUpazilla[subAreaKey] = upazilla.name
-          subAreaToDistrict[subAreaKey] = district.name
-          subAreaToDivision[subAreaKey] = division.name
+          subAreaToUpazilla[subAreaKey] ||= upazilla.name
+          subAreaToDistrict[subAreaKey] ||= district.name
+          subAreaToDivision[subAreaKey] ||= division.name
           ;(subAreaCandidates[subAreaKey] ||= []).push({
             division: division.name,
             district: district.name,
@@ -331,6 +359,10 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
     minPrice: normalizePositiveNumber(getValue(paramsLike, 'minPrice', ['minBudget', 'min_budget'])),
     maxPrice: normalizePositiveNumber(getValue(paramsLike, 'maxPrice', ['maxBudget', 'max_budget'])),
     rooms: normalizePositiveNumber(getValue(paramsLike, 'rooms')),
+    baths: normalizePositiveNumber(getValue(paramsLike, 'baths', ['bathrooms'])),
+    amenities: parseAmenityList(getValue(paramsLike, 'amenities')).join(','),
+    occupancy: getValue(paramsLike, 'occupancy').trim().toLowerCase(),
+    includeNegotiable: getValue(paramsLike, 'includeNegotiable') === '1' ? '1' : '',
     sort: getValue(paramsLike, 'sort').trim(),
   }
 
@@ -340,6 +372,8 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
   nextFilters.propertyType =
     resolvePropertyTypeOption(nextFilters.propertyType) || DEFAULT_SEARCH_FILTERS.propertyType
   nextFilters.rooms = ROOM_FILTER_OPTIONS.includes(nextFilters.rooms) ? nextFilters.rooms : ''
+  nextFilters.baths = BATHROOM_FILTER_OPTIONS.includes(nextFilters.baths) ? nextFilters.baths : ''
+  nextFilters.occupancy = OCCUPANCY_FILTER_KEYS.includes(nextFilters.occupancy) ? nextFilters.occupancy : ''
   nextFilters.sort = SORT_OPTIONS.some((option) => option.value === nextFilters.sort)
     ? nextFilters.sort
     : DEFAULT_SEARCH_FILTERS.sort
@@ -349,96 +383,27 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
 
 export const getLocationOptions = (filters = DEFAULT_SEARCH_FILTERS) => {
   const normalizedFilters = buildLocationTrail(filters)
+  const { division, district, upazilla } = normalizedFilters
+  const districtsIn = (divisionName) => LOCATION_INDEX.districtsByDivision[divisionName] || []
+  const scopeDistricts = district
+    ? [district]
+    : division
+      ? districtsIn(division)
+      : LOCATION_INDEX.divisions.flatMap(districtsIn)
 
-  // Get all districts - either from selected division or all districts
-  const getDistricts = () => {
-    if (normalizedFilters.division) {
-      return LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
-    }
-    // Return all districts from all divisions (sorted and deduplicated)
-    const allDistricts = new Set()
-    LOCATION_INDEX.divisions.forEach((division) => {
-      const districts = LOCATION_INDEX.districtsByDivision[division] || []
-      districts.forEach((district) => allDistricts.add(district))
-    })
-    return Array.from(allDistricts).sort()
-  }
+  const upazillas = scopeDistricts.flatMap((districtName) => LOCATION_INDEX.upazillasByDistrict[districtName] || [])
 
-  // Get all upazillas - either from selected district, all upazillas in selected division, or all upazillas
-  const getUpazillas = () => {
-    if (normalizedFilters.district) {
-      return LOCATION_INDEX.upazillasByDistrict[normalizedFilters.district] || []
-    }
-    if (normalizedFilters.division) {
-      // Return all upazillas within the selected division (sorted and deduplicated)
-      const allUpazillas = new Set()
-      const districts = LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
-      districts.forEach((district) => {
-        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
-        upazillas.forEach((upazilla) => allUpazillas.add(upazilla))
-      })
-      return Array.from(allUpazillas).sort()
-    }
-    // Return all upazillas from all districts (sorted and deduplicated)
-    const allUpazillas = new Set()
-    LOCATION_INDEX.divisions.forEach((division) => {
-      const districts = LOCATION_INDEX.districtsByDivision[division] || []
-      districts.forEach((district) => {
-        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
-        upazillas.forEach((upazilla) => allUpazillas.add(upazilla))
-      })
-    })
-    return Array.from(allUpazillas).sort()
-  }
-
-  // Get all sub-areas - either from selected upazilla, all sub-areas in selected district/division, or all sub-areas
-  const getSubAreas = () => {
-    if (normalizedFilters.upazilla) {
-      return LOCATION_INDEX.subAreasByUpazilla[normalizedFilters.upazilla] || []
-    }
-    if (normalizedFilters.district) {
-      // Return all sub-areas within the selected district (sorted and deduplicated)
-      const allSubAreas = new Set()
-      const upazillas = LOCATION_INDEX.upazillasByDistrict[normalizedFilters.district] || []
-      upazillas.forEach((upazilla) => {
-        const subAreas = LOCATION_INDEX.subAreasByUpazilla[upazilla] || []
-        subAreas.forEach((subArea) => allSubAreas.add(subArea))
-      })
-      return Array.from(allSubAreas).sort()
-    }
-    if (normalizedFilters.division) {
-      // Return all sub-areas within the selected division (sorted and deduplicated)
-      const allSubAreas = new Set()
-      const districts = LOCATION_INDEX.districtsByDivision[normalizedFilters.division] || []
-      districts.forEach((district) => {
-        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
-        upazillas.forEach((upazilla) => {
-          const subAreas = LOCATION_INDEX.subAreasByUpazilla[upazilla] || []
-          subAreas.forEach((subArea) => allSubAreas.add(subArea))
-        })
-      })
-      return Array.from(allSubAreas).sort()
-    }
-    // Return all sub-areas from all upazillas (sorted and deduplicated)
-    const allSubAreas = new Set()
-    LOCATION_INDEX.divisions.forEach((division) => {
-      const districts = LOCATION_INDEX.districtsByDivision[division] || []
-      districts.forEach((district) => {
-        const upazillas = LOCATION_INDEX.upazillasByDistrict[district] || []
-        upazillas.forEach((upazilla) => {
-          const subAreas = LOCATION_INDEX.subAreasByUpazilla[upazilla] || []
-          subAreas.forEach((subArea) => allSubAreas.add(subArea))
-        })
-      })
-    })
-    return Array.from(allSubAreas).sort()
-  }
+  const subAreas = scopeDistricts.flatMap((districtName) =>
+    (LOCATION_INDEX.upazillasByDistrict[districtName] || [])
+      .filter((upazillaName) => !upazilla || upazillaName === upazilla)
+      .flatMap((upazillaName) => LOCATION_INDEX.subAreasByUpazilla[subAreaListKey(districtName, upazillaName)] || [])
+  )
 
   return {
     divisions: LOCATION_INDEX.divisions,
-    districts: getDistricts(),
-    upazillas: getUpazillas(),
-    subAreas: getSubAreas(),
+    districts: division ? districtsIn(division) : uniquePlaceNames(scopeDistricts),
+    upazillas: uniquePlaceNames(upazillas.filter((name) => !/^others?$/i.test(name))),
+    subAreas: uniquePlaceNames(subAreas),
   }
 }
 
@@ -449,8 +414,20 @@ export const updateSearchFilters = (filters, key, value) => {
     [key]: typeof value === 'string' ? value : value?.toString?.() || '',
   }
 
-  if (key === 'minPrice' || key === 'maxPrice' || key === 'rooms') {
+  if (key === 'minPrice' || key === 'maxPrice' || key === 'rooms' || key === 'baths') {
     nextFilters[key] = normalizePositiveNumber(value)
+  }
+
+  if (key === 'amenities') {
+    nextFilters.amenities = parseAmenityList(value).join(',')
+  }
+
+  if (key === 'occupancy' && !OCCUPANCY_FILTER_KEYS.includes(nextFilters.occupancy)) {
+    nextFilters.occupancy = ''
+  }
+
+  if (key === 'includeNegotiable') {
+    nextFilters.includeNegotiable = value === true || value === '1' ? '1' : ''
   }
 
   if (key === 'category' && !HOME_CATEGORIES.includes(nextFilters.category)) {
@@ -487,7 +464,15 @@ export const updateSearchFilters = (filters, key, value) => {
   return buildLocationTrail(nextFilters)
 }
 
-export const clearSearchFilter = (filters, key) => updateSearchFilters(filters, key, DEFAULT_SEARCH_FILTERS[key] || '')
+export const clearSearchFilter = (filters, key) => {
+  // Amenity chips are 'amenity:<key>' and remove only that amenity.
+  if (String(key).startsWith('amenity:')) {
+    const amenity = String(key).slice('amenity:'.length)
+    return updateSearchFilters(filters, 'amenities', parseAmenityList(filters.amenities).filter((entry) => entry !== amenity))
+  }
+
+  return updateSearchFilters(filters, key, DEFAULT_SEARCH_FILTERS[key] || '')
+}
 
 export const buildSearchParams = (filters, existingSearchParams) => {
   const normalizedFilters = buildLocationTrail({ ...DEFAULT_SEARCH_FILTERS, ...filters })
@@ -723,6 +708,12 @@ export const getActiveSearchChips = (filters = DEFAULT_SEARCH_FILTERS) => {
   if (filters.minPrice) chips.push({ key: 'minPrice', labelKey: 'search.chips.minPrice', vars: { value: filters.minPrice } })
   if (filters.maxPrice) chips.push({ key: 'maxPrice', labelKey: 'search.chips.maxPrice', vars: { value: filters.maxPrice } })
   if (filters.rooms) chips.push({ key: 'rooms', labelKey: 'search.chips.rooms', vars: { value: filters.rooms } })
+  if (filters.baths) chips.push({ key: 'baths', labelKey: 'search.chips.baths', vars: { value: filters.baths } })
+  parseAmenityList(filters.amenities).forEach((amenity) => {
+    chips.push({ key: `amenity:${amenity}`, labelKey: `search.amenities.${amenity}`, vars: { value: amenity } })
+  })
+  if (filters.occupancy) chips.push({ key: 'occupancy', labelKey: `search.occupancy.${filters.occupancy}`, vars: { value: filters.occupancy } })
+  if (filters.includeNegotiable) chips.push({ key: 'includeNegotiable', labelKey: 'search.chips.includeNegotiable', vars: {} })
   if (filters.sort && filters.sort !== DEFAULT_SEARCH_FILTERS.sort) {
     const sortOption = SORT_OPTIONS.find((option) => option.value === filters.sort)
     chips.push({ key: 'sort', labelKey: 'search.chips.sort', vars: { value: filters.sort }, valueLabelKey: sortOption?.labelKey })

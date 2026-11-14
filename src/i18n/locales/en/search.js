@@ -26,12 +26,20 @@ const search = {
       submit: 'Search Properties',
       reset: 'Clear All',
       moreFilters: 'More filters',
+      baths: 'Bathrooms',
+      anyBaths: 'Any bathrooms',
+      bathsOption: '{baths}+ baths',
+      occupancy: 'Who can rent',
+      anyOccupancy: 'Anyone',
+      amenities: 'Facilities',
+      includeNegotiable: 'Include "price on request" listings',
     },
 
     sort: {
       newest: 'Newest First',
       priceLow: 'Price: Low to High',
       priceHigh: 'Price: High to Low',
+      oldest: 'Oldest First',
     },
 
     chips: {
@@ -46,6 +54,8 @@ const search = {
       maxPrice: 'Max ৳{value}',
       rooms: '{value}+ rooms',
       sort: 'Sort: {value}',
+      baths: '{value}+ baths',
+      includeNegotiable: 'Incl. price on request',
     },
 
     overlay: {
@@ -82,6 +92,35 @@ const search = {
       error: 'Unable to search properties right now.',
       errorHint: 'Check your connection and try again in a moment.',
       cachedNotice: 'Showing saved results. Live search is unavailable right now.',
+      foundTotal: '{count} properties found',
+      showingPlace: 'Showing {place}',
+      placeDistrict: '{name} district',
+      placeDivision: '{name} division',
+      placeArea: '{name}',
+      didYouMean: 'Did you mean',
+      punctuationOnly: 'Type an area, district, Property ID or keyword to search.',
+      featured: 'Featured',
+      featuredTitle: 'Featured listings',
+      pageOf: 'Page {page} of {pages}',
+      previous: 'Previous',
+      next: 'Next',
+      pagination: 'Search result pages',
+      goToPage: 'Go to page {page}',
+      endOfResults: 'You have reached the end of the results.',
+    },
+
+    amenities: {
+      furnished: 'Furnished',
+      lift: 'Lift',
+      generator: 'Generator',
+      parking: 'Parking / garage',
+      gas: 'Gas line',
+    },
+
+    occupancy: {
+      family: 'Family only',
+      female: 'Female only',
+      male: 'Male only',
     },
   },
 

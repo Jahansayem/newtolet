@@ -1,23 +1,24 @@
 import { supabase, isRecoverableSupabaseError } from './supabaseClient'
-import { readSnapshot, removeSnapshot, removeSnapshotsByPrefix, writeSnapshot } from './cacheService'
+import { pruneSnapshotsByPrefix, readSnapshot, removeSnapshot, removeSnapshotsByPrefix, writeSnapshot } from './cacheService'
 import {
   HOME_CATEGORIES,
   getPropertyCategoryValues,
-  matchesPropertyCategory,
   normalizePropertyCategory,
 } from '../lib/propertyCategories'
-import { getPropertyTypeValues, matchesPropertyTypeOption } from '../lib/propertyTypes'
+import { getPropertyTypeValues } from '../lib/propertyTypes'
 import { compareActivePinnedFirst, isPropertyActivelyPinned } from '../utils/propertyPinning'
-import { extractExactPropertyIdNumber, stripPropertyIdPrefix } from '../utils/propertyDisplaySerial'
+import { extractExactPropertyIdNumber } from '../utils/propertyDisplaySerial'
 import locationData from '../thetolet_locations_bundle.json'
+import { createLocationIndex } from '../lib/search/locationIndex.js'
+import { buildSearchPlan } from '../lib/search/queryPlan.js'
+import { PAGE_SIZE, parseAmenityList, parsePageNumber } from '../lib/search/filterOptions.js'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 const RELATED_RECORD_BATCH_SIZE = 100
 const HOMEPAGE_CATEGORY_ITEM_LIMIT = 6
 const HOMEPAGE_PROPERTIES_LIMIT = 72
 const SEARCHABLE_PROPERTIES_LIMIT = 200
-const SEARCH_RESULTS_LIMIT = 500
-const PROPERTY_CATALOG_CACHE_VERSION = 'v3'
+const PROPERTY_CATALOG_CACHE_VERSION = 'v4'
 const PUBLIC_PROPERTY_SELECT =
   'id, property_id_number, category, property_type, total_rooms, total_bathrooms, balcony, floor_level, occupancy, room_size_sqft, rent_amount_bdt, rent_period, state_district, area, sub_area, short_description, available_from, deadline, status, created_at, updated_at, reviewed_at, is_featured, is_active, is_pinned, pinned_at, pinned_until, total_kitchen, dining_rooms, living_rooms, is_rent_negotiable, lat, lng'
 
@@ -66,87 +67,6 @@ const isTransientFetchError = (error) => {
   )
 }
 
-const locationIndex = (() => {
-  const districtsByDivision = {}
-  const divisions = []
-  const divisionByKey = {}
-  const districtByKey = {}
-  const upazillaByKey = {}
-  const subAreaByKey = {}
-  const districtToDivision = {}
-  const upazillaToDistrict = {}
-  const upazillaToDivision = {}
-  const subAreaToUpazilla = {}
-  const subAreaToDistrict = {}
-  const subAreaToDivision = {}
-
-  ;(locationData?.divisions || []).forEach((division) => {
-    const divisionName = division?.name || ''
-
-    if (!divisionName) {
-      return
-    }
-
-    divisions.push(divisionName)
-    divisionByKey[divisionName.toLowerCase()] = divisionName
-    districtsByDivision[divisionName.toLowerCase()] = (division.districts || [])
-      .map((district) => district?.name)
-      .filter(Boolean)
-
-    ;(division.districts || []).forEach((district) => {
-      const districtName = district?.name || ''
-
-      if (!districtName) {
-        return
-      }
-
-      districtByKey[districtName.toLowerCase()] = districtName
-      districtToDivision[districtName.toLowerCase()] = divisionName
-
-      ;(district.upazillas || []).forEach((upazilla) => {
-        const upazillaName = upazilla?.name || ''
-
-        if (!upazillaName) {
-          return
-        }
-
-        upazillaByKey[upazillaName.toLowerCase()] = upazillaName
-        upazillaToDistrict[upazillaName.toLowerCase()] = districtName
-        upazillaToDivision[upazillaName.toLowerCase()] = divisionName
-
-        ;(upazilla.sub_areas || []).forEach((subArea) => {
-          if (!subArea) {
-            return
-          }
-
-          subAreaByKey[subArea.toLowerCase()] = subArea
-          subAreaToUpazilla[subArea.toLowerCase()] = upazillaName
-          subAreaToDistrict[subArea.toLowerCase()] = districtName
-          subAreaToDivision[subArea.toLowerCase()] = divisionName
-        })
-      })
-    })
-  })
-
-  return {
-    divisions,
-    districtsByDivision,
-    divisionByKey,
-    districtByKey,
-    upazillaByKey,
-    subAreaByKey,
-    districtToDivision,
-    upazillaToDistrict,
-    upazillaToDivision,
-    subAreaToUpazilla,
-    subAreaToDistrict,
-    subAreaToDivision,
-  }
-})()
-
-// Users paste the label as shown on cards ("ID: 100001"); match on the bare value.
-const normalizeSearchText = (value) => stripPropertyIdPrefix(value).toLowerCase()
-
 const normalizeSearchFilters = (filters = {}) => ({
   ...DEFAULT_SEARCH_FILTERS,
   ...filters,
@@ -163,261 +83,16 @@ const normalizeSearchFilters = (filters = {}) => ({
   minPrice: String(filters.minPrice || '').replace(/[^\d]/g, ''),
   maxPrice: String(filters.maxPrice || '').replace(/[^\d]/g, ''),
   rooms: String(filters.rooms || '').replace(/[^\d]/g, ''),
+  baths: String(filters.baths || '').replace(/[^\d]/g, ''),
+  amenities: parseAmenityList(filters.amenities).join(','),
+  occupancy: String(filters.occupancy || '').trim().toLowerCase(),
+  includeNegotiable: filters.includeNegotiable === true || filters.includeNegotiable === '1',
   sort: filters.sort || DEFAULT_SEARCH_FILTERS.sort,
 })
 
 const getSearchCacheKey = (filters = {}) => {
   const normalizedFilters = normalizeSearchFilters(filters)
   return `properties:${PROPERTY_CATALOG_CACHE_VERSION}:search:${JSON.stringify(normalizedFilters)}`
-}
-
-const escapePostgrestPatternValue = (value = '') =>
-  String(value).replace(/[\\%_*]/g, '\\$&').replace(/[(),]/g, ' ')
-
-const getKeywordSearchTerms = (search = '') =>
-  Array.from(new Set([
-    search,
-    ...String(search || '').split(/\s+/),
-  ]
-    .map((term) => escapePostgrestPatternValue(term).trim())
-    .filter((term) => term.length >= 2)))
-
-const getDivisionDistrictValues = (division = '') => {
-  const normalizedDivision = division.trim()
-  const districts = locationIndex.districtsByDivision[normalizedDivision.toLowerCase()] || []
-  return Array.from(new Set([normalizedDivision, ...districts].filter(Boolean)))
-}
-
-const getMatchedLocationValues = (search = '') => {
-  const normalizedSearch = normalizeSearchText(search)
-  const stateDistrictValues = new Set()
-  const areaValues = new Set()
-  const subAreaValues = new Set()
-  const divisionValues = new Set()
-
-  if (normalizedSearch.length < 2) {
-    return {
-      stateDistrictValues: [],
-      areaValues: [],
-      subAreaValues: [],
-      divisionValues: [],
-    }
-  }
-
-  const matchesSearch = (value = '') => normalizeSearchText(value).includes(normalizedSearch)
-
-  locationIndex.divisions.forEach((division) => {
-    if (!matchesSearch(division)) {
-      return
-    }
-
-    divisionValues.add(division)
-    getDivisionDistrictValues(division).forEach((value) => stateDistrictValues.add(value))
-  })
-
-  Object.entries(locationIndex.districtByKey).forEach(([districtKey, district]) => {
-    if (!districtKey.includes(normalizedSearch)) {
-      return
-    }
-
-    stateDistrictValues.add(district)
-    const division = locationIndex.districtToDivision[districtKey]
-
-    if (division) {
-      divisionValues.add(division)
-    }
-  })
-
-  Object.entries(locationIndex.upazillaByKey).forEach(([upazillaKey, upazilla]) => {
-    if (!upazillaKey.includes(normalizedSearch)) {
-      return
-    }
-
-    areaValues.add(upazilla)
-    const district = locationIndex.upazillaToDistrict[upazillaKey]
-    const division = locationIndex.upazillaToDivision[upazillaKey]
-
-    if (district) {
-      stateDistrictValues.add(district)
-    }
-
-    if (division) {
-      divisionValues.add(division)
-    }
-  })
-
-  Object.entries(locationIndex.subAreaByKey).forEach(([subAreaKey, subArea]) => {
-    if (!subAreaKey.includes(normalizedSearch)) {
-      return
-    }
-
-    subAreaValues.add(subArea)
-    const upazilla = locationIndex.subAreaToUpazilla[subAreaKey]
-    const district = locationIndex.subAreaToDistrict[subAreaKey]
-    const division = locationIndex.subAreaToDivision[subAreaKey]
-
-    if (upazilla) {
-      areaValues.add(upazilla)
-    }
-
-    if (district) {
-      stateDistrictValues.add(district)
-    }
-
-    if (division) {
-      divisionValues.add(division)
-    }
-  })
-
-  return {
-    stateDistrictValues: [...stateDistrictValues],
-    areaValues: [...areaValues],
-    subAreaValues: [...subAreaValues],
-    divisionValues: [...divisionValues],
-  }
-}
-
-const getPropertyLocationSearchValues = (property = {}) => {
-  const stateDistrict = property.location?.state_district ?? property.state_district
-  const area = property.location?.area ?? property.area
-  const subArea = property.location?.sub_area ?? property.sub_area
-  const values = [stateDistrict, area, subArea]
-  const stateDistrictKey = normalizeSearchText(stateDistrict)
-  const areaKey = normalizeSearchText(area)
-  const subAreaKey = normalizeSearchText(subArea)
-
-  if (locationIndex.divisionByKey[stateDistrictKey]) {
-    values.push(locationIndex.divisionByKey[stateDistrictKey])
-  }
-
-  if (locationIndex.districtToDivision[stateDistrictKey]) {
-    values.push(locationIndex.districtToDivision[stateDistrictKey])
-  }
-
-  if (locationIndex.upazillaToDistrict[areaKey]) {
-    values.push(locationIndex.upazillaToDistrict[areaKey], locationIndex.upazillaToDivision[areaKey])
-  }
-
-  if (locationIndex.subAreaToUpazilla[subAreaKey]) {
-    values.push(
-      locationIndex.subAreaToUpazilla[subAreaKey],
-      locationIndex.subAreaToDistrict[subAreaKey],
-      locationIndex.subAreaToDivision[subAreaKey]
-    )
-  }
-
-  return Array.from(new Set(values.filter(Boolean)))
-}
-
-const getGeneratedPropertySearchText = (property = {}) => {
-  const stateDistrict = property.location?.state_district ?? property.state_district
-  const area = property.location?.area ?? property.area
-  const subArea = property.location?.sub_area ?? property.sub_area
-  const category = property.category
-  const propertyType = property.property_type
-
-  return [
-    [category, propertyType].filter(Boolean).join(' '),
-    [category, propertyType, area, stateDistrict].filter(Boolean).join(' '),
-    [propertyType, area, subArea, stateDistrict].filter(Boolean).join(' '),
-    [category, 'property', area, stateDistrict].filter(Boolean).join(' '),
-  ]
-}
-
-const matchesSearchKeyword = (property = {}, search = '') => {
-  const normalizedSearch = normalizeSearchText(search)
-
-  if (!normalizedSearch) {
-    return true
-  }
-
-  const searchableValues = [
-    property.id,
-    property.property_id_number,
-    property.category,
-    property.property_type,
-    property.floor_level,
-    property.occupancy,
-    property.pricing?.rent_period ?? property.rent_period,
-    property.search_related_text,
-    ...getPropertyLocationSearchValues(property),
-    property.location?.short_description ?? property.short_description,
-    property.pricing?.rent_amount_bdt ?? property.rent_amount_bdt,
-    ...(Array.isArray(property.amenities) ? property.amenities : []),
-    ...getGeneratedPropertySearchText(property),
-  ]
-
-  const normalizedValues = searchableValues
-    .filter((value) => value !== null && value !== undefined)
-    .map((value) => normalizeSearchText(value))
-    .filter(Boolean)
-  const normalizedTokens = normalizedSearch.split(/\s+/).filter(Boolean)
-  const searchableText = normalizedValues.join(' ')
-
-  return (
-    normalizedValues.some((value) => value.includes(normalizedSearch)) ||
-    normalizedTokens.every((token) => searchableText.includes(token))
-  )
-}
-
-const getPropertyRentAmount = (property = {}) => {
-  const amount = Number(property?.pricing?.rent_amount_bdt ?? property?.rent_amount_bdt)
-  return Number.isFinite(amount) && amount > 0 ? amount : null
-}
-
-const getPropertyRoomCount = (property = {}) =>
-  Number(property?.total_rooms ?? property?.specifications?.total_rooms ?? 0)
-
-const getPropertyLocationField = (property = {}, key) =>
-  property?.location?.[key] ?? property?.[key] ?? ''
-
-const matchesPropertyFilters = (property = {}, filters = {}) => {
-  const normalizedFilters = normalizeSearchFilters(filters)
-  const stateDistrict = String(getPropertyLocationField(property, 'state_district')).toLowerCase()
-  const area = String(getPropertyLocationField(property, 'area')).toLowerCase()
-  const subArea = String(getPropertyLocationField(property, 'sub_area')).toLowerCase()
-  const divisionValues = normalizedFilters.division
-    ? getDivisionDistrictValues(normalizedFilters.division).map((value) => value.toLowerCase())
-    : []
-  const rentAmount = getPropertyRentAmount(property)
-
-  if (normalizedFilters.district && stateDistrict !== normalizedFilters.district.toLowerCase()) {
-    return false
-  }
-
-  if (!normalizedFilters.district && normalizedFilters.division && !divisionValues.includes(stateDistrict)) {
-    return false
-  }
-
-  if (normalizedFilters.upazilla && area !== normalizedFilters.upazilla.toLowerCase()) {
-    return false
-  }
-
-  if (normalizedFilters.subArea && subArea !== normalizedFilters.subArea.toLowerCase()) {
-    return false
-  }
-
-  if (!matchesPropertyCategory(property, normalizedFilters.category)) {
-    return false
-  }
-
-  if (!matchesPropertyTypeOption(property.property_type, normalizedFilters.propertyType)) {
-    return false
-  }
-
-  if (normalizedFilters.minPrice && (rentAmount === null || rentAmount < Number(normalizedFilters.minPrice))) {
-    return false
-  }
-
-  if (normalizedFilters.maxPrice && (rentAmount === null || rentAmount > Number(normalizedFilters.maxPrice))) {
-    return false
-  }
-
-  if (normalizedFilters.rooms && getPropertyRoomCount(property) < Number(normalizedFilters.rooms)) {
-    return false
-  }
-
-  return matchesSearchKeyword(property, normalizedFilters.search)
 }
 
 export const getAllPropertiesCacheKey = (options = {}) => {
@@ -631,267 +306,43 @@ const sortPublicProperties = (properties = []) =>
     return new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime()
   })
 
+/** Rows the public may see: approved, active, not soft-deleted. */
+export const applyPublicVisibility = (query) =>
+  query.eq('status', 'approved').neq('is_active', false).is('deleted_at', null)
+
+// PostgREST returns at most 1000 rows per request (max_rows), so "everything" must be paged.
+const POSTGREST_MAX_ROWS = 1000
+const FULL_CATALOG_CAP = 3000
+
+/**
+ * Newest public listings. With `limit`, one ranged request. Without it, pages through the catalog
+ * up to FULL_CATALOG_CAP rows (the old single request silently stopped at 1000 rows).
+ */
 const fetchPublicProperties = async ({ select = PUBLIC_PROPERTY_SELECT, limit = null, offset = 0 } = {}) => {
-  let legacyQuery = supabase
-    .from('properties')
-    .select(select)
-    .eq('status', 'approved')
-    .neq('is_active', false)
-    .order('created_at', { ascending: false })
+  const fetchRange = async (from, to) => {
+    const { data, error } = await applyPublicVisibility(supabase.from('properties').select(select))
+      .order('created_at', { ascending: false })
+      .range(from, to)
 
-  const { data: legacyData, error: legacyError } = await legacyQuery
-
-  if (legacyError) {
-    throw legacyError
-  }
-
-  const sortedData = sortPublicProperties(legacyData || [])
-  const pagedData = limit ? sortedData.slice(offset, offset + limit) : sortedData
-
-  return {
-    properties: pagedData,
-  }
-}
-
-const applyPublicPropertyFilters = (query, filters = {}) => {
-  const normalizedFilters = normalizeSearchFilters(filters)
-  let nextQuery = query
-
-  if (normalizedFilters.district) {
-    nextQuery = nextQuery.eq('state_district', normalizedFilters.district)
-  } else if (normalizedFilters.division) {
-    nextQuery = nextQuery.in('state_district', getDivisionDistrictValues(normalizedFilters.division))
-  }
-
-  if (normalizedFilters.upazilla) {
-    nextQuery = nextQuery.eq('area', normalizedFilters.upazilla)
-  }
-
-  if (normalizedFilters.subArea) {
-    nextQuery = nextQuery.eq('sub_area', normalizedFilters.subArea)
-  }
-
-  if (normalizedFilters.category !== 'All') {
-    nextQuery = nextQuery.in('category', getPropertyCategoryValues(normalizedFilters.category))
-  }
-
-  if (normalizedFilters.propertyType !== 'All') {
-    nextQuery = nextQuery.in('property_type', getPropertyTypeValues(normalizedFilters.propertyType))
-  }
-
-  if (normalizedFilters.minPrice) {
-    nextQuery = nextQuery.gte('rent_amount_bdt', Number(normalizedFilters.minPrice))
-  }
-
-  if (normalizedFilters.maxPrice) {
-    nextQuery = nextQuery.lte('rent_amount_bdt', Number(normalizedFilters.maxPrice))
-  }
-
-  if (normalizedFilters.rooms) {
-    nextQuery = nextQuery.gte('total_rooms', Number(normalizedFilters.rooms))
-  }
-
-  if (normalizedFilters.search) {
-    const searchTerms = getKeywordSearchTerms(normalizedFilters.search)
-    const matchedLocations = getMatchedLocationValues(normalizedFilters.search)
-    const keywordConditions = []
-
-    searchTerms.forEach((keyword) => {
-      keywordConditions.push(
-        `property_id_number.ilike.%${keyword}%`,
-        `category.ilike.%${keyword}%`,
-        `property_type.ilike.%${keyword}%`,
-        `state_district.ilike.%${keyword}%`,
-        `area.ilike.%${keyword}%`,
-        `sub_area.ilike.%${keyword}%`,
-        `short_description.ilike.%${keyword}%`,
-        `floor_level.ilike.%${keyword}%`,
-        `occupancy.ilike.%${keyword}%`,
-        `rent_period.ilike.%${keyword}%`
-      )
-    })
-
-    matchedLocations.stateDistrictValues.forEach((value) => {
-      keywordConditions.push(`state_district.ilike.%${escapePostgrestPatternValue(value)}%`)
-    })
-
-    matchedLocations.areaValues.forEach((value) => {
-      keywordConditions.push(`area.ilike.%${escapePostgrestPatternValue(value)}%`)
-    })
-
-    matchedLocations.subAreaValues.forEach((value) => {
-      keywordConditions.push(`sub_area.ilike.%${escapePostgrestPatternValue(value)}%`)
-    })
-
-    if (keywordConditions.length) {
-      nextQuery = nextQuery.or(Array.from(new Set(keywordConditions)).join(','))
-    }
-  }
-
-  return nextQuery
-}
-
-const applySortOrder = (query, sort = DEFAULT_SEARCH_FILTERS.sort) => {
-  if (sort === 'price_low') {
-    return query.order('rent_amount_bdt', { ascending: true, nullsFirst: false })
-  }
-
-  if (sort === 'price_high') {
-    return query.order('rent_amount_bdt', { ascending: false, nullsFirst: false })
-  }
-
-  return query.order('created_at', { ascending: false })
-}
-
-const sortSearchResults = (properties = [], sort = DEFAULT_SEARCH_FILTERS.sort) => {
-  const nextProperties = [...properties]
-  const withPinnedFirst = (comparison) =>
-    nextProperties.sort((left, right) => {
-      const pinComparison = compareActivePinnedFirst(left, right)
-
-      if (pinComparison !== 0) {
-        return pinComparison
-      }
-
-      return comparison(left, right)
-    })
-
-  if (sort === 'price_low') {
-    return withPinnedFirst(
-      (left, right) =>
-        (getPropertyRentAmount(left) ?? Number.MAX_SAFE_INTEGER) -
-        (getPropertyRentAmount(right) ?? Number.MAX_SAFE_INTEGER)
-    )
-  }
-
-  if (sort === 'price_high') {
-    return withPinnedFirst(
-      (left, right) => (getPropertyRentAmount(right) ?? -1) - (getPropertyRentAmount(left) ?? -1)
-    )
-  }
-
-  return sortPublicProperties(nextProperties)
-}
-
-const mergePropertiesById = (...propertyLists) => {
-  const propertiesById = new Map()
-
-  propertyLists.flat().forEach((property) => {
-    if (!property?.id) {
-      return
+    if (error) {
+      throw error
     }
 
-    const existing = propertiesById.get(property.id)
-
-    if (!existing) {
-      propertiesById.set(property.id, property)
-      return
-    }
-
-    // Keep the first copy but carry over amenity enrichment from a later duplicate.
-    if (!existing.search_related_text && property.search_related_text) {
-      propertiesById.set(property.id, { ...existing, search_related_text: property.search_related_text })
-    }
-  })
-
-  return [...propertiesById.values()]
-}
-
-const fetchKeywordAmenityPropertyIds = async (search = '') => {
-  const searchTerms = getKeywordSearchTerms(search)
-
-  if (!searchTerms.length) {
-    return { ids: [], amenitiesById: new Map() }
+    return data || []
   }
 
-  const { data, error } = await supabase
-    .from('property_amenities')
-    .select('property_id, amenity_type')
-    .or(searchTerms.map((keyword) => `amenity_type.ilike.%${keyword}%`).join(','))
-    .limit(SEARCH_RESULTS_LIMIT)
-
-  if (error) {
-    if (process.env.NODE_ENV === 'development' && !isSupabaseQuotaError(error)) {
-      console.warn(`Continuing without amenity keyword matches: ${getErrorMessage(error)}`)
-    }
-
-    return { ids: [], amenitiesById: new Map() }
+  if (limit) {
+    return { properties: sortPublicProperties(await fetchRange(offset, offset + limit - 1)) }
   }
 
-  const amenitiesById = new Map()
-  ;(data || []).forEach((row) => {
-    if (!row?.property_id) {
-      return
-    }
-    const list = amenitiesById.get(row.property_id) || []
-    if (row.amenity_type && !list.includes(row.amenity_type)) {
-      list.push(row.amenity_type)
-    }
-    amenitiesById.set(row.property_id, list)
-  })
-
-  return { ids: [...amenitiesById.keys()], amenitiesById }
-}
-
-const fetchFilteredPublicPropertyRows = async (filters = {}, propertyIds = null) => {
-  if (Array.isArray(propertyIds) && !propertyIds.length) {
-    return []
+  const rows = []
+  for (let from = offset; from < offset + FULL_CATALOG_CAP; from += POSTGREST_MAX_ROWS) {
+    const page = await fetchRange(from, from + POSTGREST_MAX_ROWS - 1)
+    rows.push(...page)
+    if (page.length < POSTGREST_MAX_ROWS) break
   }
 
-  const normalizedFilters = normalizeSearchFilters(filters)
-  let query = supabase
-    .from('properties')
-    .select(PUBLIC_PROPERTY_SELECT)
-    .eq('status', 'approved')
-    .neq('is_active', false)
-
-  query = applyPublicPropertyFilters(query, normalizedFilters)
-
-  if (Array.isArray(propertyIds)) {
-    query = query.in('id', propertyIds)
-  }
-
-  query = applySortOrder(query, normalizedFilters.sort).limit(SEARCH_RESULTS_LIMIT)
-
-  const { data, error } = await query
-
-  if (error) {
-    throw error
-  }
-
-  return data || []
-}
-
-const prepareFilteredSearchRows = (rows = [], filters = {}) => {
-  const normalizedFilters = normalizeSearchFilters(filters)
-
-  return sortSearchResults(rows, normalizedFilters.sort).filter(
-    (property) => matchesSearchKeyword(property, normalizedFilters.search)
-  )
-}
-
-const fetchFilteredPublicProperties = async (filters = {}) => {
-  const normalizedFilters = normalizeSearchFilters(filters)
-  const keywordRows = await fetchFilteredPublicPropertyRows(normalizedFilters)
-  const { ids: amenityPropertyIds, amenitiesById } = await fetchKeywordAmenityPropertyIds(
-    normalizedFilters.search
-  )
-  // Tag each amenity match with the amenity names that matched (not the whole query), so the
-  // every-word post-filter still requires the other words to match the property itself.
-  const amenityRows = (await fetchFilteredPublicPropertyRows(
-    {
-      ...normalizedFilters,
-      search: '',
-    },
-    amenityPropertyIds
-  )).map((property) => ({
-    ...property,
-    search_related_text: (amenitiesById.get(property.id) || []).join(' '),
-  }))
-  return prepareFilteredSearchRows(
-    mergePropertiesById(keywordRows, amenityRows),
-    normalizedFilters
-  )
+  return { properties: sortPublicProperties(rows) }
 }
 
 export const invalidatePropertyCatalogSnapshots = () => {
@@ -960,83 +411,205 @@ export const getAllProperties = async (options = {}) => {
   }
 }
 
+const SEARCH_LOCATION_INDEX = createLocationIndex(locationData)
+const MAX_PINNED_RESULTS = 6
+
 /**
- * Search with an explicit outcome so the UI can distinguish "no matches" from
- * "the service could not be reached". `properties` is always an array.
- *   source: 'live' | 'cache-search' | 'cache-all' | 'none'
- *   error:  null | { code: 'unavailable' | 'failed', message }
+ * Applies a search plan (see lib/search/queryPlan.js) to a properties query. Everything happens in
+ * SQL so `count: 'exact'` and `.range()` give a true total and real pages.
  */
-export const searchPropertiesWithStatus = async (filters = {}) => {
+const applySearchPlan = (query, filters, plan) => {
+  let nextQuery = applyPublicVisibility(query)
+
+  if (plan.logic) {
+    nextQuery = nextQuery.or(plan.logic)
+  }
+
+  plan.amenities.forEach((values, index) => {
+    nextQuery = nextQuery.in(`amenity_filter_${index}.amenity_type`, values)
+  })
+
+  if (plan.category !== 'All') {
+    nextQuery = nextQuery.in('category', getPropertyCategoryValues(plan.category))
+  }
+
+  if (plan.propertyType !== 'All') {
+    nextQuery = nextQuery.in('property_type', getPropertyTypeValues(plan.propertyType))
+  }
+
+  if (plan.occupancyValues.length) {
+    nextQuery = nextQuery.in('occupancy', plan.occupancyValues)
+  }
+
+  // With "include price on request" the range lives inside plan.logic as an OR branch.
+  if (!filters.includeNegotiable && (filters.minPrice || filters.maxPrice)) {
+    nextQuery = nextQuery.not('is_rent_negotiable', 'is', true)
+    if (filters.minPrice) nextQuery = nextQuery.gte('rent_amount_bdt', Number(filters.minPrice))
+    if (filters.maxPrice) nextQuery = nextQuery.lte('rent_amount_bdt', Number(filters.maxPrice))
+  }
+
+  if (filters.rooms) {
+    nextQuery = nextQuery.gte('total_rooms', Number(filters.rooms))
+  }
+
+  if (filters.baths) {
+    nextQuery = nextQuery.gte('total_bathrooms', Number(filters.baths))
+  }
+
+  return nextQuery
+}
+
+const searchSelect = (plan) =>
+  plan.amenities.reduce(
+    (select, _values, index) => `${select}, amenity_filter_${index}:property_amenities!inner(amenity_type)`,
+    PUBLIC_PROPERTY_SELECT
+  )
+
+/**
+ * Price sorts put listings with a real price first and "Negotiable"/price-on-request last, so a
+ * cheap-first list never starts with unpriced cards. Newest is the default.
+ */
+const applyPagedSortOrder = (query, sort) => {
+  if (sort === 'price_low' || sort === 'price_high') {
+    return query
+      .order('is_rent_negotiable', { ascending: true, nullsFirst: true })
+      .order('rent_amount_bdt', { ascending: sort === 'price_low', nullsFirst: false })
+      .order('created_at', { ascending: false })
+  }
+
+  if (sort === 'oldest') {
+    return query.order('created_at', { ascending: true })
+  }
+
+  return query.order('created_at', { ascending: false })
+}
+
+const stripSearchJoins = (rows = []) =>
+  rows.map((row) => {
+    const clean = { ...row }
+    Object.keys(clean).forEach((key) => {
+      if (key.startsWith('amenity_filter_')) delete clean[key]
+    })
+    return clean
+  })
+
+const attachImagesAndAmenities = async (rows = []) => {
+  if (!rows.length) {
+    return []
+  }
+
+  const propertyIds = rows.map((property) => property.id)
+  const [allImages, allAmenities] = await Promise.all([
+    fetchOptionalRelatedRowsInBatches({ table: 'property_images', ids: propertyIds, orderColumn: 'display_order' }),
+    fetchOptionalRelatedRowsInBatches({ table: 'property_amenities', select: 'property_id, amenity_type', ids: propertyIds }),
+  ])
+
+  return mapPublicProperties(rows, allImages, allAmenities)
+}
+
+/**
+ * One page of search results with a true total.
+ *
+ * Active paid pins ("Featured") come from a separate small query: they lead page 1 and are
+ * excluded from the paged list so they never repeat or shift page boundaries.
+ *
+ * @returns {Promise<{
+ *   properties: object[], featured: object[], total: number, page: number, pageCount: number,
+ *   pageSize: number, place: null|{type, name}, suggestion: string,
+ *   source: 'live'|'cache-search'|'none', error: null|{code, message}
+ * }>}
+ */
+export const searchPropertiesWithStatus = async (filters = {}, { page = 1, pageSize = PAGE_SIZE } = {}) => {
   const normalizedFilters = normalizeSearchFilters(filters)
-  const cacheKey = getSearchCacheKey(normalizedFilters)
+  const safePage = parsePageNumber(page)
+  const cacheKey = `${getSearchCacheKey(normalizedFilters)}:page:${safePage}`
+  const plan = buildSearchPlan(normalizedFilters, SEARCH_LOCATION_INDEX)
+  const meta = {
+    page: safePage,
+    pageSize,
+    place: plan.place ? { type: plan.place.type, name: plan.place.name } : null,
+    suggestion: plan.suggestion,
+  }
+
+  if (plan.empty) {
+    return { ...meta, emptyQuery: true, properties: [], featured: [], total: 0, pageCount: 0, source: 'live', error: null }
+  }
 
   try {
-    const properties = await fetchFilteredPublicProperties(normalizedFilters)
+    const select = searchSelect(plan)
+    const nowIso = new Date().toISOString()
 
-    if (!properties.length) {
-      writeSnapshot(cacheKey, [])
-      return { properties: [], source: 'live', error: null }
+    const { data: pinnedRows, error: pinnedError } = await applySearchPlan(
+      supabase.from('properties').select(select),
+      normalizedFilters,
+      plan
+    )
+      .gt('pinned_until', nowIso)
+      .order('pinned_until', { ascending: false })
+      .limit(MAX_PINNED_RESULTS)
+
+    if (pinnedError) {
+      throw pinnedError
     }
 
-    const propertyIds = properties.map((property) => property.id)
-    const [allImages, allAmenities] = await Promise.all([
-      fetchOptionalRelatedRowsInBatches({
-        table: 'property_images',
-        ids: propertyIds,
-        orderColumn: 'display_order',
-      }),
-      fetchOptionalRelatedRowsInBatches({
-        table: 'property_amenities',
-        select: 'property_id, amenity_type',
-        ids: propertyIds,
-      }),
+    const pinnedIds = (pinnedRows || []).map((row) => row.id)
+    const from = (safePage - 1) * pageSize
+    let mainQuery = applySearchPlan(
+      supabase.from('properties').select(select, { count: 'exact' }),
+      normalizedFilters,
+      plan
+    )
+
+    if (pinnedIds.length) {
+      mainQuery = mainQuery.not('id', 'in', `(${pinnedIds.join(',')})`)
+    }
+
+    const { data: pageRows, count, error } = await applyPagedSortOrder(mainQuery, normalizedFilters.sort)
+      .range(from, from + pageSize - 1)
+
+    if (error) {
+      throw error
+    }
+
+    const [featured, properties] = await Promise.all([
+      safePage === 1 ? attachImagesAndAmenities(stripSearchJoins(pinnedRows || [])) : Promise.resolve([]),
+      attachImagesAndAmenities(stripSearchJoins(pageRows || [])),
     ])
+    const total = (count || 0) + pinnedIds.length
+    const result = {
+      ...meta,
+      properties,
+      featured,
+      total,
+      pageCount: Math.max(1, Math.ceil((count || 0) / pageSize)),
+      source: 'live',
+      error: null,
+    }
 
-    const transformedProperties = mapPublicProperties(properties, allImages, allAmenities)
-
-    writeSnapshot(cacheKey, transformedProperties)
-
-    return { properties: transformedProperties, source: 'live', error: null }
+    writeSnapshot(cacheKey, { properties, featured, total, pageCount: result.pageCount })
+    pruneSnapshotsByPrefix(`properties:${PROPERTY_CATALOG_CACHE_VERSION}:search:`, 30)
+    return result
   } catch (error) {
     const errorMessage = getErrorMessage(error)
     const isRecoverable = isSupabaseQuotaError(error) || isRecoverableSupabaseError(error)
 
-    if (isRecoverable) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn(`Search unavailable, using cached data if any: ${errorMessage}`)
-      }
-    } else {
+    if (!isRecoverable) {
       console.error('Error searching properties:', errorMessage, error)
     }
 
-    const status = {
-      code: isRecoverable ? 'unavailable' : 'failed',
-      message: errorMessage,
+    const status = { code: isRecoverable ? 'unavailable' : 'failed', message: errorMessage }
+    const cached = readSnapshot(cacheKey)
+
+    if (cached && Array.isArray(cached.properties)) {
+      return { ...meta, ...cached, source: 'cache-search', error: status }
     }
 
-    const cachedSearchProperties = readSnapshot(cacheKey)
-    if (Array.isArray(cachedSearchProperties)) {
-      return { properties: cachedSearchProperties, source: 'cache-search', error: status }
-    }
-
-    const cachedAllProperties = readSnapshot(getAllPropertiesCacheKey())
-    if (Array.isArray(cachedAllProperties)) {
-      return {
-        properties: sortSearchResults(
-          cachedAllProperties.filter((property) => matchesPropertyFilters(property, normalizedFilters)),
-          normalizedFilters.sort
-        ),
-        source: 'cache-all',
-        error: status,
-      }
-    }
-
-    return { properties: [], source: 'none', error: status }
+    return { ...meta, properties: [], featured: [], total: 0, pageCount: 0, source: 'none', error: status }
   }
 }
 
-export const searchProperties = async (filters = {}) =>
-  (await searchPropertiesWithStatus(filters)).properties
+export const searchProperties = async (filters = {}, options = {}) =>
+  (await searchPropertiesWithStatus(filters, options)).properties
 
 const PROPERTY_ID_LOOKUP_RPC = 'find_public_property_id_by_number'
 
@@ -1094,60 +667,43 @@ export const getHomepageProperties = async () => {
   const cacheKey = getHomepagePropertiesCacheKey()
 
   try {
-    const homepagePropertiesByCategory = HOME_CATEGORIES.reduce((accumulator, category) => {
-      accumulator[category] = []
-      return accumulator
-    }, {})
+    // One small query per category, in parallel. The old loop re-downloaded the whole catalog
+    // for every 72-row step until each category had 6 items (minutes on slow connections).
+    const nowIso = new Date().toISOString()
+    const categoryRows = await Promise.all(
+      HOME_CATEGORIES.map(async (category) => {
+        const values = getPropertyCategoryValues(category)
+        const [pinnedResult, latestResult] = await Promise.all([
+          applyPublicVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
+            .in('category', values)
+            .gt('pinned_until', nowIso)
+            .order('pinned_until', { ascending: false })
+            .limit(HOMEPAGE_CATEGORY_ITEM_LIMIT),
+          applyPublicVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
+            .in('category', values)
+            .order('created_at', { ascending: false })
+            .limit(HOMEPAGE_CATEGORY_ITEM_LIMIT),
+        ])
+
+        if (latestResult.error) {
+          throw latestResult.error
+        }
+
+        return [...(pinnedResult.data || []), ...(latestResult.data || [])]
+      })
+    )
+
     const selectedPropertyIds = new Set()
-    let offset = 0
-    let exhaustedCatalog = false
-
-    while (!exhaustedCatalog) {
-      const response = await fetchPublicProperties({
-        limit: HOMEPAGE_PROPERTIES_LIMIT,
-        offset,
-      })
-      const properties = response?.properties || []
-
-      if (properties.length === 0) {
-        exhaustedCatalog = true
-        break
-      }
-
-      properties.forEach((property) => {
-        const category = normalizePropertyCategory(property?.category)
-
-        if (!HOME_CATEGORIES.includes(category)) {
-          return
-        }
-
-        if (selectedPropertyIds.has(property.id)) {
-          return
-        }
-
-        if (homepagePropertiesByCategory[category].length >= HOMEPAGE_CATEGORY_ITEM_LIMIT) {
-          return
-        }
-
-        homepagePropertiesByCategory[category].push(property)
-        selectedPropertyIds.add(property.id)
-      })
-
-      const allCategoriesFilled = HOME_CATEGORIES.every(
-        (category) => homepagePropertiesByCategory[category].length >= HOMEPAGE_CATEGORY_ITEM_LIMIT
-      )
-
-      if (allCategoriesFilled) {
-        break
-      }
-
-      if (properties.length < HOMEPAGE_PROPERTIES_LIMIT) {
-        exhaustedCatalog = true
-        break
-      }
-
-      offset += HOMEPAGE_PROPERTIES_LIMIT
-    }
+    const homepagePropertiesByCategory = {}
+    HOME_CATEGORIES.forEach((category, categoryIndex) => {
+      homepagePropertiesByCategory[category] = sortPublicProperties(categoryRows[categoryIndex])
+        .filter((property) => {
+          if (selectedPropertyIds.has(property.id)) return false
+          selectedPropertyIds.add(property.id)
+          return true
+        })
+        .slice(0, HOMEPAGE_CATEGORY_ITEM_LIMIT)
+    })
 
     const selectedProperties = HOME_CATEGORIES.flatMap(
       (category) => homepagePropertiesByCategory[category]

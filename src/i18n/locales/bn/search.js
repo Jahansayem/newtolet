@@ -26,12 +26,20 @@ const search = {
       submit: 'প্রপার্টি খুঁজুন',
       reset: 'সব মুছুন',
       moreFilters: 'আরও ফিল্টার',
+      baths: 'বাথরুম',
+      anyBaths: 'যেকোনো সংখ্যক বাথরুম',
+      bathsOption: '{baths}+ বাথরুম',
+      occupancy: 'কারা ভাড়া নিতে পারবেন',
+      anyOccupancy: 'যে কেউ',
+      amenities: 'সুবিধাসমূহ',
+      includeNegotiable: '"আলোচনা সাপেক্ষ" ভাড়ার লিস্টিংও দেখান',
     },
 
     sort: {
       newest: 'নতুন আগে',
       priceLow: 'ভাড়া: কম থেকে বেশি',
       priceHigh: 'ভাড়া: বেশি থেকে কম',
+      oldest: 'পুরনো আগে',
     },
 
     chips: {
@@ -46,6 +54,8 @@ const search = {
       maxPrice: 'সর্বোচ্চ ৳{value}',
       rooms: '{value}+ রুম',
       sort: 'সাজানো: {value}',
+      baths: '{value}+ বাথরুম',
+      includeNegotiable: 'আলোচনা সাপেক্ষ ভাড়াসহ',
     },
 
     overlay: {
@@ -82,6 +92,35 @@ const search = {
       error: 'এই মুহূর্তে প্রপার্টি খোঁজা যাচ্ছে না।',
       errorHint: 'ইন্টারনেট সংযোগ দেখে একটু পর আবার চেষ্টা করুন।',
       cachedNotice: 'সংরক্ষিত ফলাফল দেখানো হচ্ছে। এই মুহূর্তে লাইভ সার্চ করা যাচ্ছে না।',
+      foundTotal: '{count}টি প্রপার্টি পাওয়া গেছে',
+      showingPlace: '{place} দেখানো হচ্ছে',
+      placeDistrict: '{name} জেলা',
+      placeDivision: '{name} বিভাগ',
+      placeArea: '{name}',
+      didYouMean: 'আপনি কি খুঁজছেন',
+      punctuationOnly: 'খুঁজতে এলাকা, জেলা, প্রপার্টি আইডি বা কীওয়ার্ড লিখুন।',
+      featured: 'ফিচার্ড',
+      featuredTitle: 'ফিচার্ড লিস্টিং',
+      pageOf: '{pages} পেজের মধ্যে {page}',
+      previous: 'আগের',
+      next: 'পরের',
+      pagination: 'সার্চ ফলাফলের পেজ',
+      goToPage: '{page} নম্বর পেজে যান',
+      endOfResults: 'সব ফলাফল দেখানো হয়েছে।',
+    },
+
+    amenities: {
+      furnished: 'ফার্নিশড',
+      lift: 'লিফট',
+      generator: 'জেনারেটর',
+      parking: 'পার্কিং / গ্যারেজ',
+      gas: 'গ্যাস লাইন',
+    },
+
+    occupancy: {
+      family: 'শুধু পরিবার',
+      female: 'শুধু মহিলা',
+      male: 'শুধু পুরুষ',
     },
   },
 

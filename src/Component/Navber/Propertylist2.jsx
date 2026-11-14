@@ -1,5 +1,8 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { normalizeHrefKey, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { normalizeHrefKey, useNavigate, useParams } from 'react-router-dom'
+import { usePathname } from 'next/navigation'
+import { useDeferredSearchParams } from '../../lib/useDeferredSearchParams.jsx'
+import { parsePageNumber } from '../../lib/search/filterOptions.js'
 import { RxCross2 } from 'react-icons/rx'
 import { listcontext } from '../Route/Listprovaider'
 import CategoryFilterBar from '../Home/CategoryFilterBar'
@@ -26,8 +29,10 @@ import { useLanguage } from '../../i18n/useLanguage'
 
 const Propertylist2 = () => {
   const [resultCount, setResultCount] = useState(null)
-  const [searchParams] = useSearchParams()
-  const location = useLocation()
+  // Deferred params: the page (H1, filters, skeleton) renders into the static HTML, and the
+  // results load once the real query string is known (paramsReady).
+  const [searchParams, searchParamsBridge, paramsReady] = useDeferredSearchParams()
+  const pathname = usePathname() || '/'
   const navigate = useNavigate()
   const routeParams = useParams()
   const { isLoading, selectedCategory, setSelectedCategory } = useContext(listcontext)
@@ -38,8 +43,8 @@ const Propertylist2 = () => {
     ? routeParams.divisionSlug[0] || ''
     : routeParams?.divisionSlug || ''
   const routeContext = useMemo(
-    () => getSearchRouteContext(location.pathname, { divisionSlug }),
-    [divisionSlug, location.pathname]
+    () => getSearchRouteContext(pathname, { divisionSlug }),
+    [divisionSlug, pathname]
   )
   const searchParamsString = useMemo(
     () => searchParams.toString(),
@@ -71,6 +76,7 @@ const Propertylist2 = () => {
   }, [urlSearchFilters, urlSearchSignature])
 
   const committedSearchFilters = urlSearchFilters
+  const currentPage = parsePageNumber(searchParams.get('page'))
 
   // An exact Property ID ("100001", "ID: 100001") opens the listing directly instead of
   // rendering a one-card results page. 'checking' holds the list back so the keyword
@@ -159,7 +165,7 @@ const Propertylist2 = () => {
 
     const nextHref = buildSearchHref(nextFilters, routeContext)
     const nextUrl = new URL(nextHref, 'http://localhost')
-    const currentUrl = new URL(location.href || '/', 'http://localhost')
+    const currentUrl = new URL(typeof window !== 'undefined' ? window.location.href : '/', 'http://localhost')
 
     // Compare canonical forms: location.href carries the trailing slash, nextHref does not.
     if (
@@ -169,7 +175,7 @@ const Propertylist2 = () => {
       // Submits and category picks push so Back steps through searches; chip clears replace.
       navigate(nextHref, { replace: Boolean(options.replace) })
     }
-  }, [location.href, navigate, routeContext])
+  }, [navigate, routeContext])
 
   const handleFieldChange = useCallback((field, value) => {
     setSearchFilters((currentFilters) => updateSearchFilters(currentFilters, field, value))
@@ -179,6 +185,27 @@ const Propertylist2 = () => {
     const nextCategory = searchFilters.category === category ? 'All' : category
     applyNextFilters(updateSearchFilters(searchFilters, 'category', nextCategory), { syncUrl: true })
   }, [applyNextFilters, searchFilters])
+
+  // Sort applies at once (the audit found it did nothing until "Search" was pressed).
+  const handleSortChange = useCallback((sort) => {
+    applyNextFilters(updateSearchFilters(committedSearchFilters, 'sort', sort), { syncUrl: true, replace: true })
+    setSearchFilters((currentFilters) => updateSearchFilters(currentFilters, 'sort', sort))
+  }, [applyNextFilters, committedSearchFilters])
+
+  const handlePageChange = useCallback((page) => {
+    const url = new URL(buildSearchHref(committedSearchFilters, routeContext), 'http://localhost')
+    if (page > 1) {
+      url.searchParams.set('page', String(page))
+    }
+    navigate(`${url.pathname}${url.search}`)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [committedSearchFilters, navigate, routeContext])
+
+  const pageTitle = routeContext.division
+    ? t('listing.browse.titleDivision', { division: tv('divisions', routeContext.division) })
+    : t('listing.browse.titleAll')
 
   const handleSearchSubmit = useCallback((event) => {
     event.preventDefault()
@@ -196,6 +223,7 @@ const Propertylist2 = () => {
 
   return (
     <div className='site-shell min-h-screen py-5 md:py-6'>
+      {searchParamsBridge}
       <div className='site-shell-bleed sticky top-[var(--nav-h)] z-40 mb-6 border-b border-line/80 bg-canvas/95 py-2.5 backdrop-blur'>
         <CategoryFilterBar
           selectedCategory={searchFilters.category}
@@ -205,7 +233,7 @@ const Propertylist2 = () => {
 
       <div className='mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
         <div className='max-w-3xl'>
-          <h1 className='text-2xl font-bold leading-tight text-ink md:text-3xl'>{t('nav.propertyList')}</h1>
+          <h1 className='text-2xl font-bold leading-tight text-ink md:text-3xl'>{pageTitle}</h1>
           <p className='mt-1 text-caption text-muted md:text-body'>
             {t('listing.browse.subtitle')}
           </p>
@@ -230,6 +258,7 @@ const Propertylist2 = () => {
           <PropertySearchForm
             filters={searchFilters}
             onFieldChange={handleFieldChange}
+            onSortChange={handleSortChange}
             onSubmit={handleSearchSubmit}
             onReset={handleClearAll}
             showSort
@@ -276,7 +305,11 @@ const Propertylist2 = () => {
       ) : (
         <Homelist
           searchFilters={committedSearchFilters}
+          page={currentPage}
+          ready={paramsReady}
+          onPageChange={handlePageChange}
           onResultsChange={setResultCount}
+          onSuggestionSelect={(suggestion) => applyNextFilters(updateSearchFilters(committedSearchFilters, 'search', suggestion), { syncUrl: true })}
         />
       )}
     </div>

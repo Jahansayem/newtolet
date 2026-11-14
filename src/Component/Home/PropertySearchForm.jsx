@@ -2,15 +2,19 @@ import React, { useCallback, useId, useMemo, useState } from 'react'
 import { FiChevronDown, FiChevronUp, FiSearch } from 'react-icons/fi'
 import { HOME_CATEGORIES } from './categoryConfig'
 import {
+  AMENITY_FILTER_KEYS,
+  BATHROOM_FILTER_OPTIONS,
   DEFAULT_SEARCH_FILTERS,
+  OCCUPANCY_FILTER_KEYS,
   PROPERTY_TYPE_OPTIONS,
   ROOM_FILTER_OPTIONS,
   SORT_OPTIONS,
   getLocationOptions,
 } from './propertySearch'
+import { parseAmenityList } from '../../lib/search/filterOptions.js'
 import { useLanguage } from '../../i18n/useLanguage'
 
-const SECONDARY_KEYS = ['district', 'upazilla', 'subArea', 'propertyType', 'rooms']
+const SECONDARY_KEYS = ['district', 'upazilla', 'subArea', 'propertyType', 'occupancy', 'amenities']
 
 const Field = ({ id, label, children }) => (
   <div className='min-w-0'>
@@ -20,13 +24,17 @@ const Field = ({ id, label, children }) => (
 )
 
 /**
- * Two-tier search form: the fields tenants use on every search stay visible (keyword, division,
- * category, budget); district/area/type/rooms/sort sit behind a "More filters" disclosure that opens
- * automatically when one of them is already active.
+ * Two-tier search form. Always visible: keyword, division, category, rent range, bedrooms,
+ * bathrooms and sort (the filters renters use on every search). Behind "More filters": district,
+ * area, sub-area, type, occupancy and facilities; the panel opens when one of them is active.
+ *
+ * `onSortChange` applies a sort immediately (no submit needed); without it sort behaves like
+ * any other field.
  */
 const PropertySearchForm = ({
   filters = DEFAULT_SEARCH_FILTERS,
   onFieldChange,
+  onSortChange,
   onSubmit,
   onReset,
   showSort = true,
@@ -40,10 +48,27 @@ const PropertySearchForm = ({
   const hasSecondaryValue = SECONDARY_KEYS.some((key) => filters[key] && filters[key] !== DEFAULT_SEARCH_FILTERS[key])
   const [moreOpen, setMoreOpen] = useState(hasSecondaryValue)
   const showMore = moreOpen || hasSecondaryValue
+  const selectedAmenities = useMemo(() => parseAmenityList(filters.amenities), [filters.amenities])
+  const hasPriceRange = Boolean(filters.minPrice || filters.maxPrice)
 
   const handleChange = useCallback((field) => (event) => {
     onFieldChange?.(field, event.target.value)
   }, [onFieldChange])
+
+  const handleSortChange = useCallback((event) => {
+    if (onSortChange) {
+      onSortChange(event.target.value)
+      return
+    }
+    onFieldChange?.('sort', event.target.value)
+  }, [onFieldChange, onSortChange])
+
+  const toggleAmenity = useCallback((amenity) => {
+    const next = selectedAmenities.includes(amenity)
+      ? selectedAmenities.filter((entry) => entry !== amenity)
+      : [...selectedAmenities, amenity]
+    onFieldChange?.('amenities', next.join(','))
+  }, [onFieldChange, selectedAmenities])
 
   const fieldId = (name) => `${idPrefix}-${name}`
 
@@ -98,8 +123,8 @@ const PropertySearchForm = ({
         </div>
       </div>
 
-      <div className='grid gap-3 sm:grid-cols-3 lg:grid-cols-12 lg:items-end'>
-        <div className='lg:col-span-3'>
+      <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-12 lg:items-end'>
+        <div className='lg:col-span-2'>
           <Field id={fieldId('minRent')} label={t('search.form.minRent')}>
             <input
               id={fieldId('minRent')}
@@ -112,7 +137,7 @@ const PropertySearchForm = ({
             />
           </Field>
         </div>
-        <div className='lg:col-span-3'>
+        <div className='lg:col-span-2'>
           <Field id={fieldId('maxRent')} label={t('search.form.maxRent')}>
             <input
               id={fieldId('maxRent')}
@@ -125,10 +150,34 @@ const PropertySearchForm = ({
             />
           </Field>
         </div>
+        <div className='lg:col-span-2'>
+          <Field id={fieldId('rooms')} label={t('search.form.rooms')}>
+            <select id={fieldId('rooms')} value={filters.rooms} onChange={handleChange('rooms')} className='ui-field'>
+              <option value=''>{t('search.form.anyRooms')}</option>
+              {ROOM_FILTER_OPTIONS.map((rooms) => (
+                <option key={rooms} value={rooms}>
+                  {t('search.form.roomsOption', { rooms })}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className='lg:col-span-2'>
+          <Field id={fieldId('baths')} label={t('search.form.baths')}>
+            <select id={fieldId('baths')} value={filters.baths || ''} onChange={handleChange('baths')} className='ui-field'>
+              <option value=''>{t('search.form.anyBaths')}</option>
+              {BATHROOM_FILTER_OPTIONS.map((baths) => (
+                <option key={baths} value={baths}>
+                  {t('search.form.bathsOption', { baths })}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
         {showSort ? (
-          <div className='lg:col-span-3'>
+          <div className='col-span-2 sm:col-span-1 lg:col-span-2'>
             <Field id={fieldId('sort')} label={t('search.form.sort')}>
-              <select id={fieldId('sort')} value={filters.sort} onChange={handleChange('sort')} className='ui-field'>
+              <select id={fieldId('sort')} value={filters.sort} onChange={handleSortChange} className='ui-field'>
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {t(option.labelKey)}
@@ -138,7 +187,7 @@ const PropertySearchForm = ({
             </Field>
           </div>
         ) : null}
-        <div className='flex flex-wrap items-end gap-2 sm:col-span-3 lg:col-span-3 lg:justify-end'>
+        <div className='col-span-2 flex flex-wrap items-end gap-2 sm:col-span-3 lg:col-span-2 lg:justify-end'>
           <button
             type='button'
             onClick={() => setMoreOpen((current) => !current)}
@@ -154,6 +203,19 @@ const PropertySearchForm = ({
           </button>
         </div>
       </div>
+
+      {hasPriceRange ? (
+        <label htmlFor={fieldId('negotiable')} className='flex min-h-11 items-center gap-2 text-sm text-ink'>
+          <input
+            id={fieldId('negotiable')}
+            type='checkbox'
+            checked={filters.includeNegotiable === '1'}
+            onChange={(event) => onFieldChange?.('includeNegotiable', event.target.checked ? '1' : '')}
+            className='h-4 w-4 accent-brand'
+          />
+          {t('search.form.includeNegotiable')}
+        </label>
+      ) : null}
 
       <div id={fieldId('more')} className={showMore ? 'grid gap-3 border-t border-line pt-4 sm:grid-cols-2 lg:grid-cols-5' : 'hidden'}>
         <Field id={fieldId('district')} label={t('search.form.district')}>
@@ -218,16 +280,39 @@ const PropertySearchForm = ({
           </select>
         </Field>
 
-        <Field id={fieldId('rooms')} label={t('search.form.rooms')}>
-          <select id={fieldId('rooms')} value={filters.rooms} onChange={handleChange('rooms')} className='ui-field'>
-            <option value=''>{t('search.form.anyRooms')}</option>
-            {ROOM_FILTER_OPTIONS.map((rooms) => (
-              <option key={rooms} value={rooms}>
-                {t('search.form.roomsOption', { rooms })}
+        <Field id={fieldId('occupancy')} label={t('search.form.occupancy')}>
+          <select id={fieldId('occupancy')} value={filters.occupancy || ''} onChange={handleChange('occupancy')} className='ui-field'>
+            <option value=''>{t('search.form.anyOccupancy')}</option>
+            {OCCUPANCY_FILTER_KEYS.map((occupancy) => (
+              <option key={occupancy} value={occupancy}>
+                {t(`search.occupancy.${occupancy}`)}
               </option>
             ))}
           </select>
         </Field>
+
+        <fieldset className='sm:col-span-2 lg:col-span-5'>
+          <legend className='ui-label'>{t('search.form.amenities')}</legend>
+          <div className='flex flex-wrap gap-2'>
+            {AMENITY_FILTER_KEYS.map((amenity) => {
+              const checked = selectedAmenities.includes(amenity)
+              return (
+                <label
+                  key={amenity}
+                  className={`ui-chip min-h-11 cursor-pointer gap-2 ${checked ? 'ui-chip-selected' : ''}`}
+                >
+                  <input
+                    type='checkbox'
+                    checked={checked}
+                    onChange={() => toggleAmenity(amenity)}
+                    className='h-4 w-4 accent-brand'
+                  />
+                  {t(`search.amenities.${amenity}`)}
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
       </div>
     </form>
   )

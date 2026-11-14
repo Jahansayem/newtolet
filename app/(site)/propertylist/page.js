@@ -5,7 +5,7 @@ import Propertylist from '../../../src/Component/Navber/Propertylist.jsx'
 
 export default function PropertyListPage() {
   return (
-    <Listprovaider>
+    <Listprovaider queryOptions={{ limit: 20 }}>
       <Propertylist />
     </Listprovaider>
   )

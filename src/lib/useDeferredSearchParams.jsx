@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams as useNextSearchParams } from 'next/navigation'
 
 const EMPTY_PARAMS = new URLSearchParams()
@@ -24,15 +24,17 @@ function SearchParamsBridge({ onChange }) {
  * an empty skeleton. Here only a tiny bridge suspends; the caller renders on the server with empty
  * params and picks up the real ones after hydration.
  *
- * Returns [params, bridgeElement]; render bridgeElement anywhere in the caller's output.
+ * Returns [params, bridgeElement, ready]; render bridgeElement anywhere in the caller's output.
+ * `ready` turns true once the real query string has been read (never on the server), so data
+ * loaders can wait instead of fetching unfiltered results first.
  */
 export function useDeferredSearchParams() {
-  const [queryString, setQueryString] = useState('')
-  const params = queryString ? new URLSearchParams(queryString) : EMPTY_PARAMS
+  const [queryString, setQueryString] = useState(null)
+  const params = useMemo(() => (queryString ? new URLSearchParams(queryString) : EMPTY_PARAMS), [queryString])
   const bridge = (
     <Suspense fallback={null}>
       <SearchParamsBridge onChange={setQueryString} />
     </Suspense>
   )
-  return [params, bridge]
+  return [params, bridge, queryString !== null]
 }

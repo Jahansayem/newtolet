@@ -2,7 +2,8 @@
 
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useDeferredSearchParams } from '../../lib/useDeferredSearchParams.jsx';
 import { listcontext } from '../Route/Listprovaider';
 import CategoryFilterBar from './CategoryFilterBar';
 import CoverSkeleton from './CoverSkeleton';
@@ -81,8 +82,10 @@ const Home = () => {
     const { t, tv } = useLanguage();
     const [jobFeedOrders, setJobFeedOrders] = useState([]);
     const [jobFeedLoading, setJobFeedLoading] = useState(true);
-    const [searchParams, setSearchParams] = useSearchParams();
-    const { isLoading, list } = useContext(listcontext);
+    // Deferred: the hero, H1 and sections render into the static HTML; ?search= arrives after hydration.
+    const [searchParams, searchParamsBridge] = useDeferredSearchParams();
+    const navigate = useNavigate();
+    const { isLoading, list, refreshProperties } = useContext(listcontext);
     const searchQuery = (searchParams.get('search') || '').trim();
     const lastLoggedSignatureRef = useRef('');
     const sectionRefs = useRef({});
@@ -351,8 +354,9 @@ const Home = () => {
     const clearSearch = useCallback(() => {
         const nextSearchParams = new URLSearchParams(searchParams.toString());
         nextSearchParams.delete('search');
-        setSearchParams(nextSearchParams);
-    }, [searchParams, setSearchParams]);
+        const query = nextSearchParams.toString();
+        navigate(query ? `/?${query}` : '/', { replace: true });
+    }, [navigate, searchParams]);
 
     const handleSavedPropertiesChange = useCallback((propertyIds) => {
         if (Array.isArray(propertyIds)) {
@@ -368,6 +372,7 @@ const Home = () => {
 
     return (
         <div className='site-shell site-shell-full min-h-screen py-5 md:py-6'>
+            {searchParamsBridge}
             <div ref={stickySentinelRef} className='h-0 w-full' aria-hidden='true' />
             <div
                 ref={stickyBarRef}
@@ -424,6 +429,11 @@ const Home = () => {
                         <div role='status' className='rounded-[var(--radius-panel)] border border-dashed border-line bg-canvas px-6 py-14 text-center'>
                             <p className='text-lg font-semibold text-ink'>{t('home.noCategoryListings')}</p>
                             <p className='mt-2 text-caption text-muted'>{t('home.noCategoryListingsHint')}</p>
+                            {typeof refreshProperties === 'function' ? (
+                                <button type='button' onClick={refreshProperties} className='ui-btn ui-btn-secondary ui-btn-sm mt-5'>
+                                    {t('common.retry')}
+                                </button>
+                            ) : null}
                         </div>
                     ) : (
                         <div className='space-y-12 md:space-y-16'>

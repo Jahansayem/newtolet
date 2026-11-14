@@ -24,7 +24,8 @@ function HomePageRedirectInner() {
     const searchParams = new URLSearchParams(window.location.search)
     const pageParam = searchParams.get('page')
 
-    if (!pageParam) {
+    // Numeric ?page= is pagination, never a legacy page key.
+    if (!pageParam || /^\d+$/.test(pageParam)) {
       return // No redirect needed - continue to home page
     }
 

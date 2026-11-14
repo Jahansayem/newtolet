@@ -60,6 +60,8 @@ const listing = {
     },
 
     browse: {
+      titleAll: 'Properties for rent in Bangladesh',
+      titleDivision: 'Properties for rent in {division} Division',
       kicker: 'Search Rentals',
       title: 'Find properties the way tenants actually search',
       subtitle:

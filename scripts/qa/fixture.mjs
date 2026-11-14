@@ -4,7 +4,7 @@
 // Ids are deliberately non-UUID ("qa-fixture-…") so they can never collide with real data.
 
 const CACHE_PREFIX = 'newtolet-cache:v1'
-const CATALOG_VERSION = 'v3'
+const CATALOG_VERSION = 'v4'
 const HOMEPAGE_KEY = `properties:${CATALOG_VERSION}:homepage:72`
 const ALL_KEY = `properties:${CATALOG_VERSION}:all:all:0`
 const SEARCHABLE_KEY = `properties:${CATALOG_VERSION}:searchable:200`

@@ -12,6 +12,13 @@ export const DEFAULT_SEARCH_FILTERS = {
   minPrice: '',
   maxPrice: '',
   rooms: '',
+  baths: '',
+  // Comma list of AMENITY_FILTERS keys, e.g. 'lift,gas'.
+  amenities: '',
+  // '' | 'family' | 'female' | 'male' (OCCUPANCY_FILTERS keys).
+  occupancy: '',
+  // '1' = a rent range also shows Negotiable / price-on-request listings.
+  includeNegotiable: '',
   sort: 'newest',
 }
 

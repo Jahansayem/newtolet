@@ -317,16 +317,16 @@ const ResetPassword = () => {
                                 aria-describedby={errors.newPassword ? 'reset-new-password-error' : undefined}
                                 placeholder={t('auth.placeholders.newPassword')}
                                 {...register("newPassword", {
-                                    required: t('auth.validation.newPasswordRequired'),
+                                    required: 'auth.validation.newPasswordRequired',
                                     minLength: {
                                         value: 6,
-                                        message: t('auth.validation.passwordMin')
+                                        message: 'auth.validation.passwordMin'
                                     }
                                 })}
                                 className='auth-input my-2'
                                 disabled={isLoading}
                             />
-                            {errors.newPassword && <p id='reset-new-password-error' role='alert' className='text-red-700 text-xs'>{errors.newPassword.message}</p>}
+                            {errors.newPassword && <p id='reset-new-password-error' role='alert' className='text-red-700 text-xs'>{t(errors.newPassword.message)}</p>}
                         </div>
 
                         <div className='w-full'>
@@ -338,14 +338,14 @@ const ResetPassword = () => {
                                 aria-describedby={errors.confirmPassword ? 'reset-confirm-password-error' : undefined}
                                 placeholder={t('auth.placeholders.confirmNewPassword')}
                                 {...register("confirmPassword", {
-                                    required: t('auth.validation.confirmPasswordRequired'),
+                                    required: 'auth.validation.confirmPasswordRequired',
                                     validate: (value) =>
-                                        value === newPassword || t('auth.validation.passwordsMismatch')
+                                        value === newPassword || 'auth.validation.passwordsMismatch'
                                 })}
                                 className='auth-input my-2'
                                 disabled={isLoading}
                             />
-                            {errors.confirmPassword && <p id='reset-confirm-password-error' role='alert' className='text-red-700 text-xs'>{errors.confirmPassword.message}</p>}
+                            {errors.confirmPassword && <p id='reset-confirm-password-error' role='alert' className='text-red-700 text-xs'>{t(errors.confirmPassword.message)}</p>}
                         </div>
 
                         <button

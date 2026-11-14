@@ -1,8 +1,10 @@
-const companyName = 'NewTolet.Com'
-const websiteUrl = 'https://www.newtolet.com/'
-const supportEmail = 'newtolet.com@gmail.com'
-const supportPhone = '+880 1707346634'
-const supportAddress = 'jugidor, Moulvibazar, Sylhet'
+import { SITE_CONTACT } from '../../config/siteContact.js'
+
+const companyName = SITE_CONTACT.companyName
+const websiteUrl = SITE_CONTACT.websiteUrl
+const supportEmail = SITE_CONTACT.email
+const supportPhone = SITE_CONTACT.phoneDisplay
+const supportAddress = SITE_CONTACT.addressEn
 
 export const termsPolicy = {
   en: {

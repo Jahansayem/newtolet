@@ -50,7 +50,7 @@ const orders = {
       step: 'Step {number}',
       steps: {
         browse: {
-          title: 'Browse verified homes',
+          title: 'Browse reviewed homes',
           description:
             'Start from the property list and compare rent, area, and amenities before you place a request.',
         },

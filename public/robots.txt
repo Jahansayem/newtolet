@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /admin-dashboard/
+Disallow: /dashboard/
+Disallow: /addproperty/
+Disallow: /edit-property/
+Disallow: /my-properties/
+Disallow: /my-orders/
+Disallow: /book/
+Disallow: /payment-confirm/
+Disallow: /reset-password/
+Disallow: /saved/
+
+Sitemap: https://www.newtolet.com/sitemap.xml

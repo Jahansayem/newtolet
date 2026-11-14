@@ -32,6 +32,7 @@ const auth = {
       confirmPasswordRequired: 'Please confirm your password',
       passwordsMismatch: 'Passwords do not match',
       referralInvalid: 'Please enter a valid referral username or code.',
+      termsRequired: 'Please accept the Terms & Conditions and Privacy Policy to continue.',
     },
     or: 'OR',
     aria: {
@@ -60,6 +61,13 @@ const auth = {
       title: 'Registration Here',
       subtitle: 'Create your account to save properties, manage listings, and unlock contact details faster.',
       submit: 'Register',
+      terms: {
+        before: 'I agree to the',
+        terms: 'Terms & Conditions',
+        and: 'and',
+        privacy: 'Privacy Policy',
+        after: '.',
+      },
       submitting: 'Registering...',
       haveAccount: 'Already have an account?',
       loginLink: 'Login',

@@ -20,6 +20,9 @@ import {
 } from 'react-icons/fi';
 import { LuBath, LuBedDouble } from 'react-icons/lu';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
+import { useDocumentHead } from '../../lib/seo/useDocumentHead.js';
+import { listingDescription, listingDocumentTitle, listingJsonLd } from '../../lib/seo/jsonLd.js';
+import { SITE_URL } from '../../lib/seo/siteMeta.js';
 import { useAuth } from '../../hooks/useAuth';
 import {
     getPropertyById,
@@ -100,6 +103,38 @@ const Listdetails = () => {
     const [shareStatus, setShareStatus] = useState('');
     // 'copied' | 'failed' | '' — feedback for the Property ID copy button.
     const [idCopyStatus, setIdCopyStatus] = useState('');
+
+    // Per-listing <title>, canonical, Open Graph and schema.org JSON-LD (static export: set in the browser).
+    const documentHead = useMemo(() => {
+        if (!lists?.id) return null;
+        const flat = {
+            id: lists.id,
+            property_type: lists.property_type,
+            category: lists.category,
+            total_rooms: lists.total_rooms ?? lists.specifications?.total_rooms,
+            total_bathrooms: lists.total_bathrooms ?? lists.specifications?.total_bathrooms,
+            size_sqft: lists.room_size_sqft ?? lists.room_size ?? lists.specifications?.room_size,
+            area: lists.location?.area,
+            state_district: lists.location?.state_district,
+            short_description: lists.location?.short_description,
+            rent_amount_bdt: lists.pricing?.rent_amount_bdt,
+            is_rent_negotiable: lists.pricing?.is_rent_negotiable,
+            created_at: lists.created_at,
+            lat: lists.lat,
+            lng: lists.lng,
+        };
+        const images = [...(Array.isArray(lists.images) ? lists.images : []), lists.primary_image]
+            .filter((image) => typeof image === 'string' && /^https?:/.test(image));
+        const canonicalPath = `/listdetails/?id=${lists.id}`;
+        return {
+            title: listingDocumentTitle(flat),
+            description: listingDescription(flat),
+            canonicalPath,
+            image: images[0],
+            jsonLd: listingJsonLd(flat, { url: `${SITE_URL}${canonicalPath}`, images }),
+        };
+    }, [lists]);
+    useDocumentHead(documentHead);
 
     useEffect(() => {
         if (!idCopyStatus) {

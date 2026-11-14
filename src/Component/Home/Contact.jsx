@@ -2,6 +2,9 @@ import React, { useId, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { submitFeedback } from '../../services/feedbackService';
 import { useLanguage } from '../../i18n/useLanguage';
+import { IoMdMail } from 'react-icons/io';
+import { FaPhone, FaLocationDot } from 'react-icons/fa6';
+import { SITE_CONTACT } from '../../config/siteContact.js';
 
 const Contact = () => {
     const { t } = useLanguage();
@@ -39,11 +42,11 @@ const Contact = () => {
 
             if (error) throw error;
 
-            setSuccessMessage(t('home.contact.success'));
+            setSuccessMessage('home.contact.success');
             setFormData({ name: '', email: '', message: '' });
         } catch (error) {
             console.error('Error submitting feedback:', error);
-            setErrorMessage(t('home.contact.error'));
+            setErrorMessage('home.contact.error');
         } finally {
             setLoading(false);
         }
@@ -61,13 +64,13 @@ const Contact = () => {
             <form onSubmit={handleSubmit} className='ui-card mt-8 space-y-5 p-5 sm:p-6' noValidate={false}>
                 {successMessage && (
                     <p role='status' className='ui-note ui-note-success'>
-                        {successMessage}
+                        {t(successMessage)}
                     </p>
                 )}
 
                 {errorMessage && (
                     <p role='alert' className='ui-note ui-note-danger text-danger'>
-                        {errorMessage}
+                        {t(errorMessage)}
                     </p>
                 )}
 
@@ -129,6 +132,22 @@ const Contact = () => {
                     {loading ? t('home.contact.sending') : t('home.contact.send')}
                 </button>
             </form>
+
+            {/* Same details as the footer and policy pages (single source: config/siteContact.js). */}
+            <address className='ui-card mt-6 grid gap-3 p-5 text-sm not-italic sm:grid-cols-3 sm:p-6'>
+                <a href={SITE_CONTACT.phoneHref} className='flex min-h-11 items-center gap-3 text-ink hover:text-brand'>
+                    <FaPhone className='shrink-0 text-brand' aria-hidden='true' />
+                    <span>{SITE_CONTACT.phoneDisplay}</span>
+                </a>
+                <a href={'mailto:' + SITE_CONTACT.email} className='flex min-h-11 items-center gap-3 break-all text-ink hover:text-brand'>
+                    <IoMdMail className='shrink-0 text-brand' aria-hidden='true' />
+                    <span>{SITE_CONTACT.email}</span>
+                </a>
+                <p className='flex min-h-11 items-center gap-3 text-ink'>
+                    <FaLocationDot className='shrink-0 text-brand' aria-hidden='true' />
+                    <span>{t('footer.address')}</span>
+                </p>
+            </address>
         </div>
     );
 };

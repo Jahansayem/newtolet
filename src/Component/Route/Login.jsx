@@ -255,16 +255,16 @@ const Login = () => {
                         aria-describedby={errors.email ? 'login-email-error' : undefined}
                         placeholder={t('auth.placeholders.email')}
                         {...register("email", {
-                            required: t('auth.validation.emailRequired'),
+                            required: 'auth.validation.emailRequired',
                             pattern: {
                                 value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                message: t('auth.validation.emailInvalid')
+                                message: 'auth.validation.emailInvalid'
                             }
                         })}
                         className='auth-input my-2'
                         disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.email && <p id='login-email-error' role='alert' className='text-red-700 text-xs'>{errors.email.message}</p>}
+                    {errors.email && <p id='login-email-error' role='alert' className='text-red-700 text-xs'>{t(errors.email.message)}</p>}
                 </div>
 
                 <div className='w-full'>
@@ -276,16 +276,16 @@ const Login = () => {
                         aria-describedby={errors.password ? 'login-password-error' : undefined}
                         placeholder={t('auth.placeholders.password')}
                         {...register("password", {
-                            required: t('auth.validation.passwordRequired'),
+                            required: 'auth.validation.passwordRequired',
                             minLength: {
                                 value: 6,
-                                message: t('auth.validation.passwordMin')
+                                message: 'auth.validation.passwordMin'
                             }
                         })}
                         className='auth-input my-2'
                         disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.password && <p id='login-password-error' role='alert' className='text-red-700 text-xs'>{errors.password.message}</p>}
+                    {errors.password && <p id='login-password-error' role='alert' className='text-red-700 text-xs'>{t(errors.password.message)}</p>}
                 </div>
 
                 <button

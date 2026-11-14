@@ -46,6 +46,7 @@ const Registration = () => {
         referralCode: ''
     });
     const [errors, setErrors] = useState({});
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [referrerName, setReferrerName] = useState('');
     const [referralPreviewError, setReferralPreviewError] = useState('');
     const isMountedRef = useRef(true);
@@ -141,31 +142,35 @@ const Registration = () => {
         const newErrors = {};
 
         if (!formData.name.trim()) {
-            newErrors.name = t('auth.validation.nameRequired');
+            newErrors.name = 'auth.validation.nameRequired';
         }
 
         if (!formData.email.trim()) {
-            newErrors.email = t('auth.validation.emailRequired');
+            newErrors.email = 'auth.validation.emailRequired';
         } else if (!/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(formData.email)) {
-            newErrors.email = t('auth.validation.emailInvalid');
+            newErrors.email = 'auth.validation.emailInvalid';
         }
 
         if (!formData.phone.trim()) {
-            newErrors.phone = t('auth.validation.phoneRequired');
+            newErrors.phone = 'auth.validation.phoneRequired';
         } else if (!/^[0-9]{10,15}$/.test(formData.phone.replace(/[\s-]/g, ''))) {
-            newErrors.phone = t('auth.validation.phoneInvalid');
+            newErrors.phone = 'auth.validation.phoneInvalid';
         }
 
         if (!formData.password) {
-            newErrors.password = t('auth.validation.passwordRequired');
+            newErrors.password = 'auth.validation.passwordRequired';
         } else if (formData.password.length < 6) {
-            newErrors.password = t('auth.validation.passwordMin');
+            newErrors.password = 'auth.validation.passwordMin';
         } else if (formData.password.length > 20) {
-            newErrors.password = t('auth.validation.passwordMax');
+            newErrors.password = 'auth.validation.passwordMax';
+        }
+
+        if (!acceptedTerms) {
+            newErrors.acceptTerms = 'auth.validation.termsRequired';
         }
 
         if (formData.referralCode.trim() && !referrerName) {
-            newErrors.referralCode = t('auth.validation.referralInvalid');
+            newErrors.referralCode = 'auth.validation.referralInvalid';
         }
 
         setErrors(newErrors);
@@ -344,7 +349,7 @@ const Registration = () => {
                         className='auth-input my-2'
                         disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.name && <p id='register-name-error' role='alert' className='text-red-700 text-xs'>{errors.name}</p>}
+                    {errors.name && <p id='register-name-error' role='alert' className='text-red-700 text-xs'>{t(errors.name)}</p>}
                 </div>
 
                 <div className='w-full'>
@@ -362,7 +367,7 @@ const Registration = () => {
                         className='auth-input my-2'
                         disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.email && <p id='register-email-error' role='alert' className='text-red-700 text-xs'>{errors.email}</p>}
+                    {errors.email && <p id='register-email-error' role='alert' className='text-red-700 text-xs'>{t(errors.email)}</p>}
                 </div>
 
                 <div className='w-full'>
@@ -381,7 +386,7 @@ const Registration = () => {
                         className='auth-input my-2'
                         disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.phone && <p id='register-phone-error' role='alert' className='text-red-700 text-xs'>{errors.phone}</p>}
+                    {errors.phone && <p id='register-phone-error' role='alert' className='text-red-700 text-xs'>{t(errors.phone)}</p>}
                 </div>
 
                 <div className='w-full'>
@@ -398,7 +403,7 @@ const Registration = () => {
                         className='auth-input my-2'
                         disabled={isLoading || isGoogleLoading}
                     />
-                    {errors.password && <p id='register-password-error' role='alert' className='text-red-700 text-xs'>{errors.password}</p>}
+                    {errors.password && <p id='register-password-error' role='alert' className='text-red-700 text-xs'>{t(errors.password)}</p>}
                 </div>
 
                 {/* Referral Field */}
@@ -424,7 +429,7 @@ const Registration = () => {
                         </p>
                     )}
                     {errors.referralCode && (
-                        <p className='text-red-700 text-xs'>{errors.referralCode}</p>
+                        <p className='text-red-700 text-xs'>{t(errors.referralCode)}</p>
                     )}
                     {!referrerName && referralPreviewError && (
                         <p className='text-red-600 text-xs'>{referralPreviewError}</p>
@@ -432,6 +437,36 @@ const Registration = () => {
                     <p className='text-gray-400 text-xs'>
                         {t('auth.register.referral.hint')}
                     </p>
+                </div>
+
+                {/* Consent: required for email sign-up; the same terms apply to Google sign-up (note below). */}
+                <div className='w-full'>
+                    <label htmlFor='register-terms' className='flex items-start gap-2 text-sm text-gray-700'>
+                        <input
+                            id='register-terms'
+                            type='checkbox'
+                            name='acceptTerms'
+                            checked={acceptedTerms}
+                            onChange={(event) => {
+                                setAcceptedTerms(event.target.checked);
+                                if (errors.acceptTerms) {
+                                    setErrors(prev => ({ ...prev, acceptTerms: '' }));
+                                }
+                            }}
+                            className='mt-0.5 h-4 w-4 shrink-0 accent-brand'
+                            aria-invalid={errors.acceptTerms ? 'true' : undefined}
+                            aria-describedby={errors.acceptTerms ? 'register-terms-error' : undefined}
+                            disabled={isLoading || isGoogleLoading}
+                        />
+                        <span>
+                            {t('auth.register.terms.before')}{' '}
+                            <Link to='/terms' className='font-semibold text-brand underline-offset-2 hover:underline'>{t('auth.register.terms.terms')}</Link>
+                            {' '}{t('auth.register.terms.and')}{' '}
+                            <Link to='/privacy' className='font-semibold text-brand underline-offset-2 hover:underline'>{t('auth.register.terms.privacy')}</Link>
+                            {t('auth.register.terms.after')}
+                        </span>
+                    </label>
+                    {errors.acceptTerms && <p id='register-terms-error' role='alert' className='mt-1 text-red-700 text-xs'>{t(errors.acceptTerms)}</p>}
                 </div>
 
                 <button

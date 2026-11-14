@@ -23,6 +23,7 @@ const core = {
     previous: 'Previous',
     submit: 'Submit',
     loading: 'Loading...',
+    checkingAccount: 'Checking your account...',
     retry: 'Retry',
     search: 'Search',
     viewAll: 'View all',
@@ -81,7 +82,7 @@ const core = {
   footer: {
     logoAlt: 'Company Logo',
     tagline:
-      'Your trusted partner in finding the right rental property. Search with clearer filters, browse verified listings, and move faster with tools built for real tenants.',
+      'Your trusted partner in finding the right rental property. Search with clearer filters, browse listings checked by our team before they go live, and move faster with tools built for real tenants.',
     quickLinks: 'Quick Links',
     propertyTypes: 'Property Types',
     getInTouch: 'Get In Touch',
@@ -92,6 +93,9 @@ const core = {
       addProperty: 'Add Property',
       aboutUs: 'About Us',
       contact: 'Contact',
+      terms: 'Terms & Conditions',
+      privacy: 'Privacy Policy',
+      refund: 'Refund Policy',
     },
     types: {
       apartments: 'Apartments',
@@ -131,6 +135,12 @@ const core = {
     title: 'Page not found',
     description: 'The page you requested does not exist or has been moved.',
     goHome: 'Go to homepage',
+    searchLabel: 'Search properties',
+    searchPlaceholder: 'Area, district or Property ID',
+    searchSubmit: 'Search',
+    popular: 'Popular areas',
+    browseAll: 'Browse all properties',
+    contact: 'Contact us',
   },
 
   values: {

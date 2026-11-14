@@ -99,16 +99,19 @@ export const buildPageHref = (page = '', params = {}, hash = '') => {
 }
 
 export const getRoutePage = (pathname = '/', searchParamsLike = null) => {
-  const explicitPage =
-    typeof searchParamsLike?.get === 'function'
-      ? searchParamsLike.get('page')
-      : searchParamsLike?.page
-
-  if (explicitPage) {
-    return String(explicitPage).trim()
-  }
-
   const normalizedPath = normalizePathname(pathname)
+
+  // Legacy '/?page=about' URLs only exist on the home path. Elsewhere ?page= is pagination.
+  if (normalizedPath === '/') {
+    const explicitPage =
+      typeof searchParamsLike?.get === 'function'
+        ? searchParamsLike.get('page')
+        : searchParamsLike?.page
+
+    if (explicitPage && !/^\d+$/.test(String(explicitPage).trim())) {
+      return String(explicitPage).trim()
+    }
+  }
 
   if (normalizedPath.startsWith('/bd/property-division/')) {
     return 'propertylist2'

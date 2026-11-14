@@ -9,6 +9,36 @@ import {
 } from '../services/authService';
 
 /**
+ * True when the browser may hold a Supabase session: a persisted `sb-*-auth-token` entry, or an
+ * OAuth/magic-link callback in the URL (implicit flow puts the token in the hash). When neither
+ * exists the visitor is certainly a guest, so guards can redirect at once instead of waiting
+ * for getSession() to finish a network round trip (seen as an ~8 s blank page on /dashboard).
+ */
+const mayHaveSession = () => {
+    if (typeof window === 'undefined') {
+        return true;
+    }
+
+    try {
+        const { hash, search } = window.location;
+        if (/access_token=|refresh_token=|error_description=/.test(hash) || /[?&]code=/.test(search)) {
+            return true;
+        }
+
+        for (let index = 0; index < window.localStorage.length; index += 1) {
+            const key = window.localStorage.key(index) || '';
+            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+                return true;
+            }
+        }
+
+        return false;
+    } catch {
+        return true;
+    }
+};
+
+/**
  * Authentication Context
  * Provides authentication state and functions to the entire app
  */
@@ -97,6 +127,13 @@ export const AuthProvider = ({ children }) => {
                 const storedUser = getStoredUser();
                 if (storedUser && isMountedRef.current) {
                     applyAuthState(storedUser, null);
+                }
+
+                if (!storedUser && !mayHaveSession() && isMountedRef.current) {
+                    // Certain guest: settle now. syncAuthState below still runs and would
+                    // apply a session if one appeared, via onAuthStateChange.
+                    setIsLoading(false);
+                    initialLoadComplete = true;
                 }
 
                 await syncAuthState();

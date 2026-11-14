@@ -6,12 +6,12 @@ import { useLanguage } from '../../i18n/useLanguage';
 const CONTENT_CARDS = [
     {
         key: 'refer',
-        learnMoreUrl: 'https://www.thetolet.com/bd/article/earn-from-home-refer-and-earn-the-tolet',
+        learnMoreUrl: '/article/#refer-and-earn',
         earnNowUrl: buildDashboardHref('referrals'),
     },
     {
         key: 'finding',
-        learnMoreUrl: 'https://www.thetolet.com/bd/article/earn-by-finding-house',
+        learnMoreUrl: '/article/#earn-by-finding-homes',
         earnNowUrl: buildDashboardHref('job-feed'),
     },
 ];
@@ -63,8 +63,6 @@ const Earnmoney = () => {
                                 <div className='flex flex-wrap items-center justify-center gap-3 border-t border-gray-200 px-6 py-4'>
                                     <a
                                         href={card.learnMoreUrl}
-                                        target='_blank'
-                                        rel='noreferrer'
                                         className='inline-flex items-center justify-center rounded-lg border border-gray-300 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:border-gray-400 hover:bg-gray-50'
                                     >
                                         {t('earn.learnMore')}

@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
+import { useDeferredSearchParams } from '../../src/lib/useDeferredSearchParams.jsx'
 import { useEffect, useRef, useState } from 'react'
 import { FiHeart, FiHome, FiPlus, FiSearch, FiUser } from 'react-icons/fi'
 import { buildDashboardHref, buildPageHref, getRoutePage } from '../../src/lib/routePaths.js'
@@ -39,7 +40,7 @@ const tabIconClassName = (active) =>
  */
 const FloatingQuickRail = () => {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const [searchParams, searchParamsBridge] = useDeferredSearchParams()
   const routeKey = `${pathname}?${searchParams?.toString() || ''}`
   const page = getRoutePage(pathname, searchParams)
   const { t } = useLanguage()
@@ -96,6 +97,8 @@ const FloatingQuickRail = () => {
   const badge = savedCount > 99 ? '99+' : savedCount > 0 ? String(savedCount) : null
 
   return (
+    <>
+    {searchParamsBridge}
     <nav
       aria-label={t('quickRail.quickAccess')}
       className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-white/95 px-2 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur sm:hidden"
@@ -148,6 +151,7 @@ const FloatingQuickRail = () => {
         </Link>
       </div>
     </nav>
+    </>
   )
 }
 

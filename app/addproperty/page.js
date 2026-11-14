@@ -5,6 +5,7 @@ import PrivateRouter from '../../src/Component/Route/PrivateRouter.jsx'
 import Navber from '../../src/Component/Home/Navber.jsx'
 import Addproperty from '../../src/Component/Navber/Addproperty.jsx'
 import FloatingQuickRail from '../../components/app/FloatingQuickRail.jsx'
+import Footer from '../../src/Component/Home/Footer.jsx'
 
 export default function AddPropertyPage() {
   useEffect(() => {
@@ -16,11 +17,12 @@ export default function AddPropertyPage() {
       <div className="site-main min-h-screen bg-gray-50">
         <Navber />
         <FloatingQuickRail />
-        <div className="max-w-full mx-auto">
+        <main id="main-content" className="max-w-full mx-auto">
           <PrivateRouter>
             <Addproperty />
           </PrivateRouter>
-        </div>
+        </main>
+        <Footer />
       </div>
     </Suspense>
   )

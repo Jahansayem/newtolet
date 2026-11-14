@@ -338,6 +338,8 @@ const normalizePropertyDetail = (propertyForViewer, images, amenities) => ({
   property_id_number: propertyForViewer.property_id_number,
   category: propertyForViewer.category,
   property_type: propertyForViewer.property_type,
+  total_rooms: propertyForViewer.total_rooms ?? null,
+  updated_at: propertyForViewer.updated_at || null,
   dining_rooms: propertyForViewer.dining_rooms || 0,
   living_rooms: propertyForViewer.living_rooms || 0,
   total_bathrooms: propertyForViewer.total_bathrooms,
@@ -348,6 +350,7 @@ const normalizePropertyDetail = (propertyForViewer, images, amenities) => ({
   occupancy: propertyForViewer.occupancy || null,
   protected_contact_unlocked: Boolean(propertyForViewer.protected_contact_unlocked),
   specifications: {
+    total_rooms: propertyForViewer.total_rooms ?? null,
     dining_rooms: propertyForViewer.dining_rooms || 0,
     living_rooms: propertyForViewer.living_rooms || 0,
     total_bathrooms: propertyForViewer.total_bathrooms,

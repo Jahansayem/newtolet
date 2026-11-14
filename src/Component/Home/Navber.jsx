@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import ReactDOM from 'react-dom'
 import { RxCross2 } from 'react-icons/rx'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { usePathname } from 'next/navigation'
+import { useDeferredSearchParams } from '../../lib/useDeferredSearchParams.jsx'
 import { TfiMenu } from 'react-icons/tfi'
 import { BiCoin } from 'react-icons/bi'
 import {
@@ -105,8 +107,10 @@ const Navber = () => {
   const { user, handleLogout: logout } = useAuth()
   const { t, tv } = useLanguage()
   const navigate = useNavigate()
-  const location = useLocation()
-  const [routeSearchParams] = useSearchParams()
+  // usePathname (not the shim's useLocation, which reads search params) keeps the header in
+  // the static HTML instead of bailing out to a Suspense fallback at build time.
+  const pathname = usePathname() || '/'
+  const [routeSearchParams, searchParamsBridge] = useDeferredSearchParams()
   const profileDropdownRef = useRef(null)
   const propertyDropdownRef = useRef(null)
   const menuButtonRef = useRef(null)
@@ -115,9 +119,9 @@ const Navber = () => {
   const drawerWasOpenRef = useRef(false)
   const isAuthenticated = Boolean(user)
   const canUsePortal = mounted && typeof document !== 'undefined'
-  const activePage = getRoutePage(location.pathname, routeSearchParams)
+  const activePage = getRoutePage(pathname, routeSearchParams)
   const activeDashboardTab = routeSearchParams.get('tab') || 'dashboard'
-  const isHomepage = location.pathname === '/'
+  const isHomepage = pathname === '/'
   const [homeNavVisible, setHomeNavVisible] = useState(true)
   const [hasStoredAdminRole, setHasStoredAdminRole] = useState(false)
   const isMountedRef = useRef(true)
@@ -280,7 +284,7 @@ const Navber = () => {
   const isDesktopLinkActive = useCallback((key) => {
     switch (key) {
       case 'home':
-        return location.pathname === '/'
+        return pathname === '/'
       case 'propertylist':
         return activePage === 'propertylist' || activePage === 'propertylist2'
       case 'profile':
@@ -296,7 +300,7 @@ const Navber = () => {
       default:
         return false
     }
-  }, [location.pathname, activePage, activeDashboardTab])
+  }, [pathname, activePage, activeDashboardTab])
 
   const closeDrawer = useCallback(() => setmenubtn(false), [])
 
@@ -310,6 +314,8 @@ const Navber = () => {
   ]
 
   return (
+    <>
+    {searchParamsBridge}
     <header
       className={`sticky top-0 z-50 border-b border-line bg-white/95 text-ink backdrop-blur transition-transform duration-300 ${
         isHomepage && !homeNavVisible ? '-translate-y-full pointer-events-none' : 'translate-y-0'
@@ -625,6 +631,7 @@ const Navber = () => {
         />
       ) : null}
     </header>
+    </>
   )
 }
 

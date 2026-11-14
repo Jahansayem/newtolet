@@ -2,6 +2,8 @@ import './globals.css'
 import Providers from './providers'
 import Script from 'next/script'
 import { Hind_Siliguri, Poppins } from 'next/font/google'
+import { DEFAULT_OG_IMAGE, ROUTE_SEO, SITE_NAME, SITE_URL } from '../src/lib/seo/siteMeta.js'
+import { siteJsonLd } from '../src/lib/seo/jsonLd.js'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -18,44 +20,31 @@ const hindSiliguri = Hind_Siliguri({
 })
 
 export const metadata = {
-  title: 'NewTolet.Com - Find Rental Properties in Bangladesh',
-  description: 'Property rental marketplace in Bangladesh. Find apartments, flats, houses, and commercial spaces for rent. Browse verified property listings with photos and details.',
-  keywords: 'rent, property rental, bangladesh, dhaka rent, apartment rent, flat rent, house rent, tolet, sublet',
-  authors: [{ name: 'NewTolet.Com', url: 'https://thetolet.com' }],
-  creator: 'NewTolet.Com',
-  publisher: 'NewTolet.Com',
+  // No canonical or og:url here: those are per route (app/**/layout.js), otherwise every
+  // page would inherit the home URL as its canonical.
+  description: ROUTE_SEO.home.description,
+  openGraph: {
+    siteName: SITE_NAME,
+    type: 'website',
+    locale: 'en_US',
+    alternateLocale: ['bn_BD'],
+    images: [{ url: DEFAULT_OG_IMAGE, width: 512, height: 512, alt: `${SITE_NAME} logo` }],
+  },
+  twitter: { card: 'summary', images: [DEFAULT_OG_IMAGE] },
+  title: {
+    default: ROUTE_SEO.home.title,
+    template: '%s',
+  },
+  keywords: 'rent, house rent, flat rent, to-let, tolet, bachelor room, sublet, hostel, office rent, shop rent, dhaka, bangladesh',
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
   formatDetection: {
     email: false,
     address: false,
     telephone: false,
   },
-  metadataBase: new URL('https://thetolet.com'),
-  alternates: {
-    canonical: '/',
-  },
-  openGraph: {
-    title: 'NewTolet.Com - Property Rental Marketplace Bangladesh',
-    description: 'Find your perfect rental property in Bangladesh. Browse verified listings of apartments, flats, houses, and commercial spaces.',
-    url: 'https://thetolet.com',
-    siteName: 'NewTolet.Com',
-    images: [
-      {
-        url: 'https://thetolet.com/favicon-512x512.png',
-        width: 512,
-        height: 512,
-        alt: 'NewTolet.Com Logo',
-      },
-    ],
-    locale: 'en_US',
-    alternateLocale: ['bn_BD'],
-    type: 'website',
-  },
-  twitter: {
-    card: 'summary',
-    title: 'NewTolet.Com - Property Rental Marketplace',
-    description: 'Find rental properties in Bangladesh',
-    images: ['https://thetolet.com/favicon-512x512.png'],
-  },
+  metadataBase: new URL(SITE_URL),
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: '48x48' },
@@ -124,6 +113,10 @@ export default function RootLayout({ children }) {
             })();
           `}
         </Script>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd()) }}
+        />
       </head>
       <body suppressHydrationWarning>
         <Providers>{children}</Providers>

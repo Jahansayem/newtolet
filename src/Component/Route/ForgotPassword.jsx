@@ -98,16 +98,16 @@ const ForgotPassword = () => {
                         aria-describedby={errors.email ? 'forgot-email-error' : undefined}
                         placeholder={t('auth.placeholders.registeredEmail')}
                         {...register("email", {
-                            required: t('auth.validation.emailRequired'),
+                            required: 'auth.validation.emailRequired',
                             pattern: {
                                 value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                                message: t('auth.validation.emailInvalid')
+                                message: 'auth.validation.emailInvalid'
                             }
                         })}
                         className='auth-input my-2'
                         disabled={isLoading}
                     />
-                    {errors.email && <p id='forgot-email-error' role='alert' className='text-red-700 text-xs'>{errors.email.message}</p>}
+                    {errors.email && <p id='forgot-email-error' role='alert' className='text-red-700 text-xs'>{t(errors.email.message)}</p>}
                 </div>
 
                 <button

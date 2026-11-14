@@ -1,11 +1,12 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/fa';
+import { Link } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
 import { IoMdMail } from 'react-icons/io';
 import { FaPhone, FaLocationDot } from 'react-icons/fa6';
 import { IoChevronUp } from 'react-icons/io5';
 import { useLanguage } from '../../i18n/useLanguage';
 import { buildSearchHref } from './propertySearch';
+import { SITE_CONTACT } from '../../config/siteContact.js';
 
 const LOGO_SRC = '/logo.png';
 const LOGO_FALLBACK_SRC = '/logo1.png';
@@ -18,6 +19,12 @@ const footerLinks = [
     { to: '/contact', labelKey: 'footer.links.contact' },
 ];
 
+const policyLinks = [
+    { to: '/terms', labelKey: 'footer.links.terms' },
+    { to: '/privacy', labelKey: 'footer.links.privacy' },
+    { to: '/refund', labelKey: 'footer.links.refund' },
+];
+
 // Only property types the search page can actually filter by (see PROPERTY_TYPE_OPTIONS).
 // Labels come from the shared values.propertyTypes dictionary so EN/বাং stay in sync.
 const FOOTER_PROPERTY_TYPES = ['Apartment', 'House', 'Room', 'Office', 'Shop'];
@@ -26,18 +33,15 @@ const propertyTypeLinks = FOOTER_PROPERTY_TYPES.map((type) => ({
     type,
 }));
 
-const socialLinks = [
-    { href: 'https://facebook.com', icon: FaFacebookF, label: 'Facebook' },
-    { href: 'https://twitter.com', icon: FaTwitter, label: 'Twitter' },
-    { href: 'https://instagram.com', icon: FaInstagram, label: 'Instagram' },
-    { href: 'https://linkedin.com', icon: FaLinkedinIn, label: 'LinkedIn' },
-];
+// Real profile URLs live in SITE_CONTACT.socialLinks ({ href, icon, label }); none are published
+// yet, so no icons render instead of linking to the bare facebook.com/twitter.com homepages.
+const socialLinks = SITE_CONTACT.socialLinks;
 
 const Footer = () => {
     const { t, tv } = useLanguage();
     const currentYear = new Date().getFullYear();
     // The home page is full width, so its footer drops the shell cap to keep edges aligned.
-    const isHomepage = useLocation().pathname === '/';
+    const isHomepage = usePathname() === '/';
 
     const scrollToTop = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -59,6 +63,7 @@ const Footer = () => {
                         <p className='max-w-sm text-sm leading-6 text-primary-100/85'>
                             {t('footer.tagline')}
                         </p>
+                        {socialLinks.length > 0 ? (
                         <div className='flex flex-wrap gap-2.5'>
                             {socialLinks.map(({ href, icon: Icon, label }) => (
                                 <a
@@ -73,6 +78,7 @@ const Footer = () => {
                                 </a>
                             ))}
                         </div>
+                        ) : null}
                     </div>
 
                     <div className='space-y-4'>
@@ -106,11 +112,11 @@ const Footer = () => {
                         <address className='space-y-2 text-sm not-italic'>
                             <p className='flex items-center gap-3'>
                                 <FaPhone className='text-primary-200' aria-hidden='true' />
-                                <a href='tel:09649551551' className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>09649551551</a>
+                                <a href={SITE_CONTACT.phoneHref} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>{SITE_CONTACT.phoneDisplay}</a>
                             </p>
                             <p className='flex items-center gap-3 break-all'>
                                 <IoMdMail className='text-primary-200' aria-hidden='true' />
-                                <a href='mailto:newtolet.com@gmail.com' className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>newtolet.com@gmail.com</a>
+                                <a href={`mailto:${SITE_CONTACT.email}`} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>{SITE_CONTACT.email}</a>
                             </p>
                             <p className='flex items-start gap-3'>
                                 <FaLocationDot className='mt-1 text-primary-200' aria-hidden='true' />
@@ -137,6 +143,15 @@ const Footer = () => {
                 <div className='flex flex-col gap-4 py-6 text-center text-sm text-primary-100/75 md:flex-row md:items-center md:justify-between md:text-left'>
                     <div>
                         <p>{t('footer.copyright', { year: currentYear })}</p>
+                        <ul className='mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 md:justify-start'>
+                            {policyLinks.map(({ to, labelKey }) => (
+                                <li key={labelKey}>
+                                    <Link to={to} className='inline-flex min-h-9 items-center underline-offset-4 hover:text-white hover:underline'>
+                                        {t(labelKey)}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
                         <p className='mt-1'>
                             {t('footer.developedBy')}{' '}
                             <a

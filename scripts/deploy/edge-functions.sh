@@ -107,11 +107,23 @@ find "$FN_DIR" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 
 # 2. Compose override that exposes the agent secrets to the functions service.
 #    Rewritten when a newer variable (SUPABASE_PUBLIC_URL, EPS_HASH_KEY) is missing from an older copy.
+#    The rewrite replaces the whole file, so the template also carries the auth: block that
+#    enable-google-oauth.sh adds; without it a rewrite switches Google sign-in off.
 if [[ ! -f "$OVERRIDE" ]] || ! grep -q "LISTINGS_AGENT_API_KEY" "$OVERRIDE" || ! grep -q "SUPABASE_PUBLIC_URL" "$OVERRIDE" || ! grep -q "EPS_HASH_KEY" "$OVERRIDE"; then
+  if [[ -f "$OVERRIDE" ]]; then
+    cp -a "$OVERRIDE" "$OVERRIDE.bak-$(date +%Y%m%d-%H%M%S)"
+  fi
   cat > "$OVERRIDE" <<'YAML'
 # Local additions to the upstream docker-compose.yml. Loaded through COMPOSE_FILE in .env.
-# Secrets live in .env; this file only forwards them to the edge-runtime container.
+# Secrets live in .env; this file only forwards them to the containers.
 services:
+  auth:
+    environment:
+      # Google sign-in. Values live in .env; the callback must be registered in Google Cloud console.
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${GOOGLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOOGLE_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${API_EXTERNAL_URL}/callback
   functions:
     environment:
       LISTINGS_AGENT_API_KEY: ${LISTINGS_AGENT_API_KEY}

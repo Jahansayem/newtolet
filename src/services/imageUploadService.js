@@ -116,14 +116,17 @@ export const uploadMultipleImages = async (files, propertyId) => {
  * @param {File} file - The ID document file
  * @param {string} userId - The user ID
  * @param {string} side - 'front' or 'back'
- * @returns {Promise<string>} - Public URL of uploaded document
+ * @returns {Promise<string>} - Object path inside the private bucket ("<userId>/front-<ts>.jpg").
+ *   The bucket is private: show the image to admins with createSignedUrl(path), never a public URL.
  */
 export const uploadIDDocument = async (file, userId, side) => {
   try {
     const compressedFile = await compressImage(file)
 
     const timestamp = Date.now()
-    const filename = `${userId}/${side}-${timestamp}-${file.name}`
+    // Extension only: original names can hold spaces or Bangla, which storage keys reject.
+    const extension = (String(file.name || '').match(/\.(jpe?g|png|webp)$/i)?.[1] || 'jpg').toLowerCase()
+    const filename = `${userId}/${side}-${timestamp}.${extension}`
 
     const { data, error } = await supabase.storage
       .from('id-documents')
@@ -136,12 +139,7 @@ export const uploadIDDocument = async (file, userId, side) => {
       throw error
     }
 
-    // Get private URL (for private bucket)
-    const { data: publicData } = supabase.storage
-      .from('id-documents')
-      .getPublicUrl(filename)
-
-    return publicData.publicUrl
+    return data?.path || filename
   } catch (error) {
     console.error('ID document upload error:', error)
     throw new Error(`Failed to upload ID document: ${error.message}`)

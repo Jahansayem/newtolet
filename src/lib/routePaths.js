@@ -25,6 +25,7 @@ const PAGE_BY_PATH = Object.freeze({
   '/refund': 'refund',
   '/registration': 'registration',
   '/reset-password': 'reset-password',
+  '/saved': 'saved',
   '/terms': 'terms',
 })
 

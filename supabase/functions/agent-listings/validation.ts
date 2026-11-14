@@ -105,6 +105,7 @@ export const EDITABLE_FIELDS = [
   "available_from",
   "deadline",
   "contact_number",
+  "whatsapp_enabled",
   "amenities",
   "images",
 ] as const;
@@ -536,6 +537,7 @@ const readScalars = (ctx: Ctx, body: Record<string, unknown>) => {
   readInteger(ctx, body, "room_size_sqft", { min: 1, max: MAX_SQFT });
   readInteger(ctx, body, "rent_amount_bdt", { min: 1, max: MAX_RENT });
   readBoolean(ctx, body, "is_rent_negotiable");
+  readBoolean(ctx, body, "whatsapp_enabled");
 
   readText(ctx, body, "state_district", { min: 1, max: MAX_SHORT_TEXT_LENGTH, nullable: false });
   readText(ctx, body, "area", { min: 1, max: MAX_SHORT_TEXT_LENGTH, nullable: false });
@@ -565,6 +567,36 @@ const readScalars = (ctx: Ctx, body: Record<string, unknown>) => {
     ctx.fields.deadline < ctx.fields.available_from
   ) {
     ctx.errors.push("deadline must be on or after available_from");
+  }
+};
+
+/** Lowest monthly/yearly rent accepted as a real price (1-Taka placeholders broke sorting). */
+export const MIN_RENT = 100;
+const HOME_PROPERTY_TYPES = ["Unit", "Apartment", "House"];
+const NO_BATHROOM_PROPERTY_TYPES = ["Office Space", "Shop", "Warehouse", "Factory", "Hotel", "Building"];
+
+/**
+ * Listing quality rules from the 2026-11-14 QA audit. `merged` is the listing as it will be
+ * stored (the request fields on create; on PATCH only the fields being changed).
+ */
+const checkListingQuality = (ctx: Ctx, merged: Record<string, unknown>, isCreate: boolean) => {
+  const rent = merged.rent_amount_bdt;
+  const period = merged.rent_period;
+  const shortPeriod = period === "Daily" || period === "Weekly";
+  if (typeof rent === "number" && rent < MIN_RENT && !shortPeriod && merged.is_rent_negotiable !== true) {
+    ctx.errors.push(
+      `rent_amount_bdt must be at least ${MIN_RENT} for a monthly or yearly rent; send is_rent_negotiable: true (and no rent_amount_bdt) when the price is not known`,
+    );
+  }
+
+  if (!isCreate) return;
+
+  const type = String(merged.property_type ?? "");
+  if (HOME_PROPERTY_TYPES.includes(type) && !(Number(merged.total_rooms) >= 1)) {
+    ctx.errors.push(`total_rooms must be at least 1 for property_type ${type}`);
+  }
+  if (type && !NO_BATHROOM_PROPERTY_TYPES.includes(type) && !(Number(merged.total_bathrooms) >= 1)) {
+    ctx.errors.push(`total_bathrooms must be at least 1 for property_type ${type}`);
   }
 };
 
@@ -599,6 +631,7 @@ export const validateCreateBody = (body: unknown): ValidatedListing => {
   if (!hasRent && !negotiable) {
     ctx.errors.push("rent_amount_bdt is required unless is_rent_negotiable is true");
   }
+  checkListingQuality(ctx, ctx.fields, true);
 
   const contactNumber = readContactNumber(ctx, body);
   const amenities = normalizeAmenities(body.amenities, ctx.errors) ?? [];
@@ -622,6 +655,7 @@ export const validatePatchBody = (body: unknown): ValidatedListing => {
   if (ctx.fields.rent_amount_bdt === null && ctx.fields.is_rent_negotiable !== true) {
     ctx.errors.push("rent_amount_bdt can only be cleared when is_rent_negotiable is true");
   }
+  checkListingQuality(ctx, ctx.fields, false);
 
   const contactNumber = readContactNumber(ctx, body);
   const amenities = normalizeAmenities(body.amenities, ctx.errors);

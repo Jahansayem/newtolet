@@ -3,6 +3,8 @@ const dashboard = {
     panelLabel: 'User Panel',
 
     nav: {
+      savedSearches: 'Saved searches',
+      verification: 'Get verified',
       dashboard: 'Dashboard',
       home: 'Go to Homepage',
       orders: 'Orders',
@@ -360,7 +362,43 @@ const dashboard = {
       submitted: 'Withdrawal request submitted successfully.',
     },
 
+    verification: {
+      title: 'Get verified',
+      subtitle: 'Verified owners get a badge on every listing, so renters trust them faster.',
+      why: 'Upload the front and back of your National ID, passport or driving licence. Our team checks it within two working days.',
+      privacy: 'The images are stored privately: only you and NewTolet staff can see them, and renters never do.',
+      needBothSides: 'Please add both the front and the back of the ID.',
+      submit: 'Submit for review',
+      submitting: 'Uploading...',
+      submitted: 'Thanks! Your ID was sent for review.',
+      failed: 'Could not submit your ID. Please try again.',
+      pending: 'Your ID (sent {date}) is being reviewed.',
+      approved: 'Your account is verified. The badge shows on all your listings.',
+      rejected: 'Your last ID submission was not accepted. Please upload clear photos again.',
+      reason: 'Reason: {reason}',
+    },
+
+    savedSearches: {
+      title: 'Saved searches',
+      subtitle: 'We count new listings that match each search since you last opened it.',
+      emptyTitle: 'No saved searches yet',
+      emptyDescription: 'Search for properties, then use "Save this search" to get a count of new matches here.',
+      newCount: '{count} new',
+      allListings: 'All listings',
+      lastChecked: 'Last opened {date}',
+      open: 'Open',
+      deleteLabel: 'Delete saved search {label}',
+      loadError: 'Could not load your saved searches.',
+    },
+
     myProperties: {
+      expiresOn: 'Visible in search until {date}',
+      expiredOn: 'Expired on {date}: hidden from search until you renew it',
+      expiringSoon: 'Expires in {days} days',
+      renew: 'Renew for 60 days',
+      renewing: 'Renewing...',
+      renewed: 'Listing renewed for 60 days.',
+      renewError: 'Could not renew the listing. Please try again.',
       analyticsTitle: 'Analytics',
       analyticsSubtitle: '{category} in {location}',
       loadingAnalytics: 'Loading analytics...',

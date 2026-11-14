@@ -77,6 +77,12 @@ export const ROUTE_SEO = {
     title: 'Earn Money with NewTolet Referrals',
     description: 'Refer owners and renters to NewTolet and earn commission on paid purchases.',
   },
+  saved: {
+    path: '/saved/',
+    title: 'Saved Properties | NewTolet.Com',
+    description: 'Properties you saved on NewTolet.',
+    noindex: true,
+  },
   listdetails: {
     path: '/listdetails/',
     title: 'Property Details | NewTolet.Com',

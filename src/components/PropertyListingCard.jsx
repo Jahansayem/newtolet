@@ -22,21 +22,14 @@ import {
     getComparedPropertyIds,
     toggleComparedProperty,
 } from '../services/propertyCompareService';
-import { submitPropertyReport } from '../services/propertyReportService';
+import ReportListingDialog from './listing/ReportListingDialog';
+import { VerifiedOwnerBadge } from './listing/ListingTrust';
 import { useLanguage } from '../i18n/useLanguage';
 
 const getCardImageSource = (item) =>
     item?.primary_image ||
     item?.images?.find((image) => typeof image === 'string' && image.trim()) ||
     (typeof item?.image_url === 'string' && item.image_url.trim() ? item.image_url.trim() : null);
-
-const REPORT_REASONS = [
-    'Wrong information',
-    'Already rented',
-    'Duplicate listing',
-    'Suspicious listing',
-    'Other',
-];
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : '');
 
@@ -84,14 +77,8 @@ const PropertyListingCard = ({
     const [isCompared, setIsCompared] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isReportOpen, setIsReportOpen] = useState(false);
-    const [reportReason, setReportReason] = useState(REPORT_REASONS[0]);
-    const [reportMessage, setReportMessage] = useState('');
-    const [reportFeedback, setReportFeedback] = useState({ type: '', text: '' });
-    const [isSubmittingReport, setIsSubmittingReport] = useState(false);
     const [saveStatus, setSaveStatus] = useState('');
-    const reportTitleId = useId();
     const menuId = useId();
-    const reportReasonRef = useRef(null);
     const menuRef = useRef(null);
     const menuButtonRef = useRef(null);
     const isMountedRef = useRef(true);
@@ -254,63 +241,14 @@ const PropertyListingCard = ({
     const openReportModal = useCallback((event) => {
         event.preventDefault();
         event.stopPropagation();
-        setReportReason(REPORT_REASONS[0]);
-        setReportMessage('');
-        setReportFeedback({ type: '', text: '' });
         setIsReportOpen(true);
         setIsMenuOpen(false);
     }, []);
 
     const closeReportModal = useCallback(() => {
-        if (isSubmittingReport) {
-            return;
-        }
-
         setIsReportOpen(false);
         menuButtonRef.current?.focus();
-    }, [isSubmittingReport]);
-
-    const handleReportSubmit = useCallback(async (event) => {
-        event.preventDefault();
-        setReportFeedback({ type: '', text: '' });
-
-        if (!reportReason.trim()) {
-            setReportFeedback({ type: 'error', text: t('listing.card.report.selectReason') });
-            return;
-        }
-
-        setIsSubmittingReport(true);
-
-        try {
-            const result = await submitPropertyReport({
-                propertyId: itemId,
-                userId: getStoredUser()?.id || null,
-                reason: reportReason,
-                message: reportMessage,
-            });
-
-            if (isMountedRef.current) {
-                setReportFeedback({
-                    type: 'success',
-                    text: result.isLocalFallback
-                        ? t('listing.card.report.savedLocally')
-                        : t('listing.card.report.submitted'),
-                });
-                setReportMessage('');
-            }
-        } catch (error) {
-            if (isMountedRef.current) {
-                setReportFeedback({
-                    type: 'error',
-                    text: error.message || t('listing.card.report.failed'),
-                });
-            }
-        } finally {
-            if (isMountedRef.current) {
-                setIsSubmittingReport(false);
-            }
-        }
-    }, [itemId, reportMessage, reportReason, t]);
+    }, []);
 
     useEffect(() => {
         if (!saveStatus) {
@@ -325,26 +263,6 @@ const PropertyListingCard = ({
 
         return () => clearTimeout(timer);
     }, [saveStatus]);
-
-    useEffect(() => {
-        if (!isReportOpen) {
-            return undefined;
-        }
-
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape') {
-                closeReportModal();
-            }
-        };
-
-        document.addEventListener('keydown', handleKeyDown);
-        const frame = requestAnimationFrame(() => reportReasonRef.current?.focus());
-
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-            cancelAnimationFrame(frame);
-        };
-    }, [isReportOpen, closeReportModal]);
 
     // Stable public Property ID from the database; never a list position.
     const propertyIdNumber = getPropertyIdNumber(item);
@@ -399,6 +317,8 @@ const PropertyListingCard = ({
                         <h3 className='mt-1 line-clamp-2 min-h-[2.75rem] text-[15px] font-semibold leading-[22px] text-ink'>
                             {cardTitle}
                         </h3>
+
+                        {item.owner_verified ? <VerifiedOwnerBadge compact className='mt-1' /> : null}
 
                         <p className='mt-0.5 flex min-w-0 items-center gap-1 text-caption text-muted'>
                             <FiMapPin className='shrink-0' aria-hidden='true' />
@@ -505,89 +425,12 @@ const PropertyListingCard = ({
                 </div>
             </article>
 
-            {isReportOpen && (
-                <div
-                    className='fixed inset-0 z-[100] flex items-center justify-center bg-ink/55 px-4'
-                    onClick={closeReportModal}
-                >
-                    <form
-                        role='dialog'
-                        aria-modal='true'
-                        aria-labelledby={reportTitleId}
-                        className='ui-panel max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto p-5 shadow-overlay sm:p-6'
-                        onSubmit={handleReportSubmit}
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className='flex items-start justify-between gap-4'>
-                            <div>
-                                <h3 id={reportTitleId} className='text-lg font-bold text-ink'>{t('listing.card.report.title')}</h3>
-                                <p className='mt-1 text-sm text-muted'>{cardTitle}</p>
-                            </div>
-                            <button
-                                type='button'
-                                onClick={closeReportModal}
-                                className='ui-btn ui-btn-ghost ui-btn-icon shrink-0 text-muted'
-                                aria-label={t('listing.card.report.close')}
-                            >
-                                <RxCross2 className='text-xl' aria-hidden='true' />
-                            </button>
-                        </div>
-
-                        <label className='mt-5 block'>
-                            <span className='ui-label'>{t('listing.card.report.reason')}</span>
-                            <select
-                                ref={reportReasonRef}
-                                value={reportReason}
-                                onChange={(event) => setReportReason(event.target.value)}
-                                className='ui-field'
-                            >
-                                {REPORT_REASONS.map((reason) => (
-                                    <option key={reason} value={reason}>
-                                        {tv('reportReasons', reason)}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-
-                        <label className='mt-4 block'>
-                            <span className='ui-label'>{t('listing.card.report.message')}</span>
-                            <textarea
-                                value={reportMessage}
-                                onChange={(event) => setReportMessage(event.target.value)}
-                                rows={4}
-                                className='ui-field'
-                                placeholder={t('listing.card.report.messagePlaceholder')}
-                            />
-                        </label>
-
-                        {reportFeedback.text && (
-                            <p
-                                role={reportFeedback.type === 'error' ? 'alert' : 'status'}
-                                className={`ui-note mt-4 ${reportFeedback.type === 'success' ? 'ui-note-success' : 'ui-note-danger'}`}
-                            >
-                                {reportFeedback.text}
-                            </p>
-                        )}
-
-                        <div className='mt-5 flex justify-end gap-3'>
-                            <button
-                                type='button'
-                                onClick={closeReportModal}
-                                className='ui-btn ui-btn-secondary ui-btn-sm'
-                            >
-                                {t('common.cancel')}
-                            </button>
-                            <button
-                                type='submit'
-                                disabled={isSubmittingReport}
-                                className='ui-btn ui-btn-primary ui-btn-sm'
-                            >
-                                {isSubmittingReport ? t('listing.card.report.submitting') : t('listing.card.report.submit')}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
+            <ReportListingDialog
+                open={isReportOpen}
+                onClose={closeReportModal}
+                propertyId={itemId}
+                subtitle={cardTitle}
+            />
         </>
     );
 };

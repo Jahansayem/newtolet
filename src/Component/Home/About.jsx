@@ -1,13 +1,36 @@
 'use client'
 
 import { FaBuilding, FaUsers, FaAward, FaHandshake } from 'react-icons/fa'
+import { useEffect, useState } from 'react'
 import { useLanguage } from '../../i18n/useLanguage'
+import { countNewListings } from '../../services/propertyCatalogService'
+
+// Round down to a clean figure: 6,866 -> '6,800+'. Read live so the page never disagrees with search.
+const formatListingCount = (count) => {
+    if (!Number.isFinite(count) || count <= 0) return null
+    const step = count >= 1000 ? 100 : 10
+    return `${(Math.floor(count / step) * step).toLocaleString('en-US')}+`
+}
 
 const About = ({ headingLevel = 'h2' }) => {
     const Heading = headingLevel
     const { t } = useLanguage()
+    const [listedCount, setListedCount] = useState(null)
+
+    useEffect(() => {
+        let active = true
+        countNewListings({})
+            .then((count) => {
+                if (active) setListedCount(formatListingCount(count))
+            })
+            .catch(() => {})
+        return () => {
+            active = false
+        }
+    }, [])
+
     const stats = [
-        { icon: <FaBuilding />, value: "500+", label: t('home.about.stats.propertiesListed') },
+        { icon: <FaBuilding />, value: listedCount || "6,800+", label: t('home.about.stats.propertiesListed') },
         { icon: <FaUsers />, value: "10K+", label: t('home.about.stats.happyCustomers') },
         { icon: <FaAward />, value: "15+", label: t('home.about.stats.yearsExperience') },
         { icon: <FaHandshake />, value: "98%", label: t('home.about.stats.clientSatisfaction') }

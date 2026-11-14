@@ -55,6 +55,7 @@ const addProperty = {
       upazilla: 'Upazilla *',
       subArea: 'Sub Area (Optional)',
       contactNumber: 'Contact Number *',
+      whatsappEnabled: 'This number is on WhatsApp (show a WhatsApp button to renters who unlock the contact)',
       contactFormatHint: 'Format: +8801788888888 or 01788888888',
       shortDescription: 'Short Description *',
       charCount: '{count} / {max} characters',
@@ -246,6 +247,8 @@ const addProperty = {
     },
 
     validation: {
+      bedroomsRequired: 'Please enter the number of bedrooms (at least 1)',
+      rentAmountTooLow: 'Rent must be at least {min} Taka, or mark it as negotiable',
       categoryRequired: 'Please select a category',
       bathroomsInvalid: 'Please enter valid number of bathrooms',
       balconyInvalid: 'Please enter valid number of balconies',

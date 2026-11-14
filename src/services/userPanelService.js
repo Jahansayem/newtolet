@@ -1142,3 +1142,67 @@ export const createContactUnlockRefundRequest = async (contactViewId, reasonCode
 }
 
 export const SAVED_PROPERTIES_BROWSER_EVENT = SAVED_PROPERTIES_EVENT
+
+/** Extends one of the owner's listings by 60 days from today (listings expire after 60 days). */
+export const renewPropertyListing = async (propertyId, userId) => {
+  if (!propertyId) {
+    return { data: null, error: new Error('Property is required.') }
+  }
+
+  const { data, error } = await supabase.rpc('renew_property_listing', { p_property_id: propertyId })
+
+  if (error) {
+    return { data: null, error: createServiceError(error.message || 'Unable to renew the listing.', error) }
+  }
+
+  if (userId) {
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'my-properties'))
+  }
+  invalidatePropertyCatalogSnapshots()
+
+  return { data: { expiresAt: Array.isArray(data) ? data[0] : data }, error: null }
+}
+
+/** Saved properties kept on this device (guests). Logged-in users use getSavedProperties(userId). */
+export const getGuestSavedProperties = async () => fetchPropertiesWithImages(readLocalSavedPropertyIds())
+
+/**
+ * After login, copy properties a guest saved on this device into the account, then clear the
+ * device list, so nothing saved before signing in is lost. Safe to call repeatedly.
+ */
+export const mergeGuestSavedProperties = async (userId) => {
+  const localIds = readLocalSavedPropertyIds()
+
+  if (!userId || !localIds.length) {
+    return { merged: 0 }
+  }
+
+  try {
+    const { data: existing, error: readError } = await supabase
+      .from(FAVORITES_TABLE)
+      .select('property_id')
+      .eq('user_id', userId)
+      .in('property_id', localIds)
+
+    if (readError) {
+      return { merged: 0, error: readError }
+    }
+
+    const already = new Set((existing || []).map((row) => row.property_id))
+    const rows = localIds.filter((id) => !already.has(id)).map((propertyId) => ({ user_id: userId, property_id: propertyId }))
+
+    if (rows.length) {
+      const { error: insertError } = await supabase.from(FAVORITES_TABLE).insert(rows)
+      if (insertError) {
+        return { merged: 0, error: insertError }
+      }
+    }
+
+    writeLocalSavedPropertyIds([])
+    invalidateUserResource(userId, 'saved-property-ids')
+    invalidateUserResource(userId, 'saved-properties')
+    return { merged: rows.length }
+  } catch (error) {
+    return { merged: 0, error }
+  }
+}

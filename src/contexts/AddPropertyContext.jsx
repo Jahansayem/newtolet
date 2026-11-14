@@ -26,6 +26,7 @@ const INITIAL_STATE = {
   area: '',
   sub_area: '',
   contact_number: '',
+  whatsapp_enabled: false,
   short_description: '',
   sector: '',
   road: '',

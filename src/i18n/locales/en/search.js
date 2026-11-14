@@ -107,6 +107,10 @@ const search = {
       pagination: 'Search result pages',
       goToPage: 'Go to page {page}',
       endOfResults: 'You have reached the end of the results.',
+      showMap: 'Show map',
+      hideMap: 'Show list',
+      mapLabel: 'Map of the listings on this page',
+      mapNote: '{shown} of {total} listings on this page are on the map. Circles show the approximate area; most owners share the exact address after you contact them.',
     },
 
     amenities: {

@@ -55,6 +55,7 @@ const addProperty = {
       upazilla: 'উপজেলা *',
       subArea: 'সাব-এরিয়া (ঐচ্ছিক)',
       contactNumber: 'যোগাযোগের নম্বর *',
+      whatsappEnabled: 'এই নম্বরে হোয়াটসঅ্যাপ আছে (যারা কন্টাক্ট আনলক করবেন তাদের হোয়াটসঅ্যাপ বাটন দেখান)',
       contactFormatHint: 'ফরম্যাট: +8801788888888 অথবা 01788888888',
       shortDescription: 'সংক্ষিপ্ত বিবরণ *',
       charCount: '{count} / {max} অক্ষর',
@@ -246,6 +247,8 @@ const addProperty = {
     },
 
     validation: {
+      bedroomsRequired: 'বেডরুমের সংখ্যা লিখুন (কমপক্ষে ১টি)',
+      rentAmountTooLow: 'ভাড়া কমপক্ষে {min} টাকা হতে হবে, অথবা আলোচনা সাপেক্ষ চিহ্নিত করুন',
       categoryRequired: 'একটি ক্যাটাগরি বেছে নিন',
       bathroomsInvalid: 'বাথরুমের সঠিক সংখ্যা দিন',
       balconyInvalid: 'বারান্দার সঠিক সংখ্যা দিন',

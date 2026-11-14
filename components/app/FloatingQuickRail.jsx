@@ -92,7 +92,7 @@ const FloatingQuickRail = () => {
   }, [])
 
   const isHomeActive = pathname === '/'
-  const isSavedActive = page === 'dashboard' && searchParams?.get('tab') === 'saved'
+  const isSavedActive = page === 'saved' || (page === 'dashboard' && searchParams?.get('tab') === 'saved')
   const isAccountActive = page === 'dashboard' && !isSavedActive
   const badge = savedCount > 99 ? '99+' : savedCount > 0 ? String(savedCount) : null
 
@@ -130,7 +130,7 @@ const FloatingQuickRail = () => {
           <span className="font-semibold text-brand">{t('quickRail.add')}</span>
         </Link>
 
-        <Link href={buildDashboardHref('saved')} className={tabClassName(isSavedActive)} aria-current={isSavedActive ? 'page' : undefined}>
+        <Link href='/saved/' className={tabClassName(isSavedActive)} aria-current={isSavedActive ? 'page' : undefined}>
           <span className={`relative ${tabIconClassName(isSavedActive)}`}>
             <FiHeart className="text-lg" aria-hidden="true" />
             {badge ? (

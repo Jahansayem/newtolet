@@ -40,6 +40,16 @@ import {
     SAVED_PROPERTIES_BROWSER_EVENT,
 } from '../../services/userPanelService';
 import { trackEvent } from '../../services/customerEventsService';
+import dynamic from 'next/dynamic';
+import { getListingExtras, getSimilarProperties, getVerifiedOwnerPropertyIds } from '../../services/propertyCatalogService';
+import { VerifiedOwnerBadge, WhatsAppContactButton } from '../../components/listing/ListingTrust';
+import ReportListingDialog from '../../components/listing/ReportListingDialog';
+import PropertyListingCard from '../../components/PropertyListingCard';
+import { getListingMapLocation } from '../../data/locationCentroids';
+import { FiFlag } from 'react-icons/fi';
+
+// Leaflet only loads on detail pages, after the main content.
+const ListingMap = dynamic(() => import('../../components/Maps/ListingMap'), { ssr: false });
 import RentDisplay from '../../components/RentDisplay';
 import { PropertyThumbnailImage } from '../../components/PropertyCardMedia';
 import Dialog from '../../components/ui/Dialog';
@@ -307,6 +317,39 @@ const Listdetails = () => {
         void recordPropertyView(user.id, id);
     }, [id, session?.user?.id, user?.id]);
 
+    const [listingExtras, setListingExtras] = useState({ whatsappEnabled: false, expiresAt: null });
+    const [ownerVerified, setOwnerVerified] = useState(false);
+    const [similarProperties, setSimilarProperties] = useState([]);
+    const [isReportOpen, setIsReportOpen] = useState(false);
+
+    useEffect(() => {
+        if (!lists?.id) {
+            return undefined;
+        }
+
+        let active = true;
+        setListingExtras({ whatsappEnabled: false, expiresAt: null });
+        setOwnerVerified(false);
+        setSimilarProperties([]);
+
+        Promise.all([
+            getListingExtras(lists.id),
+            getVerifiedOwnerPropertyIds([lists.id]),
+            getSimilarProperties(lists),
+        ]).then(([extras, verifiedIds, similar]) => {
+            if (!active) return;
+            setListingExtras(extras);
+            setOwnerVerified(verifiedIds.has(lists.id));
+            setSimilarProperties(similar);
+        });
+
+        return () => {
+            active = false;
+        };
+        // Reload only when a different listing opens, not when the cached copy is refreshed.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lists?.id]);
+
     useEffect(() => {
         if (!id || !lists?.id || lists.id !== id) {
             return;
@@ -377,8 +420,11 @@ const Listdetails = () => {
         try {
             const result = await toggleSavedProperty(user?.id || null, id);
             setIsFavorite(Boolean(result?.saved));
+            // Visible confirmation (the audit found saving gave no feedback).
+            setShareStatus(result?.saved ? 'saved' : 'removed');
         } catch (error) {
             console.error('Error toggling favorite property:', error);
+            setShareStatus('saveFailed');
         }
     };
 
@@ -468,6 +514,13 @@ const Listdetails = () => {
         imageList.indexOf(image) === index
     ));
     const propertyIdNumber = getPropertyIdNumber(lists);
+    const mapLocation = getListingMapLocation({
+        lat: lists.lat,
+        lng: lists.lng,
+        state_district: location.state_district,
+        area: location.area,
+        sub_area: location.sub_area,
+    });
     const isProtectedUnlocked = Boolean(lists.protected_contact_unlocked);
     const hasEnoughPoints = currentCredits >= unlockCost;
     const publicLocationText = [location.sub_area, location.area, location.state_district].filter(Boolean).join(', ');
@@ -580,6 +633,13 @@ const Listdetails = () => {
                     <span>{t('listing.detail.contact.callNow')}</span>
                 </a>
             ) : null}
+            {location.contact_number && listingExtras.whatsappEnabled ? (
+                <WhatsAppContactButton
+                    phone={location.contact_number}
+                    message={t('listing.trust.whatsappMessage', { id: getPropertyIdNumber(lists) || '' })}
+                    onClick={() => trackEvent('whatsapp_tap', { propertyId: id, metadata: { placement: 'sidebar' } })}
+                />
+            ) : null}
         </div>
     );
 
@@ -615,9 +675,19 @@ const Listdetails = () => {
                         <span
                             role="status"
                             aria-live="polite"
-                            className={shareStatus ? `text-caption font-medium ${shareStatus === 'failed' ? 'text-danger' : 'text-success'}` : 'sr-only'}
+                            className={shareStatus ? `text-caption font-medium ${shareStatus === 'failed' || shareStatus === 'saveFailed' ? 'text-danger' : 'text-success'}` : 'sr-only'}
                         >
-                            {shareStatus === 'copied' ? t('listing.detail.share.copied') : shareStatus === 'failed' ? t('listing.detail.share.failed') : ''}
+                            {shareStatus === 'copied'
+                                ? t('listing.detail.share.copied')
+                                : shareStatus === 'failed'
+                                    ? t('listing.detail.share.failed')
+                                    : shareStatus === 'saved'
+                                        ? t('listing.card.savedStatus')
+                                        : shareStatus === 'removed'
+                                            ? t('listing.card.removedStatus')
+                                            : shareStatus === 'saveFailed'
+                                                ? t('listing.card.saveFailed')
+                                                : ''}
                         </span>
                         <button
                             type="button"
@@ -736,6 +806,10 @@ const Listdetails = () => {
                             <h1 id="listing-title" className="mt-2 text-2xl font-bold leading-tight text-ink md:text-3xl">
                                 {propertyTitle}
                             </h1>
+                            {ownerVerified ? <VerifiedOwnerBadge className="mt-2" /> : null}
+                            {listingExtras.expiresAt && new Date(listingExtras.expiresAt).getTime() < Date.now() ? (
+                                <p role="status" className="ui-note mt-3">{t('listing.trust.expired')}</p>
+                            ) : null}
                             <p className="mt-2 flex items-start gap-2 text-body text-muted">
                                 <FiMapPin className="mt-1 shrink-0 text-brand" aria-hidden="true" />
                                 <span>{visibleLocationText}</span>
@@ -829,6 +903,33 @@ const Listdetails = () => {
                                 <p className="mt-3 text-body text-muted">{t('listing.detail.noFacilities')}</p>
                             )}
                         </section>
+
+                        {mapLocation ? (
+                            <section className="ui-card p-5 sm:p-6" aria-labelledby="listing-map">
+                                <h2 id="listing-map" className="text-lg font-bold text-ink">{t('listing.trust.mapTitle')}</h2>
+                                <p className="mt-1 text-caption text-muted">
+                                    {mapLocation.precision === 'exact'
+                                        ? t('listing.trust.mapExact')
+                                        : mapLocation.precision === 'area'
+                                            ? t('listing.trust.mapArea')
+                                            : t('listing.trust.mapDistrict')}
+                                </p>
+                                <ListingMap
+                                    className="mt-4"
+                                    height={300}
+                                    ariaLabel={t('listing.trust.mapLabel')}
+                                    points={[{ id: lists.id, ...mapLocation, label: visibleLocationText }]}
+                                />
+                                <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${mapLocation.lat},${mapLocation.lng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="ui-btn ui-btn-ghost ui-btn-sm mt-3 text-brand"
+                                >
+                                    {t('listing.trust.openInMaps')}
+                                </a>
+                            </section>
+                        ) : null}
                     </div>
 
                     <aside>
@@ -865,10 +966,37 @@ const Listdetails = () => {
                                     <li>{t('listing.detail.safety.noAdvance')}</li>
                                 </ul>
                             </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setIsReportOpen(true)}
+                                className="ui-btn ui-btn-ghost ui-btn-sm mt-4 w-full text-muted hover:text-danger"
+                            >
+                                <FiFlag aria-hidden="true" />
+                                <span>{t('listing.trust.report')}</span>
+                            </button>
                         </div>
                     </aside>
                 </div>
+
+                {similarProperties.length > 0 ? (
+                    <section className="mt-10" aria-labelledby="similar-listings">
+                        <h2 id="similar-listings" className="mb-4 text-xl font-bold text-ink">{t('listing.trust.similarTitle')}</h2>
+                        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+                            {similarProperties.map((item, index) => (
+                                <PropertyListingCard key={item.id} item={item} index={index} />
+                            ))}
+                        </div>
+                    </section>
+                ) : null}
             </div>
+
+            <ReportListingDialog
+                open={isReportOpen}
+                onClose={() => setIsReportOpen(false)}
+                propertyId={lists.id}
+                subtitle={propertyTitle}
+            />
 
             <Dialog
                 open={showContactModal}

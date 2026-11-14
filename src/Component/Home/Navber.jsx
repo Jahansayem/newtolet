@@ -23,6 +23,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useAdminPermissions } from '../../contexts/AdminAccessContext'
 import { useLanguage } from '../../i18n/useLanguage'
 import LanguageToggle from '../../components/LanguageToggle'
+import SavedSearchBell from '../../components/listing/SavedSearchBell'
 import { buildDashboardHref, getRoutePage } from '../../lib/routePaths'
 import { HOME_CHROME_SCROLL_EVENT, OPEN_SEARCH_OVERLAY_EVENT } from '../../lib/homeScrollChrome'
 import {
@@ -408,6 +409,17 @@ const Navber = () => {
           </Link>
 
           <LanguageToggle size="sm" className="hidden md:inline-flex" />
+
+          <SavedSearchBell />
+
+          <Link
+            to="/saved"
+            className="hidden h-11 w-11 items-center justify-center rounded-full text-ink hover:bg-brand-soft lg:inline-flex"
+            aria-label={t('nav.savedProperty')}
+            title={t('nav.savedProperty')}
+          >
+            <FiHeart className="text-lg" aria-hidden="true" />
+          </Link>
 
           {isAuthenticated ? (
             <div className="relative hidden lg:block" ref={profileDropdownRef}>

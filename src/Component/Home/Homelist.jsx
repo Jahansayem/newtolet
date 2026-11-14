@@ -12,6 +12,13 @@ import {
 } from './propertySearch';
 import { PAGE_SIZE } from '../../lib/search/filterOptions.js';
 import { useLanguage } from '../../i18n/useLanguage';
+import dynamic from 'next/dynamic';
+import { FiList, FiMap } from 'react-icons/fi';
+import { getListingMapLocation } from '../../data/locationCentroids';
+import { buildListDetailsHref } from '../../lib/routePaths';
+
+// Leaflet loads only when the visitor opens the map view.
+const ListingMap = dynamic(() => import('../../components/Maps/ListingMap'), { ssr: false });
 
 const SEARCH_ERROR_FALLBACK_KEY = 'search.results.error';
 const EMPTY_SEARCH_RESULT = { properties: [], featured: [], total: 0, pageCount: 0, page: 1, place: null, suggestion: '', emptyQuery: false };
@@ -101,6 +108,7 @@ const Homelist = ({
     // { source: 'live' | 'cache-search' | 'none', errorCode: '' | 'unavailable' | 'failed' }
     const [searchStatus, setSearchStatus] = useState({ source: 'live', errorCode: '' });
     const [retryVersion, setRetryVersion] = useState(0);
+    const [showMap, setShowMap] = useState(false);
 
     // In search mode the filters come only from the URL-driven prop; context values must not
     // feed in, otherwise a category click re-ran the search twice (prop change + context sync).
@@ -202,6 +210,23 @@ const Homelist = ({
     }, [legacyList, maxItems, searchResult, usesSearchDataSource]);
 
     const totalCount = usesSearchDataSource ? searchResult.total : legacyList.length;
+    const mapPoints = useMemo(() => {
+        if (!showMap) return [];
+        return visibleList
+            .map((item) => {
+                const point = getListingMapLocation({
+                    lat: item.lat,
+                    lng: item.lng,
+                    state_district: item.location?.state_district,
+                    area: item.location?.area,
+                    sub_area: item.location?.sub_area,
+                });
+                if (!point) return null;
+                const label = [tv('categories', item.category), item.location?.area || item.location?.state_district].filter(Boolean).join(' · ');
+                return { id: item.id, ...point, label, href: buildListDetailsHref(item.id) };
+            })
+            .filter(Boolean);
+    }, [showMap, tv, visibleList]);
     const loading = usesSearchDataSource ? isSearching || !ready : isLoading;
 
     useEffect(() => {
@@ -298,6 +323,27 @@ const Homelist = ({
                     ) : null}
                 />
             )}
+
+            {usesSearchDataSource && visibleList.length > 0 ? (
+                <div className='mb-4 flex justify-end'>
+                    <button
+                        type='button'
+                        onClick={() => setShowMap((current) => !current)}
+                        aria-pressed={showMap}
+                        className='ui-btn ui-btn-secondary ui-btn-sm'
+                    >
+                        {showMap ? <FiList aria-hidden='true' /> : <FiMap aria-hidden='true' />}
+                        {showMap ? t('search.results.hideMap') : t('search.results.showMap')}
+                    </button>
+                </div>
+            ) : null}
+
+            {showMap && mapPoints.length > 0 ? (
+                <div className='mb-6'>
+                    <ListingMap points={mapPoints} height={420} ariaLabel={t('search.results.mapLabel')} />
+                    <p className='mt-2 text-caption text-muted'>{t('search.results.mapNote', { shown: mapPoints.length, total: visibleList.length })}</p>
+                </div>
+            ) : null}
 
             <div className={`grid ${gridClassName} gap-4 gap-y-6 md:gap-5 md:gap-y-8`}>
                 {visibleList.map((item, index) => (

@@ -21,6 +21,8 @@ import AdminContentSection from './sections/AdminContentSection.jsx'
 import AdminCustomersSection from './sections/AdminCustomersSection.jsx'
 import AdminDashboardSection from './sections/AdminDashboardSection.jsx'
 import AdminFeedbackSection from './sections/AdminFeedbackSection.jsx'
+import AdminVerificationsSection from './sections/AdminVerificationsSection.jsx'
+import AdminReportsSection from './sections/AdminReportsSection.jsx'
 import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
 import AdminOrdersSection from './sections/AdminOrdersSection.jsx'
 import AdminPricingSection from './sections/AdminPricingSection.jsx'
@@ -106,6 +108,10 @@ const AdminPanelApp = () => {
         return <SearchHistoryManagement />
       case 'feedback':
         return <AdminFeedbackSection />
+      case 'verifications':
+        return <AdminVerificationsSection />
+      case 'reports':
+        return <AdminReportsSection />
       case 'refunds':
         return <ContactUnlockRefundReview />
       default:

@@ -6,8 +6,16 @@
 
 export const VALIDATION_KEY_PREFIX = 'addProperty.validation'
 
+/** Lowest rent accepted as a real price; anything lower must be marked negotiable. */
+export const MIN_MONTHLY_RENT = 100
+
+/** Categories that are homes and therefore need a bedroom count. */
+export const RESIDENTIAL_CATEGORIES = ['Family', 'Bachelor', 'Sublet']
+
 const VALIDATION_MESSAGES_EN = {
   categoryRequired: 'Please select a category',
+  bedroomsRequired: 'Please enter the number of bedrooms (at least 1)',
+  rentAmountTooLow: 'Rent must be at least {min} Taka, or mark it as negotiable',
   bathroomsInvalid: 'Please enter valid number of bathrooms',
   balconyInvalid: 'Please enter valid number of balconies',
   kitchenInvalid: 'Please enter valid number of kitchen',
@@ -64,7 +72,10 @@ export const validateScreen1Codes = (data) => {
 
   // property_type validation removed - field no longer exists
 
-  // total_rooms and living_rooms are optional, no validation needed
+  // Homes need a bedroom count (the audit found many 0-bed listings); offices/shops do not.
+  if (RESIDENTIAL_CATEGORIES.includes(data.category) && !(Number(data.total_rooms) >= 1)) {
+    errors.total_rooms = { code: 'bedroomsRequired' }
+  }
 
   if (!data.total_bathrooms || data.total_bathrooms < 0) {
     errors.total_bathrooms = { code: 'bathroomsInvalid' }
@@ -100,6 +111,14 @@ export const validateScreen2Codes = (data) => {
     errors.rent_amount_bdt = { code: 'rentAmountOrNegotiable' }
   } else if (hasRentAmount && Number(data.rent_amount_bdt) <= 0) {
     errors.rent_amount_bdt = { code: 'rentAmountInvalid' }
+  } else if (
+    hasRentAmount &&
+    !isNegotiable &&
+    !['Daily', 'Weekly'].includes(data.rent_period) &&
+    Number(data.rent_amount_bdt) < MIN_MONTHLY_RENT
+  ) {
+    // Placeholder prices (1 Taka) made sorting and price filters useless.
+    errors.rent_amount_bdt = { code: 'rentAmountTooLow', params: { min: MIN_MONTHLY_RENT } }
   }
 
   if (!data.rent_period) {

@@ -77,6 +77,7 @@ const core = {
     logout: 'Log out',
     login: 'Login',
     language: 'Language',
+    savedSearchAlerts: '{count} new listings match your saved searches',
   },
 
   footer: {
@@ -129,6 +130,17 @@ const core = {
     saved: 'Saved',
     account: 'Account',
     add: 'Add',
+  },
+
+  savedPage: {
+    title: 'Saved properties',
+    subtitleAccount: 'Properties saved to your account.',
+    subtitleGuest: 'Properties saved on this device.',
+    guestHint: 'Log in to keep your saved properties on every device. What you saved here moves into your account.',
+    emptyTitle: 'Nothing saved yet',
+    emptyDescription: 'Tap the heart on any listing to save it here.',
+    browse: 'Browse properties',
+    error: 'Could not load your saved properties.',
   },
 
   notFound: {

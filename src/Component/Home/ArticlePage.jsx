@@ -3,6 +3,7 @@
 import { FiBookOpen, FiCheckCircle, FiHome, FiMapPin } from 'react-icons/fi'
 import { ARTICLE_ITEMS } from './articleContent'
 import { useLanguage } from '../../i18n/useLanguage'
+import ArticleGuides from './ArticleGuides'
 
 const ARTICLE_ICONS = {
   book: FiBookOpen,
@@ -59,6 +60,8 @@ export default function ArticlePage() {
             <p className="mt-2 text-sm leading-6 text-slate-600">{t('article.tips.beforePayment.description')}</p>
           </div>
         </div>
+
+        <ArticleGuides />
       </div>
     </section>
   )

@@ -346,11 +346,12 @@ All fields are optional on PATCH. Required on POST are marked.
 | `state_district` | string | **Required.** District name, 1 to 120 chars |
 | `area` | string | **Required.** Area / upazilla, 1 to 120 chars |
 | `available_from` | string | **Required.** `YYYY-MM-DD` |
-| `rent_amount_bdt` | integer | Required unless `is_rent_negotiable` is `true`. 1 to 100,000,000 |
+| `rent_amount_bdt` | integer | Required unless `is_rent_negotiable` is `true`. 1 to 100,000,000, and **at least 100 when `rent_period` is `Monthly` or `Yearly`**. Do not send placeholder prices such as `1`: send `is_rent_negotiable: true` and leave the rent out when the source has no price |
 | `is_rent_negotiable` | boolean | Default `false` |
 | `occupancy` | string | One of `No Restriction`, `Only Family`, `Only Male`, `Only Female` |
-| `total_rooms` | integer | **Required.** Bedroom / room count, 0 to 1000. Send `0` when the listing has no rooms (shop, office) or the source gives no count |
-| `total_bathrooms`, `balcony`, `total_kitchen`, `dining_rooms`, `living_rooms` | integer | 0 to 1000 |
+| `total_rooms` | integer | **Required.** Bedroom / room count, 0 to 1000. **At least 1 for `Unit`, `Apartment` and `House`**; `0` only for listings without rooms (shop, office, warehouse) |
+| `total_bathrooms` | integer | 0 to 1000. **At least 1** on create unless `property_type` is `Office Space`, `Shop`, `Warehouse`, `Factory`, `Hotel` or `Building` |
+| `balcony`, `total_kitchen`, `dining_rooms`, `living_rooms` | integer | 0 to 1000 |
 | `room_size_sqft` | integer | 1 to 1,000,000 |
 | `floor_level` | string | Free text up to 40 chars, e.g. `3rd Floor`, `Ground Floor` |
 | `sub_area`, `sector`, `road`, `house_plot` | string | Up to 120 chars; `null` clears |
@@ -358,6 +359,7 @@ All fields are optional on PATCH. Required on POST are marked.
 | `lat`, `lng` | number | `-90..90` and `-180..180`; must be sent together |
 | `deadline` | string | `YYYY-MM-DD`, on or after `available_from`; `null` clears |
 | `contact_number` | string | Bangladesh mobile, e.g. `01712345678` or `+8801712345678`. Stored normalised, never returned |
+| `whatsapp_enabled` | boolean | Default `false`. `true` when the contact number takes WhatsApp; the listing then shows a WhatsApp button to visitors who unlocked the contact |
 | `amenities` | string[] | Up to 30 items, each up to 60 chars, deduplicated case-insensitively |
 | `images` | object[] | Up to 10 items. Each is `{ "image_url": "https://...", "is_thumbnail"?: bool, "display_order"?: int }` **or** `{ "image_base64": "<base64 or data: URI>", "content_type"?: "image/jpeg", "is_thumbnail"?, "display_order"? }` (a plain string counts as `image_url`). The server stores a copy of every image: `image_url` is fetched (http(s) only, public hosts only, 5 MB max), `image_base64` is decoded (4 MB max, JPEG/PNG/WebP/GIF, type detected from the bytes). Duplicates are dropped, one thumbnail (defaults to the first stored image), `display_order` re-sequenced from 0. Keep the whole request body under 10 MB; prefer URLs over base64 |
 

@@ -2,12 +2,12 @@
 
 import React, { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiBarChart2, FiEdit2, FiEye, FiMapPin, FiPlus, FiPower, FiStar, FiTrash2 } from 'react-icons/fi'
+import { FiBarChart2, FiEdit2, FiEye, FiMapPin, FiPlus, FiPower, FiStar, FiTrash2, FiRefreshCw } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { buildEditPropertyHref, buildListDetailsHref } from '../../lib/routePaths'
 import { deleteProperty, getUserProperties } from '../../services/propertyService'
-import { getPropertyAnalytics, pinPropertyFor24h, updatePropertyPanelState } from '../../services/userPanelService'
+import { getPropertyAnalytics, pinPropertyFor24h, renewPropertyListing, updatePropertyPanelState } from '../../services/userPanelService'
 import UserPanelShell from '../../components/user-panel/UserPanelShell.jsx'
 import { EmptyState, formatPanelDate, PanelCard, PanelCardHeader } from '../../components/user-panel/UserPanelPrimitives.jsx'
 import { PropertyThumbnailImage } from '../../components/PropertyCardMedia.jsx'
@@ -171,6 +171,24 @@ const MyProperties = () => {
     setRefreshKey((current) => current + 1)
   }
 
+  const [renewingPropertyId, setRenewingPropertyId] = useState(null)
+
+  const handleRenew = async (property) => {
+    setRenewingPropertyId(property.id)
+    const { error } = await renewPropertyListing(property.id, user?.id)
+    setRenewingPropertyId(null)
+
+    if (error) {
+      setMessageType('error')
+      setMessage(error.message || t('dashboard.myProperties.renewError'))
+      return
+    }
+
+    setMessageType('success')
+    setMessage(t('dashboard.myProperties.renewed'))
+    setRefreshKey((current) => current + 1)
+  }
+
   const handleDelete = (propertyId) => {
     setPendingDeleteId(propertyId)
   }
@@ -315,6 +333,19 @@ const MyProperties = () => {
                             date: formatPanelDate(property.created_at, true, language),
                           })}
                         </p>
+                        {property.expires_at ? (() => {
+                          const expiresAt = new Date(property.expires_at).getTime()
+                          const daysLeft = Math.ceil((expiresAt - Date.now()) / 86400000)
+                          const date = formatPanelDate(property.expires_at, false, language)
+                          if (daysLeft <= 0) {
+                            return <p className="mt-1 text-sm font-semibold text-danger">{t('dashboard.myProperties.expiredOn', { date })}</p>
+                          }
+                          return (
+                            <p className={`mt-1 text-sm ${daysLeft <= 7 ? 'font-semibold text-marigold-700' : 'text-slate-500'}`}>
+                              {daysLeft <= 7 ? t('dashboard.myProperties.expiringSoon', { days: daysLeft }) : t('dashboard.myProperties.expiresOn', { date })}
+                            </p>
+                          )
+                        })() : null}
                       </div>
                     </div>
 
@@ -366,6 +397,17 @@ const MyProperties = () => {
                             ? t('dashboard.myProperties.pinning')
                             : t('dashboard.myProperties.pinFor24h', { cost: PIN_PROPERTY_COST })}
                       </button>
+                      {property.expires_at ? (
+                        <button
+                          type="button"
+                          onClick={() => handleRenew(property)}
+                          disabled={renewingPropertyId === property.id}
+                          className="ui-btn ui-btn-secondary ui-btn-sm"
+                        >
+                          <FiRefreshCw />
+                          {renewingPropertyId === property.id ? t('dashboard.myProperties.renewing') : t('dashboard.myProperties.renew')}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => handleDelete(property.id)}

@@ -274,6 +274,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
     area: '',
     sub_area: '',
     contact_number: '',
+    whatsapp_enabled: false,
     short_description: '',
     sector: '',
     road: '',
@@ -401,6 +402,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
           area: property.area,
           sub_area: property.sub_area || '',
           contact_number: property.contact_number,
+          whatsapp_enabled: property.whatsapp_enabled === true,
           short_description: property.short_description,
           sector: property.sector || '',
           road: property.road || '',
@@ -433,6 +435,7 @@ const EditPropertyForm = ({ adminPanel = null }) => {
           area: processedProperty.area || '',
           sub_area: processedProperty.sub_area || '',
           contact_number: processedProperty.contact_number || '',
+          whatsapp_enabled: processedProperty.whatsapp_enabled === true,
           short_description: processedProperty.short_description || '',
           sector: processedProperty.sector || '',
           road: processedProperty.road || '',
@@ -1217,6 +1220,16 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                   />
                 </div>
                 {errors.contact_number && <p className='ui-error'>{errors.contact_number}</p>}
+                <label htmlFor='edit-whatsapp' className='mt-3 flex min-h-11 items-center gap-2 text-sm text-ink'>
+                  <input
+                    id='edit-whatsapp'
+                    type='checkbox'
+                    checked={formData.whatsapp_enabled === true}
+                    onChange={(e) => updateFormData({ whatsapp_enabled: e.target.checked })}
+                    className='h-4 w-4 accent-brand'
+                  />
+                  {t('addProperty.fields.whatsappEnabled')}
+                </label>
               </div>
 
               {/* Short Description */}

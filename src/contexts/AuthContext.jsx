@@ -163,6 +163,14 @@ export const AuthProvider = ({ children }) => {
             }
 
             // Only process specific auth events that actually change the session
+            if (event === 'SIGNED_IN' && nextSession?.user?.id) {
+                // Keep what the visitor saved before logging in (loaded lazily: avoids an import cycle).
+                const signedInUserId = nextSession.user.id;
+                void import('../services/userPanelService')
+                    .then((module) => module.mergeGuestSavedProperties(signedInUserId))
+                    .catch(() => {});
+            }
+
             if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') {
                 // For TOKEN_REFRESHED, we can just update the session without full sync
                 if (event === 'TOKEN_REFRESHED' && nextSession) {

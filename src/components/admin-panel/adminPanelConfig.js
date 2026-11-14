@@ -2,6 +2,7 @@ import {
   FiBarChart2,
   FiCreditCard,
   FiFileText,
+  FiFlag,
   FiGrid,
   FiActivity,
   FiHome,
@@ -15,6 +16,7 @@ import {
   FiShare2,
   FiTag,
   FiUsers,
+  FiUserCheck,
 } from 'react-icons/fi'
 import { buildPageHref } from '../../lib/routePaths'
 import { PERMISSIONS } from '../../lib/adminPermissions'
@@ -78,6 +80,22 @@ export const ADMIN_NAV_ITEMS = [
     permission: PERMISSIONS.FEEDBACK_REVIEW,
     badgeKey: 'pendingFeedback',
     description: 'Approve testimonials shown on the homepage.',
+  },
+  {
+    key: 'verifications',
+    label: 'ID verification',
+    section: 'Moderation',
+    icon: FiUserCheck,
+    permission: PERMISSIONS.USERS_MODERATE,
+    description: 'Review owner ID documents; approval shows a Verified owner badge on their listings.',
+  },
+  {
+    key: 'reports',
+    label: 'Listing reports',
+    section: 'Moderation',
+    icon: FiFlag,
+    permission: PERMISSIONS.PROPERTIES_MODERATE,
+    description: 'Reports visitors filed against listings (wrong info, already rented, suspicious).',
   },
   {
     key: 'orders',

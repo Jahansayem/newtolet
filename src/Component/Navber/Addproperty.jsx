@@ -932,6 +932,16 @@ const AddPropertyContent = () => {
                   />
                 </div>
                 {errors.contact_number && <p id='add-contactNumber-error' role='alert' className='ui-error'>{errors.contact_number}</p>}
+                <label htmlFor='add-whatsapp' className='mt-3 flex min-h-11 items-center gap-2 text-sm text-ink'>
+                  <input
+                    id='add-whatsapp'
+                    type='checkbox'
+                    checked={formData.whatsapp_enabled === true}
+                    onChange={(e) => updateFormData({ whatsapp_enabled: e.target.checked })}
+                    className='h-4 w-4 accent-brand'
+                  />
+                  {t('addProperty.fields.whatsappEnabled')}
+                </label>
               </div>
 
               {/* Short Description */}

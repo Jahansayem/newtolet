@@ -57,6 +57,10 @@ const isSupabaseQuotaError = (error) => {
   )
 }
 
+const isMissingDatabaseObjectError = (error) =>
+  ['PGRST202', 'PGRST204', '42883', '42703'].includes(error?.code) ||
+  /does not exist|Could not find/i.test(error?.message || '')
+
 const isTransientFetchError = (error) => {
   const message = getErrorMessage(error).toLowerCase()
   return (
@@ -306,9 +310,37 @@ const sortPublicProperties = (properties = []) =>
     return new Date(right?.created_at || 0).getTime() - new Date(left?.created_at || 0).getTime()
   })
 
-/** Rows the public may see: approved, active, not soft-deleted. */
-export const applyPublicVisibility = (query) =>
-  query.eq('status', 'approved').neq('is_active', false).is('deleted_at', null)
+// expires_at arrives with migration 20261114120000_qa_listing_quality.sql. Probe once per session
+// so this build works before and after the migration (the expiry filter switches on by itself).
+let expiryColumnProbe = null
+let hasExpiryColumn = false
+
+export const ensureCatalogCapabilities = () => {
+  if (!expiryColumnProbe) {
+    expiryColumnProbe = supabase
+      .from('properties')
+      .select('expires_at', { head: true })
+      .limit(1)
+      .then(({ error }) => {
+        hasExpiryColumn = !error
+        if (error && !isMissingDatabaseObjectError(error)) {
+          // Network trouble, not a missing column: probe again next time.
+          expiryColumnProbe = null
+        }
+      })
+      .catch(() => {
+        expiryColumnProbe = null
+      })
+  }
+
+  return expiryColumnProbe || Promise.resolve()
+}
+
+/** Rows the public may see: approved, active, not soft-deleted, not expired. */
+export const applyPublicVisibility = (query) => {
+  const visible = query.eq('status', 'approved').neq('is_active', false).is('deleted_at', null)
+  return hasExpiryColumn ? visible.gt('expires_at', new Date().toISOString()) : visible
+}
 
 // PostgREST returns at most 1000 rows per request (max_rows), so "everything" must be paged.
 const POSTGREST_MAX_ROWS = 1000
@@ -319,6 +351,7 @@ const FULL_CATALOG_CAP = 3000
  * up to FULL_CATALOG_CAP rows (the old single request silently stopped at 1000 rows).
  */
 const fetchPublicProperties = async ({ select = PUBLIC_PROPERTY_SELECT, limit = null, offset = 0 } = {}) => {
+  await ensureCatalogCapabilities()
   const fetchRange = async (from, to) => {
     const { data, error } = await applyPublicVisibility(supabase.from('properties').select(select))
       .order('created_at', { ascending: false })
@@ -536,6 +569,7 @@ export const searchPropertiesWithStatus = async (filters = {}, { page = 1, pageS
   }
 
   try {
+    await ensureCatalogCapabilities()
     const select = searchSelect(plan)
     const nowIso = new Date().toISOString()
 
@@ -571,10 +605,14 @@ export const searchPropertiesWithStatus = async (filters = {}, { page = 1, pageS
       throw error
     }
 
-    const [featured, properties] = await Promise.all([
+    const [featuredRaw, propertiesRaw] = await Promise.all([
       safePage === 1 ? attachImagesAndAmenities(stripSearchJoins(pinnedRows || [])) : Promise.resolve([]),
       attachImagesAndAmenities(stripSearchJoins(pageRows || [])),
     ])
+    const verifiedIds = await getVerifiedOwnerPropertyIds([...featuredRaw, ...propertiesRaw].map((row) => row.id))
+    const markVerified = (row) => ({ ...row, owner_verified: verifiedIds.has(row.id) })
+    const featured = featuredRaw.map(markVerified)
+    const properties = propertiesRaw.map(markVerified)
     const total = (count || 0) + pinnedIds.length
     const result = {
       ...meta,
@@ -667,6 +705,7 @@ export const getHomepageProperties = async () => {
   const cacheKey = getHomepagePropertiesCacheKey()
 
   try {
+    await ensureCatalogCapabilities()
     // One small query per category, in parallel. The old loop re-downloaded the whole catalog
     // for every 72-row step until each category had 6 items (minutes on slow connections).
     const nowIso = new Date().toISOString()
@@ -729,10 +768,8 @@ export const getHomepageProperties = async () => {
       }),
     ])
 
-    const transformedProperties = mapPublicProperties(
-      selectedProperties,
-      allImages,
-      allAmenities
+    const transformedProperties = await withOwnerVerification(
+      mapPublicProperties(selectedProperties, allImages, allAmenities)
     )
 
     writeSnapshot(cacheKey, transformedProperties)
@@ -840,4 +877,148 @@ export const getSearchableProperties = async (limit = SEARCHABLE_PROPERTIES_LIMI
 
     return []
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Trust and discovery helpers (QA audit 2026-11-14)
+
+
+/**
+ * Ids (of the given ones) whose owner has a verified account. Empty set when the lookup function
+ * is not deployed yet or the request fails: a missing badge is better than a broken page.
+ */
+export const getVerifiedOwnerPropertyIds = async (propertyIds = []) => {
+  const ids = [...new Set(propertyIds.filter(Boolean))].slice(0, 200)
+
+  if (!ids.length) {
+    return new Set()
+  }
+
+  const { data, error } = await supabase.rpc('verified_owner_property_ids', { p_property_ids: ids })
+
+  if (error) {
+    if (process.env.NODE_ENV === 'development' && !isMissingDatabaseObjectError(error)) {
+      console.warn(`Verified-owner lookup failed: ${getErrorMessage(error)}`)
+    }
+    return new Set()
+  }
+
+  return new Set((data || []).map((row) => (typeof row === 'string' ? row : row?.verified_owner_property_ids || row?.id)).filter(Boolean))
+}
+
+/** Adds `owner_verified: true|false` to mapped properties (one request for the whole list). */
+export const withOwnerVerification = async (properties = []) => {
+  if (!properties.length) {
+    return properties
+  }
+
+  const verifiedIds = await getVerifiedOwnerPropertyIds(properties.map((property) => property.id))
+  return properties.map((property) => ({ ...property, owner_verified: verifiedIds.has(property.id) }))
+}
+
+/** WhatsApp opt-in and expiry date for one listing (columns added 2026-11-14). */
+export const getListingExtras = async (propertyId) => {
+  const empty = { whatsappEnabled: false, expiresAt: null }
+
+  if (!propertyId) {
+    return empty
+  }
+
+  const { data, error } = await supabase
+    .from('properties')
+    .select('whatsapp_enabled, expires_at')
+    .eq('id', propertyId)
+    .maybeSingle()
+
+  if (error || !data) {
+    return empty
+  }
+
+  return { whatsappEnabled: data.whatsapp_enabled === true, expiresAt: data.expires_at || null }
+}
+
+const SIMILAR_LIMIT = 6
+
+/**
+ * Listings like this one: same category in the same area first, then the same district.
+ * `property` uses the detail shape ({ id, category, location: { area, state_district } }).
+ */
+export const getSimilarProperties = async (property = {}) => {
+  const district = String(property.location?.state_district || property.state_district || '').trim()
+  const area = String(property.location?.area || property.area || '').trim()
+
+  if (!property.id || !district) {
+    return []
+  }
+
+  try {
+    await ensureCatalogCapabilities()
+    const base = () => {
+      let query = applyPublicVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
+        .neq('id', property.id)
+        .ilike('state_district', `${district}%`)
+        .order('created_at', { ascending: false })
+        .limit(SIMILAR_LIMIT)
+
+      if (property.category) {
+        query = query.in('category', getPropertyCategoryValues(property.category))
+      }
+
+      return query
+    }
+
+    const rows = []
+
+    if (area && area.toLowerCase() !== district.toLowerCase()) {
+      const { data, error } = await base().or(`area.ilike."%${area.replace(/"/g, '')}%",sub_area.ilike."%${area.replace(/"/g, '')}%"`)
+      if (error) throw error
+      rows.push(...(data || []))
+    }
+
+    if (rows.length < SIMILAR_LIMIT) {
+      const { data, error } = await base()
+      if (error) throw error
+      ;(data || []).forEach((row) => {
+        if (rows.length < SIMILAR_LIMIT && !rows.some((existing) => existing.id === row.id)) rows.push(row)
+      })
+    }
+
+    return withOwnerVerification(await attachImagesAndAmenities(rows))
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`Similar listings unavailable: ${getErrorMessage(error)}`)
+    }
+    return []
+  }
+}
+
+/**
+ * How many public listings match `filters` and were created after `sinceIso` (saved-search
+ * alerts). Head request: no rows are downloaded.
+ */
+export const countNewListings = async (filters = {}, sinceIso = null) => {
+  const normalizedFilters = normalizeSearchFilters(filters)
+  const plan = buildSearchPlan(normalizedFilters, SEARCH_LOCATION_INDEX)
+
+  if (plan.empty) {
+    return 0
+  }
+
+  await ensureCatalogCapabilities()
+  let query = applySearchPlan(
+    supabase.from('properties').select(searchSelect(plan), { count: 'exact', head: true }),
+    normalizedFilters,
+    plan
+  )
+
+  if (sinceIso) {
+    query = query.gt('created_at', sinceIso)
+  }
+
+  const { count, error } = await query
+  if (error) {
+    throw error
+  }
+
+  return count || 0
 }

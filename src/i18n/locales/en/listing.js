@@ -59,7 +59,27 @@ const listing = {
       viewAll: 'View All Properties',
     },
 
+    trust: {
+      verifiedOwner: 'Verified owner',
+      verifiedOwnerHint: "The owner's ID was checked by NewTolet.",
+      whatsapp: 'WhatsApp',
+      whatsappMessage: 'Hello, I saw your listing on NewTolet (ID: {id}). Is it still available?',
+      report: 'Report this listing',
+      expired: 'This listing has expired and no longer appears in search.',
+      mapTitle: 'Location',
+      mapExact: 'Location marked by the owner.',
+      mapArea: 'Approximate area. The exact address is shared by the owner.',
+      mapDistrict: 'Approximate district centre. The exact address is shared by the owner.',
+      mapLabel: 'Map of the listing location',
+      openInMaps: 'Open in Google Maps',
+      similarTitle: 'Similar properties nearby',
+    },
+
     browse: {
+      saveSearch: 'Save this search',
+      savingSearch: 'Saving...',
+      searchSaved: 'Saved: we will count new matches for you',
+      saveSearchError: 'Could not save this search (you can keep up to 20).',
       titleAll: 'Properties for rent in Bangladesh',
       titleDivision: 'Properties for rent in {division} Division',
       kicker: 'Search Rentals',

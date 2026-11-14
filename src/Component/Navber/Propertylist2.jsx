@@ -26,6 +26,9 @@ import {
   updateSearchFilters,
 } from '../Home/propertySearch'
 import { useLanguage } from '../../i18n/useLanguage'
+import { useAuth } from '../../hooks/useAuth'
+import { createSavedSearch } from '../../services/savedSearchService'
+import { FiBell } from 'react-icons/fi'
 
 const Propertylist2 = () => {
   const [resultCount, setResultCount] = useState(null)
@@ -203,6 +206,30 @@ const Propertylist2 = () => {
     }
   }, [committedSearchFilters, navigate, routeContext])
 
+  const { user } = useAuth()
+  // '' | 'saving' | 'saved' | 'error'
+  const [saveSearchState, setSaveSearchState] = useState('')
+  useEffect(() => {
+    setSaveSearchState('')
+  }, [urlSearchSignature])
+
+  const handleSaveSearch = useCallback(async () => {
+    if (!user?.id) {
+      navigate('/login', { state: { from: typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/bd/property-listing' } })
+      return
+    }
+
+    setSaveSearchState('saving')
+    const { sort: _sort, ...filtersToSave } = committedSearchFilters
+    const label = getActiveSearchChips(committedSearchFilters)
+      .filter((chip) => chip.key !== 'sort')
+      .map((chip) => getSearchChipLabel(chip, t, tv))
+      .join(' · ')
+      .slice(0, 120) || t('listing.browse.titleAll')
+    const { error } = await createSavedSearch(user.id, { label, filters: filtersToSave })
+    setSaveSearchState(error ? 'error' : 'saved')
+  }, [committedSearchFilters, navigate, t, tv, user?.id])
+
   const pageTitle = routeContext.division
     ? t('listing.browse.titleDivision', { division: tv('divisions', routeContext.division) })
     : t('listing.browse.titleAll')
@@ -289,6 +316,23 @@ const Propertylist2 = () => {
             >
               {t('listing.browse.clearAll')}
             </button>
+
+            <button
+              type='button'
+              onClick={() => void handleSaveSearch()}
+              disabled={saveSearchState === 'saving' || saveSearchState === 'saved'}
+              className='ui-btn ui-btn-secondary ui-btn-sm sm:ml-auto'
+            >
+              <FiBell aria-hidden='true' />
+              {saveSearchState === 'saved'
+                ? t('listing.browse.searchSaved')
+                : saveSearchState === 'saving'
+                  ? t('listing.browse.savingSearch')
+                  : t('listing.browse.saveSearch')}
+            </button>
+            {saveSearchState === 'error' ? (
+              <p role='alert' className='w-full text-caption text-danger'>{t('listing.browse.saveSearchError')}</p>
+            ) : null}
           </div>
         )}
       </div>

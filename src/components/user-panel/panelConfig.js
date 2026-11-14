@@ -1,5 +1,7 @@
 import {
+  FiBell,
   FiBriefcase,
+  FiCheckCircle,
   FiClock,
   FiCreditCard,
   FiDollarSign,
@@ -45,6 +47,20 @@ export const USER_PANEL_NAV_ITEMS = [
     labelKey: 'dashboard.nav.saved',
     href: buildDashboardHref('saved'),
     icon: FiHeart,
+    sectionKey: 'dashboard.sections.properties',
+  },
+  {
+    key: 'saved-searches',
+    labelKey: 'dashboard.nav.savedSearches',
+    href: buildDashboardHref('saved-searches'),
+    icon: FiBell,
+    sectionKey: 'dashboard.sections.properties',
+  },
+  {
+    key: 'verification',
+    labelKey: 'dashboard.nav.verification',
+    href: buildDashboardHref('verification'),
+    icon: FiCheckCircle,
     sectionKey: 'dashboard.sections.properties',
   },
   {

@@ -12,12 +12,16 @@ import JobFeedPanel from '../../components/user-panel/JobFeedPanel.jsx'
 import JobHistoryPanel from '../../components/user-panel/JobHistoryPanel.jsx'
 import ProfilePanel from '../../components/user-panel/ProfilePanel.jsx'
 import PropertyCollectionsPanel from '../../components/user-panel/PropertyCollectionsPanel.jsx'
+import SavedSearchesPanel from '../../components/user-panel/SavedSearchesPanel.jsx'
+import VerificationPanel from '../../components/user-panel/VerificationPanel.jsx'
 import UserPanelShell from '../../components/user-panel/UserPanelShell.jsx'
 
 const SUPPORTED_TABS = new Set([
   'dashboard',
   'profile',
   'saved',
+  'saved-searches',
+  'verification',
   'unlocked-listings',
   'recently-viewed',
   'job-feed',
@@ -42,6 +46,10 @@ const Dashboard = () => {
         return <ProfilePanel />
       case 'saved':
         return <PropertyCollectionsPanel type="saved" />
+      case 'saved-searches':
+        return <SavedSearchesPanel />
+      case 'verification':
+        return <VerificationPanel />
       case 'unlocked-listings':
         return <PropertyCollectionsPanel type="unlocked" />
       case 'recently-viewed':

@@ -86,7 +86,7 @@ const Footer = () => {
                         <ul className='space-y-1 text-sm'>
                             {footerLinks.map(({ to, labelKey }) => (
                                 <li key={labelKey}>
-                                    <Link to={to} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>
+                                    <Link to={to} className='inline-flex min-h-11 items-center text-primary-100/90 transition-colors hover:text-white'>
                                         {t(labelKey)}
                                     </Link>
                                 </li>
@@ -99,7 +99,7 @@ const Footer = () => {
                         <ul className='space-y-1 text-sm'>
                             {propertyTypeLinks.map(({ to, type }) => (
                                 <li key={type}>
-                                    <Link to={to} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>
+                                    <Link to={to} className='inline-flex min-h-11 items-center text-primary-100/90 transition-colors hover:text-white'>
                                         {tv('propertyTypes', type)}
                                     </Link>
                                 </li>
@@ -112,11 +112,11 @@ const Footer = () => {
                         <address className='space-y-2 text-sm not-italic'>
                             <p className='flex items-center gap-3'>
                                 <FaPhone className='text-primary-200' aria-hidden='true' />
-                                <a href={SITE_CONTACT.phoneHref} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>{SITE_CONTACT.phoneDisplay}</a>
+                                <a href={SITE_CONTACT.phoneHref} className='inline-flex min-h-11 items-center text-primary-100/90 transition-colors hover:text-white'>{SITE_CONTACT.phoneDisplay}</a>
                             </p>
                             <p className='flex items-center gap-3 break-all'>
                                 <IoMdMail className='text-primary-200' aria-hidden='true' />
-                                <a href={`mailto:${SITE_CONTACT.email}`} className='inline-flex min-h-9 items-center text-primary-100/90 transition-colors hover:text-white'>{SITE_CONTACT.email}</a>
+                                <a href={`mailto:${SITE_CONTACT.email}`} className='inline-flex min-h-11 items-center text-primary-100/90 transition-colors hover:text-white'>{SITE_CONTACT.email}</a>
                             </p>
                             <p className='flex items-start gap-3'>
                                 <FaLocationDot className='mt-1 text-primary-200' aria-hidden='true' />
@@ -146,7 +146,7 @@ const Footer = () => {
                         <ul className='mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 md:justify-start'>
                             {policyLinks.map(({ to, labelKey }) => (
                                 <li key={labelKey}>
-                                    <Link to={to} className='inline-flex min-h-9 items-center underline-offset-4 hover:text-white hover:underline'>
+                                    <Link to={to} className='inline-flex min-h-11 items-center underline-offset-4 hover:text-white hover:underline'>
                                         {t(labelKey)}
                                     </Link>
                                 </li>

@@ -323,7 +323,7 @@ const Navber = () => {
       }`}
     >
       <div className={`site-shell flex h-16 items-center gap-3 lg:gap-6 ${isHomepage ? 'site-shell-full' : ''}`}>
-        <Link to="/" className="inline-flex shrink-0 items-center" aria-label={t('nav.logoAlt')}>
+        <Link to="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label={t('nav.logoAlt')}>
           <Logo alt={t('nav.logoAlt')} />
         </Link>
 

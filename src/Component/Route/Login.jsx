@@ -314,10 +314,10 @@ const Login = () => {
 
                 <div className='w-full space-y-2 pt-2 text-center'>
                     <p>
-                        {t('auth.login.noAccount')} <Link to='/registration' className='text-brand font-medium cursor-pointer hover:underline'>{t('auth.login.registerHere')}</Link>
+                        {t('auth.login.noAccount')} <Link to='/registration' className='inline-flex min-h-11 items-center text-brand font-medium cursor-pointer hover:underline'>{t('auth.login.registerHere')}</Link>
                     </p>
                     <p className='pt-1'>
-                        <Link to='/forgot-password' className='text-brand font-semibold cursor-pointer hover:underline text-sm inline-block border-b border-transparent hover:border-brand pb-0.5 transition-all'>{t('auth.login.forgotPassword')}</Link>
+                        <Link to='/forgot-password' className='text-brand font-semibold cursor-pointer hover:underline text-sm inline-flex min-h-11 items-center border-b border-transparent hover:border-brand transition-all'>{t('auth.login.forgotPassword')}</Link>
                     </p>
                 </div>
             </div>

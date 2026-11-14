@@ -4,7 +4,7 @@ import { useLanguage } from '../i18n/useLanguage'
 
 const SIZE_CLASSES = {
   xs: 'h-8 text-xs px-2.5',
-  sm: 'h-9 text-xs px-3',
+  sm: 'h-10 min-w-11 text-xs px-3',
   md: 'h-10 text-sm px-3.5',
 }
 

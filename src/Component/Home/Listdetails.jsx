@@ -651,11 +651,11 @@ const Listdetails = () => {
                     <nav aria-label={t('listing.detail.breadcrumb')} className="min-w-0">
                         <ol className="flex min-w-0 items-center gap-1.5 text-caption text-muted">
                             <li className="shrink-0">
-                                <Link to="/" className="inline-flex min-h-9 items-center text-brand hover:text-brand-pressed">{t('common.home')}</Link>
+                                <Link to="/" className="inline-flex min-h-11 items-center text-brand hover:text-brand-pressed">{t('common.home')}</Link>
                             </li>
                             <li className="shrink-0" aria-hidden="true">/</li>
                             <li className="shrink-0">
-                                <Link to="/propertylist2" className="inline-flex min-h-9 items-center text-brand hover:text-brand-pressed">
+                                <Link to="/propertylist2" className="inline-flex min-h-11 items-center text-brand hover:text-brand-pressed">
                                     {location.state_district || tv('divisions', 'Dhaka')}
                                 </Link>
                             </li>

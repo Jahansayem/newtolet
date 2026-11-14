@@ -75,8 +75,11 @@ alter table public.properties
   add column if not exists whatsapp_enabled boolean not null default false;
 
 -- Public catalog view (used by the agent-listings API): also hide soft-deleted and expired
--- listings. New columns can only be appended at the end with "create or replace view".
-create or replace view public.public_property_catalog
+-- listings. Dropped and recreated (not "create or replace"): the live database had an older column
+-- order (no pinned_at/pinned_until), which "create or replace" cannot reorder. Nothing depends on
+-- this view (checked 2026-11-14), and the transaction keeps it from ever being missing.
+drop view if exists public.public_property_catalog;
+create view public.public_property_catalog
 with (security_invoker = true) as
 select
   p.id,
@@ -120,7 +123,7 @@ where p.status = 'approved'
   and p.deleted_at is null
   and (p.expires_at is null or p.expires_at > now());
 
-grant select on public.public_property_catalog to anon, authenticated;
+grant select on public.public_property_catalog to anon, authenticated, service_role;
 
 -- 4. Verified owners ----------------------------------------------------------------------------
 -- Returns the subset of the given listing ids whose owner has a verified account. Exposes one bit

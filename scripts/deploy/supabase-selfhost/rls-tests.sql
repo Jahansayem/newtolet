@@ -690,4 +690,376 @@ end $$;
 select case when to_regproc('public.track_customer_event') is null then 'SKIP T10.4' else 'PASS T10.4 content_manager is denied customer data' end;
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- T11. customer orders (20261116090000_customer_orders.sql). Skipped until the
+--      migration is applied. Core co_* functions are called as the table owner
+--      (what the Edge Function does with the service role); the admin wrappers
+--      are called as authenticated users.
+-- ---------------------------------------------------------------------------
+create temp table t_co (k text primary key, id uuid not null);
+grant select, insert on t_co to public;
+
+create function pg_temp.co_expect(p_sql text, p_prefix text) returns void language plpgsql as $$
+begin
+  begin
+    execute p_sql;
+  exception when others then
+    if sqlerrm like p_prefix || '%' then return; end if;
+    raise exception 'TEST FAIL: expected % but got "%" from: %', p_prefix, sqlerrm, p_sql;
+  end;
+  raise exception 'TEST FAIL: expected % but the statement succeeded: %', p_prefix, p_sql;
+end $$;
+
+-- T11.1 create: server-side charge, derived fields, idempotency, duplicate warning, validation
+do $$
+declare r jsonb; o jsonb; r2 jsonb;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  r := public.co_create_order('api_agent', null, 'agent-1',
+    '{"type":"HOUSE_SEARCH","customer_name":"Rahim Uddin","customer_phone":"+8801712345678","source":"messenger","area":"Mirpur 10,  Kazipara","rooms":2,"budget_min":10000,"budget_max":15000,"move_in_date":"2026-12-01","tenant_type":"Family"}',
+    'thread-1-20261116', false);
+  o := r -> 'order';
+  if not (r ->> 'created')::boolean then raise exception 'TEST FAIL: first create not flagged created'; end if;
+  if o ->> 'order_no' !~ '^NT-[0-9]{4}-[0-9]{4}$' then raise exception 'TEST FAIL: order_no is %', o ->> 'order_no'; end if;
+  if o ->> 'status' <> 'PENDING' or (o ->> 'service_charge_bdt')::int <> 500 then raise exception 'TEST FAIL: new order status/charge: %', o; end if;
+  if o ->> 'payment_status' <> 'PENDING' or (o ->> 'amount_paid')::int <> 0 or (o ->> 'amount_due')::int <> 500
+     or o ->> 'payment_verification' <> 'UNVERIFIED' or (o ->> 'listings_found_count')::int <> 0 then
+    raise exception 'TEST FAIL: new order derived fields: %', o;
+  end if;
+  if o ->> 'customer_phone' <> '01712345678' or o ->> 'created_via' <> 'ai_agent' or o ->> 'tenant_type' <> 'family' then
+    raise exception 'TEST FAIL: normalisation / created_via: %', o;
+  end if;
+  insert into t_co values ('a', (o ->> 'id')::uuid);
+
+  r2 := public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"Someone Else","customer_phone":"01812345678"}', 'thread-1-20261116', false);
+  if (r2 ->> 'created')::boolean or r2 -> 'order' ->> 'id' <> o ->> 'id' then raise exception 'TEST FAIL: idempotent retry created a second order'; end if;
+end $$;
+do $$
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-2', '{"customer_name":"Rahim","customer_phone":"01712345678","area":"mirpur 10, kazipara"}', null, false)$q$, 'ADMIN_CONFLICT');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"X","customer_phone":"01712345679","service_charge_bdt":50}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"X","customer_phone":"01712345679","amount_paid":500}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"X","customer_phone":"01712345679","type":"PAID_AD"}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"No Contact"}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_phone":"01712345679"}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"X","customer_phone":"0171234"}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"X","customer_phone":"01712345679","move_in_date":"2026-02-31"}', null, false)$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"X","customer_phone":"01712345679","budget_min":20000,"budget_max":10000}', null, false)$q$, 'ADMIN_VALIDATION');
+  -- "Create anyway" is allowed (warn, not hard-block).
+  insert into t_co select 'dup', (public.co_create_order('api_agent', null, 'agent-2', '{"customer_name":"Rahim","customer_phone":"01712345678","area":"Mirpur 10, Kazipara"}', null, true) -> 'order' ->> 'id')::uuid;
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.1' else 'PASS T11.1 create: 500 BDT server charge, derived fields, idempotent retry, duplicate warning, validation' end;
+
+-- T11.2 status machine incl. AI <-> human handover
+do $$
+declare a uuid; o jsonb; n int;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  select id into a from t_co where k = 'a';
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'PAYMENT_VERIFIED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_admin', null, 'admin-1', %L, 'PAYMENT_VERIFIED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'PAYMENT_CLAIMED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'COMPLETED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'PENDING', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'SEARCHING_BY_AI', '  ')$q$, a), 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'NOT_A_STATUS', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+
+  o := public.co_set_status('api_agent', null, 'agent-1', a, 'searching_by_ai', 'AI search started') -> 'order';
+  if o ->> 'status' <> 'SEARCHING_BY_AI' or o ->> 'search_mode' <> 'AI' then raise exception 'TEST FAIL: AI search state: %', o; end if;
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_admin', null, 'admin-1', %L, 'SEARCHING_BY_HUMAN', 'escalated')$q$, a), 'ADMIN_VALIDATION');
+  o := public.co_set_status('api_admin', null, 'admin-1', a, 'SEARCHING_BY_HUMAN', 'Customer asked for a human', 'Mosiur') -> 'order';
+  if o ->> 'search_mode' <> 'HUMAN' or o ->> 'search_taken_over_by' <> 'Mosiur' then raise exception 'TEST FAIL: human handover state: %', o; end if;
+  o := public.co_set_status('api_admin', null, 'admin-1', a, 'SEARCHING_BY_AI', 'Handing a stalled search back to AI') -> 'order';
+  if o ->> 'search_mode' <> 'AI' or o ->> 'search_taken_over_by' is not null then raise exception 'TEST FAIL: hand-back state: %', o; end if;
+
+  select count(*) into n from public.customer_order_status_history where order_id = a;
+  if n <> 4 then raise exception 'TEST FAIL: expected 4 history rows (create + 3 handovers), found %', n; end if;
+  select count(*) into n from public.customer_order_status_history where order_id = a and to_status = 'SEARCHING_BY_HUMAN' and taken_over_by = 'Mosiur' and actor_label = 'admin-1';
+  if n <> 1 then raise exception 'TEST FAIL: handover row does not record who took over'; end if;
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'MATCHED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'REFUND_REQUESTED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.2' else 'PASS T11.2 status machine rejects illegal moves; AI <-> human handover is recorded' end;
+
+-- T11.3 payment claims: amount required, partial maths, claim never verifies, human-only verify
+do $$
+declare a uuid; o jsonb; c1 uuid; c2 uuid; c3 uuid;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  select id into a from t_co where k = 'a';
+  perform pg_temp.co_expect(format($q$select public.co_record_payment_claim('api_agent', null, 'agent-1', %L, null, '9HX7K2M4P1')$q$, a), 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect(format($q$select public.co_record_payment_claim('api_agent', null, 'agent-1', %L, 0, '9HX7K2M4P1')$q$, a), 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect(format($q$select public.co_record_payment_claim('api_agent', null, 'agent-1', %L, 500)$q$, a), 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect(format($q$select public.co_record_payment_claim('api_agent', null, 'agent-1', %L, 500, null, '12a4')$q$, a), 'ADMIN_VALIDATION');
+
+  o := public.co_record_payment_claim('api_agent', null, 'agent-1', a, 200, null, '3456');
+  c1 := (o ->> 'claim_id')::uuid; o := o -> 'order';
+  if o ->> 'payment_status' <> 'PARTIAL_PAID' or (o ->> 'amount_paid')::int <> 200 or (o ->> 'amount_due')::int <> 300
+     or o ->> 'status' <> 'PAYMENT_CLAIMED' or o ->> 'payment_verification' <> 'CLAIMED' then
+    raise exception 'TEST FAIL: partial payment state: %', o;
+  end if;
+  o := public.co_record_payment_claim('api_agent', null, 'agent-1', a, 300, '9hx7k2m4p1', null);
+  c2 := (o ->> 'claim_id')::uuid; o := o -> 'order';
+  if o ->> 'payment_status' <> 'PAID' or (o ->> 'amount_paid')::int <> 500 or (o ->> 'amount_due')::int <> 0
+     or o ->> 'payment_verification' <> 'CLAIMED' or (o ->> 'contact_unlocked')::boolean or (o ->> 'overpaid')::boolean then
+    raise exception 'TEST FAIL: fully claimed (unverified) state: %', o;
+  end if;
+  perform pg_temp.co_expect(format($q$select public.co_record_payment_claim('api_agent', null, 'agent-1', %L, 100, '9HX7K2M4P1')$q$, a), 'ADMIN_CONFLICT');
+
+  -- claim vs verify separation
+  perform pg_temp.co_expect(format($q$select public.co_review_payment_claim('api_agent', null, 'agent-1', %L, 'verify')$q$, c1), 'ADMIN_PERMISSION_DENIED');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'COMPLETED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_review_payment_claim('api_admin', null, 'admin-1', %L, 'reject')$q$, c1), 'ADMIN_VALIDATION');
+
+  o := public.co_review_payment_claim('api_admin', null, 'admin-1', c1, 'verify') -> 'order';
+  if o ->> 'status' <> 'PAYMENT_CLAIMED' or o ->> 'payment_verification' <> 'CLAIMED' or (o ->> 'contact_unlocked')::boolean
+     or (o ->> 'amount_paid')::int <> 500 or (o ->> 'amount_verified')::int <> 200 then
+    raise exception 'TEST FAIL: a verified PARTIAL payment must not verify or unlock the order: %', o;
+  end if;
+  o := public.co_review_payment_claim('api_admin', null, 'admin-1', c2, 'verify') -> 'order';
+  if o ->> 'status' <> 'PAYMENT_VERIFIED' or o ->> 'payment_verification' <> 'VERIFIED' or not (o ->> 'contact_unlocked')::boolean
+     or (o ->> 'amount_paid')::int <> 500 or o ->> 'payment_verified_at' is null then
+    raise exception 'TEST FAIL: fully verified state: %', o;
+  end if;
+  perform pg_temp.co_expect(format($q$select public.co_review_payment_claim('api_admin', null, 'admin-1', %L, 'verify')$q$, c2), 'ADMIN_CONFLICT');
+
+  -- overpayment is accepted and flagged, and does not move a verified order back
+  o := public.co_record_payment_claim('api_agent', null, 'agent-1', a, 100, null, '9999');
+  c3 := (o ->> 'claim_id')::uuid; o := o -> 'order';
+  if not (o ->> 'overpaid')::boolean or o ->> 'status' <> 'PAYMENT_VERIFIED' or (o ->> 'amount_due')::int <> 0 then
+    raise exception 'TEST FAIL: overpayment state: %', o;
+  end if;
+  o := public.co_review_payment_claim('api_admin', null, 'admin-1', c3, 'reject', 'Not received') -> 'order';
+  if (o ->> 'overpaid')::boolean or (o ->> 'amount_paid')::int <> 500 or o ->> 'status' <> 'PAYMENT_VERIFIED' then
+    raise exception 'TEST FAIL: rejected claim still counted: %', o;
+  end if;
+end $$;
+do $$
+declare b uuid; o jsonb; c uuid;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  o := public.co_create_order('api_agent', null, 'agent-1', '{"customer_name":"Karim","facebook_thread_url":"https://www.facebook.com/messages/t/123"}', null, false) -> 'order';
+  b := (o ->> 'id')::uuid;
+  insert into t_co values ('b', b);
+  perform public.co_set_status('api_agent', null, 'agent-1', b, 'REQUIREMENTS_COLLECTED', 'Requirements complete');
+  perform public.co_set_status('api_agent', null, 'agent-1', b, 'PAYMENT_INTERESTED', 'Customer said: bKash number din');
+  o := public.co_record_payment_claim('api_agent', null, 'agent-1', b, 500, 'ABC1234567');
+  c := (o ->> 'claim_id')::uuid;
+  o := public.co_review_payment_claim('api_admin', null, 'admin-1', c, 'reject', 'TrxID not found in bKash') -> 'order';
+  if o ->> 'status' <> 'PAYMENT_FAILED' or o ->> 'payment_status' <> 'PENDING' or (o ->> 'amount_due')::int <> 500
+     or o ->> 'payment_verification' <> 'UNVERIFIED' then
+    raise exception 'TEST FAIL: rejected sole claim state: %', o;
+  end if;
+  perform public.co_set_status('api_agent', null, 'agent-1', b, 'CANCELLED', 'Customer stopped replying');
+  perform pg_temp.co_expect(format($q$select public.co_record_payment_claim('api_agent', null, 'agent-1', %L, 500, 'ZZZ1234567')$q$, b), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'PENDING', 'reopen')$q$, b), 'ADMIN_PERMISSION_DENIED');
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.3' else 'PASS T11.3 payments: amount required, partial maths, claim never verifies, verified partial stays locked, reject -> PAYMENT_FAILED' end;
+
+-- T11.4 matches drive the listings-found counts; refund path; agent limits
+do $$
+declare a uuid; o jsonb; m1 uuid;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  select id into a from t_co where k = 'a';
+  perform pg_temp.co_expect(format($q$select public.co_add_match('api_agent', null, 'agent-1', %L, '{"general_location":"Mirpur 10"}')$q$, a), 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect(format($q$select public.co_add_match('api_agent', null, 'agent-1', %L, '{"reference_id":"R-1","listings_found_count":9}')$q$, a), 'ADMIN_VALIDATION');
+  o := public.co_add_match('api_agent', null, 'agent-1', a, '{"reference_id":"R-1","general_location":"Mirpur 10","rent":14000,"verification_status":"unverified","owner_contact_phone":"01911111111","exact_address":"House 5, Road 2"}');
+  m1 := (o ->> 'match_id')::uuid;
+  o := public.co_add_match('api_agent', null, 'agent-1', a, '{"reference_id":"R-2","general_location":"Kazipara","rent":13000,"verification_status":"verified"}') -> 'order';
+  if (o ->> 'listings_found_count')::int <> 2 or (o ->> 'listings_verified_count')::int <> 1 or (o ->> 'listings_unverified_count')::int <> 1 then
+    raise exception 'TEST FAIL: listings counts after 2 matches: %', o;
+  end if;
+  perform pg_temp.co_expect(format($q$select public.co_add_match('api_agent', null, 'agent-1', %L, '{"reference_id":"r-1"}')$q$, a), 'ADMIN_CONFLICT');
+  o := public.co_update_match('api_admin', null, 'admin-1', m1, '{"owner_permission":true,"verification_status":"verified"}') -> 'order';
+  if (o ->> 'listings_verified_count')::int <> 2 then raise exception 'TEST FAIL: verified count after update: %', o; end if;
+  if not exists (select 1 from public.customer_order_matches where id = m1 and owner_permission and owner_permission_recorded_by = 'admin-1') then
+    raise exception 'TEST FAIL: owner permission not recorded with its actor';
+  end if;
+  o := public.co_update_match('api_admin', null, 'admin-1', m1, '{"removed":true}') -> 'order';
+  if (o ->> 'listings_found_count')::int <> 1 then raise exception 'TEST FAIL: removed match still counted: %', o; end if;
+
+  -- paid + verified order: search continues, then refund path
+  o := public.co_set_status('api_admin', null, 'admin-1', a, 'SEARCHING_BY_HUMAN', 'Search continues after payment', 'Mosiur') -> 'order';
+  if o ->> 'status' <> 'SEARCHING_BY_HUMAN' or o ->> 'payment_verification' <> 'VERIFIED' or not (o ->> 'contact_unlocked')::boolean then
+    raise exception 'TEST FAIL: paid + verified + searching by human state: %', o;
+  end if;
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'CANCELLED', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  perform public.co_set_status('api_agent', null, 'agent-1', a, 'REFUND_REQUESTED', 'No suitable property within 7 days');
+  if (public.co_enriched(a) ->> 'contact_unlocked')::boolean then raise exception 'TEST FAIL: contact still unlocked during a refund'; end if;
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_agent', null, 'agent-1', %L, 'REFUNDED', 'x')$q$, a), 'ADMIN_PERMISSION_DENIED');
+  perform public.co_set_status('api_admin', null, 'admin-1', a, 'REFUNDED', 'bKash returned by staff');
+  perform pg_temp.co_expect(format($q$select public.co_set_status('api_admin', null, 'admin-1', %L, 'SEARCHING_BY_AI', 'x')$q$, a), 'ADMIN_INVALID_TRANSITION');
+  if jsonb_array_length(public.co_timeline(a)) < 10 then raise exception 'TEST FAIL: timeline is missing entries'; end if;
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.4' else 'PASS T11.4 listings counts derive from matches; refund path; agent cannot refund or reopen' end;
+
+-- T11.5 append-only logs, no hard delete, soft delete only for admin scope
+do $$
+declare a uuid; d uuid;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  select id into a from t_co where k = 'a';
+  select id into d from t_co where k = 'dup';
+  perform public.co_add_note('api_agent', null, 'agent-1', a, 'Customer asked not to be messaged unless a verified match is found');
+  perform pg_temp.co_expect($q$update public.customer_order_status_history set reason = 'tampered'$q$, 'ADMIN_CONFLICT');
+  perform pg_temp.co_expect($q$delete from public.customer_order_notes$q$, 'ADMIN_CONFLICT');
+  perform pg_temp.co_expect($q$delete from public.customer_order_activity$q$, 'ADMIN_CONFLICT');
+  perform pg_temp.co_expect($q$delete from public.customer_orders$q$, 'ADMIN_CONFLICT');
+  perform pg_temp.co_expect(format($q$select public.co_soft_delete('api_agent', null, 'agent-1', %L, 'x')$q$, d), 'ADMIN_PERMISSION_DENIED');
+  perform public.co_soft_delete('api_admin', null, 'admin-1', d, 'Created by mistake');
+  if not exists (select 1 from public.customer_orders where id = d and deleted_at is not null and deleted_by_label = 'admin-1') then
+    raise exception 'TEST FAIL: soft delete did not mark the row';
+  end if;
+  perform pg_temp.co_expect(format($q$select public.co_add_note('api_agent', null, 'agent-1', %L, 'x')$q$, d), 'ADMIN_NOT_FOUND');
+  if not public.co_rate_limit_hit('rls-test-key', 2) or not public.co_rate_limit_hit('rls-test-key', 2) or public.co_rate_limit_hit('rls-test-key', 2) then
+    raise exception 'TEST FAIL: rate limiter did not stop the third hit';
+  end if;
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.5' else 'PASS T11.5 logs are append-only, orders are soft-deleted only, rate limit trips' end;
+
+-- T11.6 website orders are mirrored as customer-created
+do $$
+declare l uuid := gen_random_uuid(); o public.customer_orders%rowtype;
+begin
+  if to_regclass('public.customer_orders') is null then return; end if;
+  insert into public.orders (id, user_id, division, district, area, category, rooms, max_budget, cost, status)
+  values (l, (select id from t_ids where k = 'plain'), 'Dhaka', 'Dhaka', 'Uttara', 'Family', 3, 20000, 1000, 'pending_payment');
+  select * into o from public.customer_orders where legacy_order_id = l;
+  if not found then raise exception 'TEST FAIL: website order was not mirrored'; end if;
+  if o.created_via <> 'customer' or o.source <> 'website' or o.status <> 'PENDING' or o.service_charge_bdt <> 1000
+     or o.customer_user_id <> (select id from t_ids where k = 'plain') or o.rooms <> 3 then
+    raise exception 'TEST FAIL: mirrored order fields: %', to_jsonb(o);
+  end if;
+  if public.co_mirror_legacy_order(l) <> o.id then raise exception 'TEST FAIL: mirror is not idempotent'; end if;
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.6' else 'PASS T11.6 website order mirrored as created_via = customer with the website charge' end;
+
+-- T11.7 clients: anon and plain users get nothing; core functions are not client-executable
+set local role anon;
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
+do $$
+begin
+  if to_regclass('public.customer_order_transitions') is null then return; end if;
+  begin
+    perform count(*) from public.customer_orders;
+    raise exception 'TEST FAIL: anon can read customer_orders';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.co_create_order('api_admin', null, 'x', '{"customer_name":"X","customer_phone":"01712345670"}');
+    raise exception 'TEST FAIL: anon executed co_create_order';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.admin_customer_order_counts();
+    raise exception 'TEST FAIL: anon executed admin_customer_order_counts';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'plain'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'plain'), true);
+do $$
+declare n int;
+begin
+  if to_regclass('public.customer_order_transitions') is null then return; end if;
+  select count(*) into n from public.customer_orders;
+  if n <> 0 then raise exception 'TEST FAIL: plain user can read % customer orders', n; end if;
+  select count(*) into n from public.customer_orders_enriched;
+  if n <> 0 then raise exception 'TEST FAIL: plain user can read % enriched orders', n; end if;
+  begin
+    perform public.co_review_payment_claim('api_admin', null, 'x', gen_random_uuid(), 'verify');
+    raise exception 'TEST FAIL: authenticated executed co_review_payment_claim';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.admin_customer_order_create('{"customer_name":"X","customer_phone":"01712345670"}');
+    raise exception 'TEST FAIL: plain user created an order';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error for plain create: %', sqlerrm; end if;
+  end;
+  begin
+    insert into public.customer_order_notes (order_id, body, actor_type, actor_label) values ((select id from t_co where k = 'a'), 'x', 'admin', 'x');
+    raise exception 'TEST FAIL: authenticated inserted a note directly';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.7' else 'PASS T11.7 anon and plain users cannot read or write customer orders' end;
+
+-- T11.8 moderator (orders.manage, no payments.review): manages orders, cannot verify; finance verifies
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'mod'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'mod'), true);
+do $$
+declare r jsonb; o jsonb; n int; cid uuid;
+begin
+  if to_regclass('public.customer_order_transitions') is null then return; end if;
+  r := public.admin_customer_order_create('{"customer_name":"Dashboard Customer","customer_phone":"01612345678","area":"Uttara","rooms":3}');
+  o := r -> 'row';
+  if o ->> 'created_via' <> 'human_agent' or o ->> 'source' <> 'manual' or o ->> 'created_by_label' <> 'RLS Mod' or r ->> 'audit_id' is null then
+    raise exception 'TEST FAIL: dashboard create: %', r;
+  end if;
+  insert into t_co values ('c', (o ->> 'id')::uuid);
+  select count(*) into n from public.customer_orders_enriched where deleted_at is null;
+  if n < 3 then raise exception 'TEST FAIL: moderator sees only % orders', n; end if;
+  perform public.admin_customer_order_set_status((o ->> 'id')::uuid, 'REQUIREMENTS_COLLECTED', 'Requirements confirmed by phone');
+  perform public.admin_customer_order_set_status((o ->> 'id')::uuid, 'PAYMENT_INTERESTED', 'Customer agreed to pay');
+  perform public.admin_customer_order_assign((o ->> 'id')::uuid, (select id from t_ids where k = 'mod'));
+  begin
+    perform public.admin_customer_order_assign((o ->> 'id')::uuid, (select id from t_ids where k = 'plain'));
+    raise exception 'TEST FAIL: order assigned to a non-admin';
+  exception when others then
+    if sqlerrm not like 'ADMIN_VALIDATION%' then raise exception 'TEST FAIL: unexpected error assigning to plain: %', sqlerrm; end if;
+  end;
+  r := public.admin_customer_order_record_claim((o ->> 'id')::uuid, 500, 'MODTRX1234');
+  if r -> 'row' ->> 'status' <> 'PAYMENT_CLAIMED' or r -> 'row' ->> 'payment_verification' <> 'CLAIMED' then
+    raise exception 'TEST FAIL: dashboard claim state: %', r;
+  end if;
+  select id into cid from public.customer_order_payment_claims where order_id = (o ->> 'id')::uuid;
+  begin
+    perform public.admin_customer_order_review_claim(cid, 'verify');
+    raise exception 'TEST FAIL: moderator verified a payment';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error for moderator verify: %', sqlerrm; end if;
+  end;
+  begin
+    perform public.admin_customer_order_delete((o ->> 'id')::uuid, 'x');
+    raise exception 'TEST FAIL: moderator deleted an order';
+  exception when others then
+    if sqlerrm not like 'ADMIN_PERMISSION_DENIED%' then raise exception 'TEST FAIL: unexpected error for moderator delete: %', sqlerrm; end if;
+  end;
+  if (public.admin_customer_order_counts() ->> 'awaiting_verification')::int < 1 then raise exception 'TEST FAIL: counts miss the open claim'; end if;
+end $$;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'fin'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'fin'), true);
+do $$
+declare r jsonb; d jsonb; cid uuid; c uuid;
+begin
+  if to_regclass('public.customer_order_transitions') is null then return; end if;
+  select id into c from t_co where k = 'c';
+  select id into cid from public.customer_order_payment_claims where order_id = c;
+  r := public.admin_customer_order_review_claim(cid, 'verify');
+  if r -> 'row' ->> 'status' <> 'PAYMENT_VERIFIED' or r -> 'row' ->> 'payment_verification' <> 'VERIFIED' or r ->> 'audit_id' is null then
+    raise exception 'TEST FAIL: finance verify: %', r;
+  end if;
+  d := public.admin_customer_order_detail(c);
+  if jsonb_array_length(d -> 'claims') <> 1 or d -> 'claims' -> 0 ->> 'reviewed_by_label' <> 'RLS Fin' or jsonb_array_length(d -> 'timeline') < 5 then
+    raise exception 'TEST FAIL: order detail: %', d;
+  end if;
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  if to_regclass('public.customer_order_transitions') is null then return; end if;
+  select count(*) into n from public.admin_audit_log where entity_type = 'customer_order' and action = 'customer_order.payment_verify'
+    and actor_id = (select id from t_ids where k = 'fin');
+  if n <> 1 then raise exception 'TEST FAIL: verify not in the admin audit log (%)', n; end if;
+  select count(*) into n from public.customer_order_activity where actor_type = 'api_agent' and actor_label = 'agent-1';
+  if n < 5 then raise exception 'TEST FAIL: API writes do not record the key label (%)', n; end if;
+end $$;
+select case when to_regclass('public.customer_orders') is null then 'SKIP T11.8' else 'PASS T11.8 moderator manages orders but cannot verify or delete; finance verifies; every write records its actor' end;
+
 select 'RLS_TESTS_PASSED';

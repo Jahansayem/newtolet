@@ -58,6 +58,16 @@ const METRIC_SPECS = {
   refunds: {
     requested: () => headCount('contact_unlock_refund_requests', (q) => q.eq('status', 'requested')),
   },
+  customerOrders: {
+    // Needs attention: a payment claim waiting for verification, or an overdue
+    // follow-up on an open order. Admins without orders.manage read 0 rows.
+    attention: () =>
+      headCount('customer_orders_enriched', (q) =>
+        q
+          .is('deleted_at', null)
+          .or(`claims_awaiting_verification.gt.0,and(follow_up_at.lt."${new Date().toISOString()}",status.not.in.(COMPLETED,REFUNDED,CANCELLED,SELF_SERVICE))`)
+      ),
+  },
 }
 
 /**
@@ -114,14 +124,15 @@ export const getAdminQueueCounts = async ({ force = false } = {}) => {
   }
   if (queueCountsInflight) return queueCountsInflight
   queueCountsInflight = (async () => {
-    const [properties, payments, refunds, inquiries, feedback] = await Promise.all([
+    const [properties, payments, refunds, inquiries, feedback, customerOrders] = await Promise.all([
       METRIC_SPECS.properties.pending(),
       METRIC_SPECS.payments.awaiting(),
       METRIC_SPECS.refunds.requested(),
       METRIC_SPECS.inquiries.pending(),
       METRIC_SPECS.feedback.pending(),
+      METRIC_SPECS.customerOrders.attention(),
     ])
-    const parts = { properties, payments, refunds, inquiries, feedback }
+    const parts = { properties, payments, refunds, inquiries, feedback, customerOrders }
     const errors = Object.values(parts).map((p) => p.error).filter(Boolean)
     const counts = {
       pendingProperties: properties.value ?? 0,
@@ -129,9 +140,11 @@ export const getAdminQueueCounts = async ({ force = false } = {}) => {
       requestedRefunds: refunds.value ?? 0,
       pendingInquiries: inquiries.value ?? 0,
       pendingFeedback: feedback.value ?? 0,
+      customerOrdersAttention: customerOrders.value ?? 0,
       generatedAt: new Date().toISOString(),
     }
-    counts.total = counts.pendingProperties + counts.awaitingPayments + counts.requestedRefunds + counts.pendingInquiries + counts.pendingFeedback
+    counts.total =
+      counts.pendingProperties + counts.awaitingPayments + counts.requestedRefunds + counts.pendingInquiries + counts.pendingFeedback + counts.customerOrdersAttention
     queueCountsInflight = null
     if (errors.length === Object.keys(parts).length) {
       return fail(errors[0])

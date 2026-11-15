@@ -1,5 +1,6 @@
 import {
   FiBarChart2,
+  FiClipboard,
   FiCreditCard,
   FiFileText,
   FiFlag,
@@ -96,6 +97,15 @@ export const ADMIN_NAV_ITEMS = [
     icon: FiFlag,
     permission: PERMISSIONS.PROPERTIES_MODERATE,
     description: 'Reports visitors filed against listings (wrong info, already rented, suspicious).',
+  },
+  {
+    key: 'customer-orders',
+    label: 'Customer Orders',
+    section: 'Operations',
+    icon: FiClipboard,
+    permission: PERMISSIONS.ORDERS_MANAGE,
+    badgeKey: 'customerOrdersAttention',
+    description: 'Paid house-search orders: search status, payments to verify and listings found.',
   },
   {
     key: 'orders',

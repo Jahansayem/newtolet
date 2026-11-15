@@ -18,6 +18,7 @@ import { useAdminQueueCounts } from './hooks/useAdminQueueCounts'
 import AdminAnalyticsSection from './sections/AdminAnalyticsSection.jsx'
 import AdminAuditLogSection from './sections/AdminAuditLogSection.jsx'
 import AdminContentSection from './sections/AdminContentSection.jsx'
+import AdminCustomerOrdersSection from './sections/AdminCustomerOrdersSection.jsx'
 import AdminCustomersSection from './sections/AdminCustomersSection.jsx'
 import AdminDashboardSection from './sections/AdminDashboardSection.jsx'
 import AdminFeedbackSection from './sections/AdminFeedbackSection.jsx'
@@ -64,6 +65,9 @@ const AdminPanelApp = () => {
     nextParams.set('tab', menuId)
     nextParams.delete('view')
     nextParams.delete('edit')
+    // A selected row or queue filter belongs to the section being left.
+    nextParams.delete('id')
+    nextParams.delete('queue')
     setSearchParams(nextParams)
   }
 
@@ -100,6 +104,8 @@ const AdminPanelApp = () => {
         return <UserManagement />
       case 'properties':
         return <AdminPropertiesSection />
+      case 'customer-orders':
+        return <AdminCustomerOrdersSection />
       case 'orders':
         return <AdminOrdersSection />
       case 'inquiries':

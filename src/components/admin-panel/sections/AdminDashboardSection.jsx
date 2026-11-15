@@ -20,6 +20,7 @@ import {
 } from '../../../services/adminService'
 import { getCoverPhotos } from '../../../services/coverPhotoService'
 import StatCard from '../../ui/StatCard'
+import CustomerOrderCounters from '../customer-orders/CustomerOrderCounters'
 
 const REPORT_FILTER_PRESETS = {
   last7: 'last7',
@@ -363,6 +364,9 @@ const AdminDashboardSection = ({ onQuickAction }) => {
             tone="border-transparent bg-primary-700"
           />
         </div>
+
+        {/* Hidden for admins without orders.manage and until the customer orders migration is applied. */}
+        <CustomerOrderCounters title="Customer orders" hideOnError />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_1fr]">
           <div className="rounded-[var(--radius-panel)] border border-slate-200 bg-white p-6 shadow-sm">

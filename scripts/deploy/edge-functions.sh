@@ -7,6 +7,7 @@
 #   FUNCTION ...   function directories under supabase/functions to deploy,
 #                  default: agent-listings. supabase/functions/_shared is always included.
 #                  Payments: paymently-create-checkout paymently-verify paymently-approve
+#                  Customer Orders API: customer-orders (needs the customer orders migration)
 #
 # Environment (all optional once the server .env already has them):
 #   AGENT_USER_ID  value for LISTINGS_AGENT_USER_ID (from create-agent-owner.sh)
@@ -15,8 +16,14 @@
 #                  agent-<n+1> in LISTINGS_AGENT_API_KEYS). Missing ones are generated;
 #                  existing ones are never rotated. Keys are not printed: they are written
 #                  to /root/agent-api-keys.txt (chmod 600) on the server.
+#   ORDERS_AGENT_KEYS  number of Customer Orders API agent keys that must exist (labels
+#                  agent-1 .. agent-<n> in ORDERS_AGENT_API_KEYS); default 1 when
+#                  customer-orders is deployed. Agent keys cannot verify payments.
+#   ORDERS_ADMIN_KEYS  same for admin keys (admin-1 .. admin-<n> in ORDERS_ADMIN_API_KEYS);
+#                  default 1. Missing keys are generated, existing ones are never rotated.
+#                  They are written to /root/orders-api-keys.txt (chmod 600), not printed.
 #   SITE_URL       value for NEXT_PUBLIC_SITE_URL inside the functions container
-#   PUBLIC_URL     value for SUPABASE_PUBLIC_URL inside the functions container (the
+#   PUBLIC_URL    value for SUPABASE_PUBLIC_URL inside the functions container (the
 #                  browser-reachable Supabase URL, e.g. https://api.newtolet.com);
 #                  defaults to SUPABASE_PUBLIC_URL or API_EXTERNAL_URL from the server .env
 #   SMOKE_IMAGE_URL optional public JPEG/PNG URL; when set, the smoke test creates a
@@ -38,7 +45,8 @@
 #      update.sh keeps working)
 #   3. adds the secrets to .env (chmod 600) and makes COMPOSE_FILE load the override
 #   4. recreates the functions container and smoke-tests agent-listings and, when
-#      deployed, paymently-verify (unknown reference -> 404, eps-ping -> 200)
+#      deployed, paymently-verify (unknown reference -> 404, eps-ping -> 200) and
+#      customer-orders (no key -> 401, agent key list -> 200, agent key verify -> 403)
 #
 # Works from Git Bash on Windows: only tar, ssh and scp are required.
 
@@ -77,7 +85,7 @@ scp "${SSH_OPTS[@]}" -q "$ARCHIVE" "$TARGET:/tmp/$ARCHIVE"
 echo "installing on the server"
 # Values are %q-quoted so passwords with shell metacharacters survive the ssh command line.
 REMOTE_ENV=()
-for key in AGENT_USER_ID AGENT_API_KEY AGENT_EXTRA_KEYS SMOKE_IMAGE_URL \
+for key in AGENT_USER_ID AGENT_API_KEY AGENT_EXTRA_KEYS SMOKE_IMAGE_URL ORDERS_AGENT_KEYS ORDERS_ADMIN_KEYS \
   EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY EPS_TRANSACTION_TYPE_ID; do
   REMOTE_ENV+=("$(printf '%s=%q' "$key" "${!key:-}")")
 done
@@ -130,6 +138,9 @@ services:
       # Additional agent keys as label:key,label:key (optional).
       LISTINGS_AGENT_API_KEYS: ${LISTINGS_AGENT_API_KEYS:-}
       LISTINGS_AGENT_USER_ID: ${LISTINGS_AGENT_USER_ID}
+      # Customer Orders API keys as label:key,label:key. The list a key is in sets its scope.
+      ORDERS_AGENT_API_KEYS: ${ORDERS_AGENT_API_KEYS:-}
+      ORDERS_ADMIN_API_KEYS: ${ORDERS_ADMIN_API_KEYS:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-${SITE_URL}}
       # Browser-reachable Supabase URL; agent-listings builds stored image URLs from it.
       SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-${API_EXTERNAL_URL}}
@@ -147,6 +158,11 @@ elif ! grep -q "LISTINGS_AGENT_API_KEYS:" "$OVERRIDE"; then
   # Older override: add the one new line in place so blocks other scripts added survive.
   sed -i 's|^\( *\)LISTINGS_AGENT_API_KEY: .*|&\n\1LISTINGS_AGENT_API_KEYS: ${LISTINGS_AGENT_API_KEYS:-}|' "$OVERRIDE"
   echo "added LISTINGS_AGENT_API_KEYS to $OVERRIDE"
+fi
+if ! grep -q "ORDERS_AGENT_API_KEYS:" "$OVERRIDE"; then
+  # Existing override: add the two Customer Orders lines in place so other blocks survive.
+  sed -i 's|^\( *\)LISTINGS_AGENT_USER_ID: .*|&\n\1ORDERS_AGENT_API_KEYS: ${ORDERS_AGENT_API_KEYS:-}\n\1ORDERS_ADMIN_API_KEYS: ${ORDERS_ADMIN_API_KEYS:-}|' "$OVERRIDE"
+  echo "added ORDERS_AGENT_API_KEYS / ORDERS_ADMIN_API_KEYS to $OVERRIDE"
 fi
 
 # 3. Secrets and COMPOSE_FILE in .env.
@@ -213,6 +229,44 @@ KEYS_FILE=/root/agent-api-keys.txt
 )
 chmod 600 "$KEYS_FILE"
 echo "agent keys on file: $(cut -d' ' -f1 "$KEYS_FILE" | tr '\n' ' ')(read them with: cat $KEYS_FILE)"
+
+# Customer Orders API keys: make sure <prefix>-1 .. <prefix>-<n> exist, never rotate existing ones.
+DEPLOYING_ORDERS=0
+if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx customer-orders; then DEPLOYING_ORDERS=1; fi
+ensure_order_keys() {  # ensure_order_keys ENV_NAME LABEL_PREFIX COUNT
+  local env_name="$1" prefix="$2" count="$3" list added="" label n
+  if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+    echo "the key count for $env_name must be a whole number, got '$count'" >&2
+    exit 1
+  fi
+  list="$(get_env "$env_name" || true)"   # absent on the first run
+  for n in $(seq 1 "$count"); do
+    label="$prefix-$n"
+    case ",$list" in *",$label:"*) continue ;; esac
+    list="${list:+$list,}$label:$(openssl rand -hex 32)"
+    added="$added $label"
+  done
+  if [[ -n "$added" ]]; then
+    set_env "$env_name" "$list"
+    echo "generated $env_name keys:$added"
+  fi
+}
+ensure_order_keys ORDERS_AGENT_API_KEYS agent "${ORDERS_AGENT_KEYS:-$DEPLOYING_ORDERS}"
+ensure_order_keys ORDERS_ADMIN_API_KEYS admin "${ORDERS_ADMIN_KEYS:-$DEPLOYING_ORDERS}"
+
+# One "scope label key" line per Customer Orders key, for the operator and the smoke test below.
+ORDER_KEYS_FILE=/root/orders-api-keys.txt
+(
+  umask 077
+  {
+    { get_env ORDERS_AGENT_API_KEYS || true; } | tr ',' '\n' | sed 's/:/ /' | { grep . || true; } | sed 's/^/agent /'
+    { get_env ORDERS_ADMIN_API_KEYS || true; } | tr ',' '\n' | sed 's/:/ /' | { grep . || true; } | sed 's/^/admin /'
+  } > "$ORDER_KEYS_FILE"
+)
+chmod 600 "$ORDER_KEYS_FILE"
+if [[ -s "$ORDER_KEYS_FILE" ]]; then
+  echo "customer orders keys on file: $(cut -d' ' -f1,2 "$ORDER_KEYS_FILE" | tr ' ' ':' | tr '\n' ' ')(read them with: cat $ORDER_KEYS_FILE)"
+fi
 
 if [[ -n "${AGENT_USER_ID:-}" ]]; then
   set_env LISTINGS_AGENT_USER_ID "$AGENT_USER_ID"
@@ -361,6 +415,34 @@ if [[ "$DEPLOYING_PAYMENTS" == "1" ]] && printf '%s\n' "${FUNCTIONS[@]}" | grep 
     exit 1
   fi
   rm -f /tmp/pay-smoke.json /tmp/pay-ping.json
+fi
+# Customer Orders API smoke test (only when customer-orders was deployed). Read-only apart
+# from the rate-limit counter: no key and a wrong key are refused, an agent key can list
+# orders, an agent key is refused payment-verify, an admin key can list.
+if [[ "$DEPLOYING_ORDERS" == "1" ]]; then
+  PORT="$(get_env API_GW_HTTP_PORT || true)"; PORT="${PORT:-8000}"
+  ORDERS_BASE="http://127.0.0.1:${PORT}/functions/v1/customer-orders/orders"
+  AGENT_ORDER_KEY="$(awk '$1 == "agent" { print $3; exit }' "$ORDER_KEYS_FILE")"
+  ADMIN_ORDER_KEY="$(awk '$1 == "admin" { print $3; exit }' "$ORDER_KEYS_FILE")"
+  O_NOKEY="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$ORDERS_BASE?per_page=1" </dev/null)"
+  O_WRONG="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$ORDERS_BASE?per_page=1" -H "Authorization: Bearer $(openssl rand -hex 32)" </dev/null)"
+  O_AGENT="$(curl -s -o /tmp/orders-smoke.json -w '%{http_code}' --max-time 60 "$ORDERS_BASE?per_page=1" -H "Authorization: Bearer $AGENT_ORDER_KEY" </dev/null)"
+  O_ADMIN="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$ORDERS_BASE?per_page=1" -H "Authorization: Bearer $ADMIN_ORDER_KEY" </dev/null)"
+  O_VERIFY="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -X POST "$ORDERS_BASE/NT-2000-0001/payment-verify" \
+    -H "Authorization: Bearer $AGENT_ORDER_KEY" -H "Content-Type: application/json" --data '{"action":"verify"}' </dev/null)"
+  O_UNKNOWN="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -X POST "$ORDERS_BASE/NT-2000-0001/status" \
+    -H "Authorization: Bearer $AGENT_ORDER_KEY" -H "Content-Type: application/json" --data '{"to_status":"SEARCHING_BY_AI","reason":"smoke"}' </dev/null)"
+  echo "smoke orders: no key -> $O_NOKEY (expect 401), wrong key -> $O_WRONG (expect 401), agent list -> $O_AGENT (expect 200), admin list -> $O_ADMIN (expect 200)"
+  echo "smoke orders: agent payment-verify -> $O_VERIFY (expect 403), unknown order -> $O_UNKNOWN (expect 404)"
+  if [[ "$O_NOKEY" != "401" || "$O_WRONG" != "401" || "$O_AGENT" != "200" || "$O_ADMIN" != "200" || "$O_VERIFY" != "403" || "$O_UNKNOWN" != "404" ]]; then
+    head -c 600 /tmp/orders-smoke.json; echo
+    echo "If the list call returned 500, apply supabase/migrations/20261116090000_customer_orders.sql first."
+    echo "--- recent functions logs ---"
+    docker logs supabase-edge-functions --tail 40 2>&1 </dev/null | tail -40
+    rm -f /tmp/orders-smoke.json
+    exit 1
+  fi
+  rm -f /tmp/orders-smoke.json
 fi
 echo "deployed: ${FUNCTIONS[*]}"
 REMOTE

@@ -17,16 +17,16 @@ export const absoluteUrl = (path = '/') => new URL(withTrailingSlash(path), SITE
  * Next.js metadata for one route. `path` is the canonical path (trailing slash added),
  * so duplicate routes such as /propertylist2/ can point at /bd/property-listing/.
  */
-export function buildRouteMetadata({ title, description, path = '/', noindex = false }) {
+export function buildRouteMetadata({ title, description, path = '/', noindex = false, canonical: withCanonical = true }) {
   const canonical = withTrailingSlash(path)
   return {
     title,
     description,
-    alternates: { canonical },
+    ...(withCanonical ? { alternates: { canonical } } : {}),
     openGraph: {
       title,
       description,
-      url: canonical,
+      ...(withCanonical ? { url: canonical } : {}),
       siteName: SITE_NAME,
       type: 'website',
       locale: 'en_US',
@@ -83,10 +83,13 @@ export const ROUTE_SEO = {
     description: 'Properties you saved on NewTolet.',
     noindex: true,
   },
+  // One static shell serves every ?id=, so a baked-in canonical would fold all listings into
+  // /listdetails/. nginx splices in the per-listing tags (listing-seo Edge Function).
   listdetails: {
     path: '/listdetails/',
     title: 'Property Details | NewTolet.Com',
     description: 'Rent, rooms, facilities and location for this property on NewTolet.',
+    canonical: false,
   },
   login: { path: '/login/', title: 'Log in | NewTolet.Com', description: 'Log in to your NewTolet account.', noindex: true },
   registration: {

@@ -21,7 +21,13 @@ import {
 import { LuBath, LuBedDouble } from 'react-icons/lu';
 import useHydratedSnapshot from '../../hooks/useHydratedSnapshot';
 import { useDocumentHead } from '../../lib/seo/useDocumentHead.js';
-import { listingDescription, listingDocumentTitle, listingJsonLd } from '../../lib/seo/jsonLd.js';
+import {
+    listingDescription,
+    listingDocumentTitle,
+    listingH1,
+    listingImageAlt,
+    listingJsonLd,
+} from '../../lib/seo/jsonLd.js';
 import { SITE_URL } from '../../lib/seo/siteMeta.js';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -85,7 +91,7 @@ const DetailSkeleton = () => (
 const Listdetails = () => {
     const [searchParams] = useSearchParams();
     const id = searchParams.get('id') || '';
-    const { t, tv } = useLanguage();
+    const { t, tv, isBengali } = useLanguage();
     const routerLocation = useLocation();
     const { user, session, updateUserInContext } = useAuth();
     const viewer = useMemo(() => ({
@@ -114,10 +120,10 @@ const Listdetails = () => {
     // 'copied' | 'failed' | '' — feedback for the Property ID copy button.
     const [idCopyStatus, setIdCopyStatus] = useState('');
 
-    // Per-listing <title>, canonical, Open Graph and schema.org JSON-LD (static export: set in the browser).
-    const documentHead = useMemo(() => {
+    // Flat listing shape for the shared SEO builders (same input the listing-seo Edge Function uses).
+    const seoProperty = useMemo(() => {
         if (!lists?.id) return null;
-        const flat = {
+        return {
             id: lists.id,
             property_type: lists.property_type,
             category: lists.category,
@@ -129,22 +135,34 @@ const Listdetails = () => {
             short_description: lists.location?.short_description,
             rent_amount_bdt: lists.pricing?.rent_amount_bdt,
             is_rent_negotiable: lists.pricing?.is_rent_negotiable,
+            amenities: Array.isArray(lists.amenities) ? lists.amenities : [],
             created_at: lists.created_at,
             lat: lists.lat,
             lng: lists.lng,
         };
+    }, [lists]);
+
+    // Per-listing <title>, canonical, Open Graph and schema.org JSON-LD. nginx already serves
+    // them in the raw HTML; this keeps them right after client-side navigation.
+    const documentHead = useMemo(() => {
+        if (!seoProperty) return null;
         const images = [...(Array.isArray(lists.images) ? lists.images : []), lists.primary_image]
             .filter((image) => typeof image === 'string' && /^https?:/.test(image));
-        const canonicalPath = `/listdetails/?id=${lists.id}`;
+        const canonicalPath = `/listdetails/?id=${seoProperty.id}`;
         return {
-            title: listingDocumentTitle(flat),
-            description: listingDescription(flat),
+            title: listingDocumentTitle(seoProperty),
+            description: listingDescription(seoProperty),
             canonicalPath,
             image: images[0],
-            jsonLd: listingJsonLd(flat, { url: `${SITE_URL}${canonicalPath}`, images }),
+            jsonLd: listingJsonLd(seoProperty, { url: `${SITE_URL}${canonicalPath}`, images }),
         };
-    }, [lists]);
+    }, [seoProperty, lists]);
     useDocumentHead(documentHead);
+
+    // The H1 block nginx adds for crawlers duplicates what this page renders.
+    useEffect(() => {
+        document.getElementById('listing-ssr')?.remove();
+    }, []);
 
     useEffect(() => {
         if (!idCopyStatus) {
@@ -716,10 +734,9 @@ const Listdetails = () => {
                         <div className="aspect-[4/3] bg-slate-200 sm:aspect-video sm:max-h-[480px]">
                             <PropertyThumbnailImage
                                 src={images[currentImageIndex] || images[0]}
-                                alt={t('listing.detail.imageAlt', {
-                                    type: propertyTitle,
-                                    location: imageLocationLabel,
-                                })}
+                                alt={isBengali
+                                    ? t('listing.detail.imageAlt', { type: propertyTitle, location: imageLocationLabel })
+                                    : listingImageAlt(seoProperty, currentImageIndex + 1)}
                                 className="h-full w-full object-cover"
                                 fallbackClassName="h-full w-full"
                                 propertyType={lists.property_type}
@@ -784,7 +801,9 @@ const Listdetails = () => {
                                 >
                                     <PropertyThumbnailImage
                                         src={img}
-                                        alt={t('listing.detail.thumbnailAlt', { number: idx + 1 })}
+                                        alt={isBengali
+                                            ? t('listing.detail.thumbnailAlt', { number: idx + 1 })
+                                            : listingImageAlt(seoProperty, idx + 1)}
                                         className="h-full w-full object-cover"
                                         fallbackClassName="h-full w-full"
                                         propertyType={lists.property_type}
@@ -804,7 +823,7 @@ const Listdetails = () => {
                         <section className="ui-card p-5 sm:p-6" aria-labelledby="listing-title">
                             <p className="ui-eyebrow">{categoryLabel}</p>
                             <h1 id="listing-title" className="mt-2 text-2xl font-bold leading-tight text-ink md:text-3xl">
-                                {propertyTitle}
+                                {isBengali ? propertyTitle : listingH1(seoProperty)}
                             </h1>
                             {ownerVerified ? <VerifiedOwnerBadge className="mt-2" /> : null}
                             {listingExtras.expiresAt && new Date(listingExtras.expiresAt).getTime() < Date.now() ? (

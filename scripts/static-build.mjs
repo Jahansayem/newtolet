@@ -1,7 +1,8 @@
-import { cp, mkdir, rm } from 'node:fs/promises'
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { addListingSsi } from './listing-ssi.mjs'
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const outputDir = path.join(rootDir, 'out')
@@ -11,7 +12,8 @@ const exportDirName = 'dist-next'
 async function main() {
   try {
     await runNextBuild()
-    await publishOutput(path.join(rootDir, exportDirName))
+    const publishedDir = await publishOutput(path.join(rootDir, exportDirName))
+    await patchListingPage(publishedDir)
   } catch (error) {
     console.error(`Static build failed: ${error.message}`)
     throw error
@@ -62,6 +64,7 @@ async function publishOutput(sourceDir) {
   try {
     await replaceOutput(sourceDir, outputDir)
     console.log(`Static export updated at: ${outputDir}`)
+    return outputDir
   } catch (error) {
     if (!isWindowsPermissionError(error)) {
       throw error
@@ -71,7 +74,14 @@ async function publishOutput(sourceDir) {
     await rm(fallbackOutputDir, { recursive: true, force: true })
     await replaceOutput(sourceDir, fallbackOutputDir)
     console.log(`Static export updated at: ${fallbackOutputDir}`)
+    return fallbackOutputDir
   }
+}
+
+async function patchListingPage(exportDir) {
+  const file = path.join(exportDir, 'listdetails', 'index.html')
+  await writeFile(file, addListingSsi(await readFile(file, 'utf8')))
+  console.log(`Listing page SSI includes added: ${file}`)
 }
 
 function isWindowsPermissionError(error) {

@@ -57,6 +57,10 @@ export const metadata = {
     ],
   },
   manifest: '/site.webmanifest',
+  // Google Search Console ownership proof; removing it un-verifies the property.
+  verification: {
+    google: 'Slj_jSwBX5q4HEXCN6LN6a-63wlHrWir34vBKYp7RVo',
+  },
 }
 
 export default function RootLayout({ children }) {

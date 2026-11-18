@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import Navber from '../../src/Component/Home/Navber.jsx'
 import Footer from '../../src/Component/Home/Footer.jsx'
 import FloatingQuickRail from './FloatingQuickRail.jsx'
+import CompareTray from './CompareTray.jsx'
 import AuthHeader from './AuthHeader.jsx'
 import HomePageSkeleton from './HomePageSkeleton.jsx'
 import { getRoutePage } from '../../src/lib/routePaths.js'
@@ -65,6 +66,7 @@ export default function SiteChrome({ children }) {
       </a>
       <Navber />
       <FloatingQuickRail />
+      <CompareTray />
       <main id="main-content" tabIndex={-1} className="max-w-full mx-auto outline-none">
         {/* Pages that read the query string suspend here at build time; header and footer stay. */}
         <Suspense fallback={<HomePageSkeleton />}>{children}</Suspense>

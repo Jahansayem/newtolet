@@ -15,6 +15,7 @@ const footerLinks = [
     { to: '/', labelKey: 'footer.links.home' },
     { to: '/propertylist2', labelKey: 'footer.links.propertyList' },
     { to: '/addproperty', labelKey: 'footer.links.addProperty' },
+    { to: '/compare', labelKey: 'footer.links.compare' },
     { to: '/about', labelKey: 'footer.links.aboutUs' },
     { to: '/contact', labelKey: 'footer.links.contact' },
 ];

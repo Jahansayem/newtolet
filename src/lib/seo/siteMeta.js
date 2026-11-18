@@ -83,6 +83,12 @@ export const ROUTE_SEO = {
     description: 'Properties you saved on NewTolet.',
     noindex: true,
   },
+  compare: {
+    path: '/compare/',
+    title: 'Compare Properties | NewTolet.Com',
+    description: 'Compare rent, rooms, facilities and location of up to four NewTolet listings side by side.',
+    noindex: true,
+  },
   // One static shell serves every ?id=, so a baked-in canonical would fold all listings into
   // /listdetails/. nginx splices in the per-listing tags (listing-seo Edge Function).
   listdetails: {

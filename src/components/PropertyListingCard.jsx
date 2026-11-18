@@ -21,6 +21,7 @@ import {
     COMPARE_PROPERTIES_BROWSER_EVENT,
     getComparedPropertyIds,
     toggleComparedProperty,
+    MAX_COMPARE_ITEMS,
 } from '../services/propertyCompareService';
 import ReportListingDialog from './listing/ReportListingDialog';
 import { VerifiedOwnerBadge } from './listing/ListingTrust';
@@ -229,6 +230,7 @@ const PropertyListingCard = ({
 
         if (isMountedRef.current) {
             setIsCompared(Boolean(result?.compared));
+            setSaveStatus(result?.limitReached ? 'compareLimit' : result?.compared ? 'compared' : 'uncompared');
             setIsMenuOpen(false);
             menuButtonRef.current?.focus();
         }
@@ -410,7 +412,7 @@ const PropertyListingCard = ({
                             role='status'
                             aria-live='polite'
                             className={saveStatus
-                                ? `mt-2 rounded-lg px-2.5 py-1.5 text-caption font-medium ${saveStatus === 'error' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'}`
+                                ? `mt-2 rounded-lg px-2.5 py-1.5 text-caption font-medium ${saveStatus === 'error' || saveStatus === 'compareLimit' ? 'bg-danger-soft text-danger' : 'bg-success-soft text-success'}`
                                 : 'sr-only'}
                         >
                             {saveStatus === 'saved'
@@ -419,7 +421,13 @@ const PropertyListingCard = ({
                                     ? t('listing.card.removedStatus')
                                     : saveStatus === 'error'
                                         ? t('listing.card.saveFailed')
-                                        : ''}
+                                        : saveStatus === 'compared'
+                                            ? t('listing.card.compareAdded')
+                                            : saveStatus === 'uncompared'
+                                                ? t('listing.card.compareRemoved')
+                                                : saveStatus === 'compareLimit'
+                                                    ? t('listing.card.compareLimit', { max: MAX_COMPARE_ITEMS })
+                                                    : ''}
                         </p>
                     </div>
                 </div>

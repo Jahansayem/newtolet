@@ -33,6 +33,7 @@ const listing = {
       saveFailed: 'Could not update your saved properties. Please try again.',
       compareAdded: 'Added to compare',
       compareRemoved: 'Removed from compare',
+      compareLimit: 'You can compare up to {max} properties. Remove one first.',
       report: {
         title: 'Report Property',
         close: 'Close report form',

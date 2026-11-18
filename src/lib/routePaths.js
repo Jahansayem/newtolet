@@ -7,6 +7,7 @@ const PAGE_BY_PATH = Object.freeze({
   '/book': 'book',
   '/book/buy-credits': 'book-buy-credits',
   '/career': 'career',
+  '/compare': 'compare',
   '/contact': 'contact',
   '/dashboard': 'dashboard',
   '/bd/property-listing': 'propertylist2',

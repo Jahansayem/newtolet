@@ -329,7 +329,7 @@ const Navber = () => {
         </Link>
 
         <nav aria-label={t('nav.mainNavigation')} className="hidden min-w-0 flex-1 items-center lg:flex">
-          <ul className="flex min-w-0 items-center gap-5 xl:gap-7">
+          <ul className="flex min-w-0 items-center gap-5">
             <li>
               <DesktopNavLink href="/" label={t('nav.home')} isActive={isDesktopLinkActive('home')} />
             </li>
@@ -381,27 +381,17 @@ const Navber = () => {
           </ul>
         </nav>
 
-        <div className="ml-auto flex shrink-0 items-center gap-2 lg:gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={openSearch}
             aria-haspopup="dialog"
             aria-expanded={isSearchOverlayOpen}
             aria-label={t('nav.openSearch')}
-            className="ui-btn ui-btn-ghost ui-btn-icon lg:hidden"
+            title={t('nav.openSearch')}
+            className="ui-btn ui-btn-ghost ui-btn-icon"
           >
             <FiSearch className="text-xl" aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={openSearch}
-            aria-haspopup="dialog"
-            aria-expanded={isSearchOverlayOpen}
-            aria-label={t('nav.openSearch')}
-            className="ui-btn ui-btn-ghost ui-btn-sm hidden lg:inline-flex"
-          >
-            <FiSearch className="text-base" aria-hidden="true" />
-            <span>{t('nav.search')}</span>
           </button>
 
           <Link to="/addproperty" className="ui-btn ui-btn-primary ui-btn-sm hidden lg:inline-flex">
@@ -412,10 +402,9 @@ const Navber = () => {
           <Link
             to="/orderhome"
             className="ui-btn ui-btn-secondary ui-btn-sm hidden xl:inline-flex"
-            aria-label={t('nav.orderHome')}
-            title={t('nav.orderHome')}
           >
             <FiPackage className="text-base" aria-hidden="true" />
+            <span>{t('nav.orderHome')}</span>
           </Link>
 
           <LanguageToggle size="sm" className="hidden md:inline-flex" />

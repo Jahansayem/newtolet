@@ -6,9 +6,11 @@ import {
 } from './cacheService';
 import { serializeOrderPreferences } from '../utils/orderPreferences';
 import { getUserPanelCachePolicy } from './userPanelCacheConfig';
+import { getOrderPricing } from '../lib/orderPricing';
 
-// Single package: 7 Days Only - 1000 BDT
-const ORDER_COST = 1000;
+// Single package: 7 Days. The database forces the real cost on insert
+// (orders_enforce_price); this value only keeps the request honest.
+const ORDER_COST = getOrderPricing().payable;
 export const getUserOrdersCacheKey = (userId) => `orders:user:${userId || 'anonymous'}`;
 const getUserPanelOrdersCacheKey = (userId) => buildUserPanelCacheKey(userId || 'guest', 'orders')
 
@@ -76,35 +78,14 @@ export const createOrder = async (orderData) => {
 };
 
 /**
- * Update order status after payment
- * @param {string} orderId - The order ID
- * @param {string} status - New status ('confirmed', 'cancelled', etc.)
- * @returns {Promise<{data: Object|null, error: Object|null}>}
+ * Drop the cached order list after a payment, so My Orders shows the new status.
+ * (An order's status is changed by the server once EPS confirms the payment.)
+ * @param {string} userId - The user ID
  */
-export const updateOrderStatus = async (orderId, status) => {
-    try {
-        const { data, error } = await supabase
-            .from('orders')
-            .update({
-                status,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', orderId)
-            .select()
-            .single();
-
-        if (error) throw error;
-        if (data?.user_id) {
-            invalidateUserPanelCache(getUserPanelOrdersCacheKey(data.user_id))
-            invalidateUserPanelCache(buildUserPanelCacheKey(data.user_id, 'dashboard'))
-        }
-
-        invalidateUserPanelCache(buildUserPanelCacheKey('global', 'job-feed'))
-        return { data, error: null };
-    } catch (error) {
-        console.error('Error updating order status:', error);
-        return { data: null, error };
-    }
+export const invalidateUserOrdersCache = (userId) => {
+    if (!userId) return;
+    invalidateUserPanelCache(getUserPanelOrdersCacheKey(userId))
+    invalidateUserPanelCache(buildUserPanelCacheKey(userId, 'dashboard'))
 };
 
 /**

@@ -37,6 +37,13 @@
 #                  Required (from the environment or an earlier run) whenever a
 #                  paymently-* function is deployed; NEXT_PUBLIC_SITE_URL must be https.
 #   EPS_TRANSACTION_TYPE_ID  optional EPS TransactionTypeId override
+#   FB_PAGE_ID, FB_PAGE_ACCESS_TOKEN  Facebook Page auto-post (facebook-page-post); the
+#                  token must be a non-expiring Page token, see claudedocs/FACEBOOK_PAGE_AUTOPOST.md.
+#                  Required (from the environment or an earlier run) when it is deployed.
+#   FB_AUTOPOST_ENABLED  "true" publishes to the Page; anything else is a dry run
+#   FB_GRAPH_VERSION, FB_APP_SECRET  optional Graph API version / appsecret_proof secret
+#                  FB_POSTER_CRON_KEY is generated on the server; a cron job in
+#                  /etc/cron.d/newtolet-facebook-post runs the worker every minute.
 #
 # What it does on the server (/opt/supabase):
 #   1. replaces volumes/functions/<name> and volumes/functions/_shared with the repo copy
@@ -86,7 +93,7 @@ echo "installing on the server"
 # Values are %q-quoted so passwords with shell metacharacters survive the ssh command line.
 REMOTE_ENV=()
 for key in AGENT_USER_ID AGENT_API_KEY AGENT_EXTRA_KEYS SMOKE_IMAGE_URL ORDERS_AGENT_KEYS ORDERS_ADMIN_KEYS \
-  EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY EPS_TRANSACTION_TYPE_ID; do
+  EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY EPS_TRANSACTION_TYPE_ID   FB_PAGE_ID FB_PAGE_ACCESS_TOKEN FB_AUTOPOST_ENABLED FB_GRAPH_VERSION FB_APP_SECRET; do
   REMOTE_ENV+=("$(printf '%s=%q' "$key" "${!key:-}")")
 done
 REMOTE_ENV+=("$(printf 'SITE_URL_OVERRIDE=%q' "${SITE_URL:-}")" "$(printf 'PUBLIC_URL_OVERRIDE=%q' "${PUBLIC_URL:-}")")
@@ -152,6 +159,13 @@ services:
       EPS_PASSWORD: ${EPS_PASSWORD:-}
       EPS_HASH_KEY: ${EPS_HASH_KEY:-}
       EPS_TRANSACTION_TYPE_ID: ${EPS_TRANSACTION_TYPE_ID:-}
+      # Facebook Page auto-post (facebook-page-post). Values live in .env.
+      FB_PAGE_ID: ${FB_PAGE_ID:-}
+      FB_PAGE_ACCESS_TOKEN: ${FB_PAGE_ACCESS_TOKEN:-}
+      FB_POSTER_CRON_KEY: ${FB_POSTER_CRON_KEY:-}
+      FB_AUTOPOST_ENABLED: ${FB_AUTOPOST_ENABLED:-false}
+      FB_GRAPH_VERSION: ${FB_GRAPH_VERSION:-v24.0}
+      FB_APP_SECRET: ${FB_APP_SECRET:-}
 YAML
   echo "wrote $OVERRIDE"
 elif ! grep -q "LISTINGS_AGENT_API_KEYS:" "$OVERRIDE"; then
@@ -163,6 +177,23 @@ if ! grep -q "ORDERS_AGENT_API_KEYS:" "$OVERRIDE"; then
   # Existing override: add the two Customer Orders lines in place so other blocks survive.
   sed -i 's|^\( *\)LISTINGS_AGENT_USER_ID: .*|&\n\1ORDERS_AGENT_API_KEYS: ${ORDERS_AGENT_API_KEYS:-}\n\1ORDERS_ADMIN_API_KEYS: ${ORDERS_ADMIN_API_KEYS:-}|' "$OVERRIDE"
   echo "added ORDERS_AGENT_API_KEYS / ORDERS_ADMIN_API_KEYS to $OVERRIDE"
+fi
+
+if ! grep -q "FB_PAGE_ACCESS_TOKEN:" "$OVERRIDE"; then
+  # Existing override: append the Facebook lines under the functions service in place.
+  FB_LINES="$(mktemp)"
+  cat > "$FB_LINES" <<'YAML'
+      # Facebook Page auto-post (facebook-page-post). Values live in .env.
+      FB_PAGE_ID: ${FB_PAGE_ID:-}
+      FB_PAGE_ACCESS_TOKEN: ${FB_PAGE_ACCESS_TOKEN:-}
+      FB_POSTER_CRON_KEY: ${FB_POSTER_CRON_KEY:-}
+      FB_AUTOPOST_ENABLED: ${FB_AUTOPOST_ENABLED:-false}
+      FB_GRAPH_VERSION: ${FB_GRAPH_VERSION:-v24.0}
+      FB_APP_SECRET: ${FB_APP_SECRET:-}
+YAML
+  sed -i "/^ *LISTINGS_AGENT_USER_ID: .*/r $FB_LINES" "$OVERRIDE"
+  rm -f "$FB_LINES"
+  echo "added FB_* variables to $OVERRIDE"
 fi
 
 # 3. Secrets and COMPOSE_FILE in .env.
@@ -312,6 +343,25 @@ if printf '%s\n' "${FUNCTIONS[@]}" | grep -q '^paymently-'; then
   esac
 fi
 
+# Facebook Page auto-post: store what the caller passed, generate the cron key once.
+for key in FB_PAGE_ID FB_PAGE_ACCESS_TOKEN FB_AUTOPOST_ENABLED FB_GRAPH_VERSION FB_APP_SECRET; do
+  if [[ -n "${!key:-}" ]]; then set_secret "$key" "${!key}"; fi
+done
+DEPLOYING_FACEBOOK=0
+if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx facebook-page-post; then
+  DEPLOYING_FACEBOOK=1
+  for key in FB_PAGE_ID FB_PAGE_ACCESS_TOKEN; do
+    if ! grep -qE "^${key}=.+" "$ENV_FILE"; then
+      echo "$key is missing from $ENV_FILE; pass it in the environment (see header)." >&2
+      exit 1
+    fi
+  done
+  if [[ -z "$(get_env FB_POSTER_CRON_KEY)" ]]; then
+    set_secret FB_POSTER_CRON_KEY "$(openssl rand -hex 32)"
+    echo "generated FB_POSTER_CRON_KEY"
+  fi
+fi
+
 COMPOSE_FILE_VALUE="$(get_env COMPOSE_FILE)"
 if [[ -z "$COMPOSE_FILE_VALUE" ]]; then
   set_env COMPOSE_FILE "docker-compose.yml:docker-compose.override.yml"
@@ -443,6 +493,36 @@ if [[ "$DEPLOYING_ORDERS" == "1" ]]; then
     exit 1
   fi
   rm -f /tmp/orders-smoke.json
+fi
+# Facebook Page auto-post: cron runner (reads the key from .env at run time, so the key
+# never sits in the crontab) plus a smoke test of the auth gate and the Page token.
+if [[ "$DEPLOYING_FACEBOOK" == "1" ]]; then
+  PORT="$(get_env API_GW_HTTP_PORT || true)"; PORT="${PORT:-8000}"
+  RUNNER=/usr/local/bin/newtolet-facebook-post
+  cat > "$RUNNER" <<RUNNER_SH
+#!/usr/bin/env bash
+# Runs the facebook-page-post worker once. Installed by scripts/deploy/edge-functions.sh.
+KEY="\$(grep -E '^FB_POSTER_CRON_KEY=' $ENV_FILE | head -1 | cut -d= -f2- | tr -d "'\"")"
+exec curl -s -o /dev/null -w '%{http_code}\n' --max-time 55 -X POST \
+  "http://127.0.0.1:${PORT}/functions/v1/facebook-page-post" -H "Authorization: Bearer \$KEY"
+RUNNER_SH
+  chmod 700 "$RUNNER"
+  printf '%s\n' "# NewTolet: post newly approved listings to the Facebook Page" \
+    "* * * * * root $RUNNER >> /var/log/newtolet-facebook-post.log 2>&1" > /etc/cron.d/newtolet-facebook-post
+  chmod 644 /etc/cron.d/newtolet-facebook-post
+  echo "installed cron: /etc/cron.d/newtolet-facebook-post (log /var/log/newtolet-facebook-post.log)"
+
+  FB_URL="http://127.0.0.1:${PORT}/functions/v1/facebook-page-post"
+  FB_KEY="$(get_env FB_POSTER_CRON_KEY | tr -d "'\"")"
+  F_NOKEY="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 -X POST "$FB_URL" </dev/null)"
+  F_HEALTH="$(curl -s -o /tmp/fb-health.json -w '%{http_code}' --max-time 60 "$FB_URL?action=health" -H "Authorization: Bearer $FB_KEY" </dev/null)"
+  echo "smoke facebook: no key -> $F_NOKEY (expect 401), health -> $F_HEALTH (expect 200): $(head -c 300 /tmp/fb-health.json)"
+  rm -f /tmp/fb-health.json
+  if [[ "$F_NOKEY" != "401" || "$F_HEALTH" != "200" ]]; then
+    echo "--- recent functions logs ---"
+    docker logs supabase-edge-functions --tail 40 2>&1 </dev/null | tail -40
+    exit 1
+  fi
 fi
 echo "deployed: ${FUNCTIONS[*]}"
 REMOTE

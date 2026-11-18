@@ -1,11 +1,13 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiMapPin, FiPlus } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { getUserOrders } from '../../services/orderService'
+import { createOrderPaymentCheckout } from '../../services/paymentService'
+import { isOrderAwaitingPayment } from '../../lib/orderPricing'
 import { formatOrderNeedFrom, formatOrderPreferencesSummary } from '../../utils/orderPreferences'
 import { useLanguage } from '../../i18n/useLanguage'
 import { EmptyState, PanelCard, PanelCardHeader, formatPanelDate } from './UserPanelPrimitives'
@@ -26,6 +28,24 @@ const OrdersHistoryPanel = () => {
     },
     enabled: !isLoading && Boolean(user?.id),
   })
+  const [payingOrderId, setPayingOrderId] = useState(null)
+  const [payError, setPayError] = useState(null)
+
+  const handlePayNow = async (orderId) => {
+    setPayingOrderId(orderId)
+    setPayError(null)
+
+    const { data: checkout, error } = await createOrderPaymentCheckout(orderId)
+
+    if (error || !checkout?.payment_url) {
+      setPayingOrderId(null)
+      setPayError(orderId)
+      return
+    }
+
+    // Leave the button disabled while the browser goes to the gateway.
+    window.location.assign(checkout.payment_url)
+  }
 
   if (isLoading || ordersLoading) {
     return (
@@ -141,6 +161,25 @@ const OrdersHistoryPanel = () => {
                     <p className="mt-2 text-xl font-bold text-slate-900">
                       ৳{Number(order.cost || 0).toLocaleString('en-BD')}
                     </p>
+                    {isOrderAwaitingPayment(order) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handlePayNow(order.id)}
+                          disabled={payingOrderId !== null}
+                          className="mt-3 inline-flex w-full justify-center rounded-2xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {payingOrderId === order.id
+                            ? t('dashboard.orders.paying')
+                            : t('dashboard.orders.payNow')}
+                        </button>
+                        {payError === order.id ? (
+                          <p className="mt-2 max-w-[14rem] text-left text-xs text-red-600" role="alert">
+                            {t('dashboard.orders.payFailed')}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>

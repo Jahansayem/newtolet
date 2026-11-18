@@ -109,6 +109,21 @@ const payments = {
       },
       goToDashboard: 'Go to Dashboard',
       tryAgain: 'Try Again',
+      order: {
+        status: {
+          awaiting_admin_approval: {
+            title: 'Payment Under Review',
+            description:
+              'Your payment was received and is being reviewed by our team. Your order will be updated as soon as the review is done.',
+          },
+          credited: {
+            title: 'Order Paid',
+            description:
+              'Your payment was successful and your order is confirmed. Our team will start searching and contact you soon.',
+          },
+        },
+        goToMyOrders: 'Go to My Orders',
+      },
     },
     history: {
       totalTransactions: 'Total Transactions',

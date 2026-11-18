@@ -133,7 +133,11 @@ const orders = {
         loginRequired: 'Please login to create an order.',
         createFailed: 'Failed to create order. Please try again.',
         paymentFailed: 'Payment processing failed. Please contact support.',
+        checkoutFailed:
+          'Your order was saved, but we could not open the payment page. Open My Orders and press Pay now to finish.',
       },
+      goToMyOrders: 'Go to My Orders',
+      payWithEps: 'Pay {amount} with EPS',
       validation: {
         division: 'Division is required',
         district: 'District is required',
@@ -185,6 +189,10 @@ const orders = {
         duration: '7 Days',
         price: 'Price',
         priceValue: '{price} BDT',
+        discountBadge: '{percent}% OFF (limited time)',
+        youPay: 'You pay: {amount}',
+        paymentNote:
+          'You will pay securely through EPS with bKash, Nagad, Rocket, a card or your bank. Your order is confirmed as soon as the payment succeeds.',
         agree: 'I agree to the {terms}, {privacy}, and {refund}.',
         terms: 'Terms & Conditions',
         privacy: 'Privacy Policy',

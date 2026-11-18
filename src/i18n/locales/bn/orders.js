@@ -133,7 +133,11 @@ const orders = {
         loginRequired: 'অর্ডার তৈরি করতে লগইন করুন।',
         createFailed: 'অর্ডার তৈরি করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।',
         paymentFailed: 'পেমেন্ট প্রক্রিয়া ব্যর্থ হয়েছে। অনুগ্রহ করে সাপোর্টে যোগাযোগ করুন।',
+        checkoutFailed:
+          'আপনার অর্ডার সংরক্ষিত হয়েছে, কিন্তু পেমেন্ট পেজ খোলা যায়নি। পেমেন্ট সম্পন্ন করতে আমার অর্ডার খুলে এখনই পেমেন্ট করুন চাপুন।',
       },
+      goToMyOrders: 'আমার অর্ডারে যান',
+      payWithEps: 'EPS দিয়ে {amount} পেমেন্ট করুন',
       validation: {
         division: 'বিভাগ আবশ্যক',
         district: 'জেলা আবশ্যক',
@@ -184,6 +188,10 @@ const orders = {
         duration: '7 দিন',
         price: 'মূল্য',
         priceValue: '{price} BDT',
+        discountBadge: '{percent}% ছাড় (সীমিত সময়ের জন্য)',
+        youPay: 'আপনি দেবেন: {amount}',
+        paymentNote:
+          'আপনি EPS-এর মাধ্যমে bKash, Nagad, Rocket, কার্ড বা ব্যাংক দিয়ে নিরাপদে পেমেন্ট করবেন। পেমেন্ট সফল হলেই আপনার অর্ডার নিশ্চিত হবে।',
         agree: 'আমি {terms}, {privacy} এবং {refund} এ সম্মত।',
         terms: 'শর্তাবলি',
         privacy: 'গোপনীয়তা নীতি',

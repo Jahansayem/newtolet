@@ -3,44 +3,20 @@
 import React, { useState } from 'react'
 import { createCustomerOrder, getDuplicateOrderNo, updateCustomerOrder } from '../../../services/admin/customerOrders'
 import { SOURCE_LABELS } from '../../../lib/customerOrderStatus'
+import {
+  changedFields,
+  countChoices,
+  draftFrom,
+  facilityChoices,
+  gasChoices,
+  normalise,
+  parseFacilities,
+  sourceChoices,
+} from '../../../lib/customerOrderForm'
 import { useAdminMutation } from '../hooks/useAdminMutation'
 import Button from '../../ui/Button'
 import FormDialog from '../../ui/FormDialog'
 import InlineAlert from '../../ui/InlineAlert'
-
-const TEXT_FIELDS = ['customer_name', 'customer_phone', 'facebook_name', 'facebook_thread_url', 'source', 'area', 'move_in_date', 'tenant_type', 'gas', 'facilities', 'requirement_notes']
-const NUMBER_FIELDS = ['rooms', 'budget_min', 'budget_max', 'bathrooms', 'balconies']
-const MANUAL_SOURCES = ['manual', 'phone', 'messenger', 'lead_generation']
-
-const toLocalInput = (iso) => {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-const draftFrom = (order) => {
-  const draft = { follow_up_at: toLocalInput(order?.follow_up_at), assigned_to: order?.assigned_to || '' }
-  for (const key of TEXT_FIELDS) draft[key] = order?.[key] ?? ''
-  for (const key of NUMBER_FIELDS) draft[key] = order?.[key] ?? ''
-  if (!order) draft.source = 'manual'
-  return draft
-}
-
-/** Draft -> { key: value|null } with trimmed text, whole numbers and an ISO follow-up time. */
-const normalise = (draft) => {
-  const values = {}
-  for (const key of TEXT_FIELDS) values[key] = String(draft[key] ?? '').trim() || null
-  for (const key of NUMBER_FIELDS) values[key] = draft[key] === '' || draft[key] === null ? null : Number(draft[key])
-  values.follow_up_at = draft.follow_up_at ? new Date(draft.follow_up_at).toISOString() : null
-  return values
-}
-
-const sameValue = (key, next, order) => {
-  if (key === 'follow_up_at') return (next ? new Date(next).getTime() : null) === (order.follow_up_at ? new Date(order.follow_up_at).getTime() : null)
-  return (next ?? null) === (order[key] ?? null)
-}
 
 const Field = ({ id, label, help = null, children }) => (
   <div>
@@ -48,6 +24,22 @@ const Field = ({ id, label, help = null, children }) => (
     {children}
     {help ? <p className="ui-help">{help}</p> : null}
   </div>
+)
+
+/** A labelled set of tick options (radios or checkboxes). */
+const ChoiceGroup = ({ id, label, role = 'group', help = null, className = '', children }) => (
+  <div className={className} role={role} aria-labelledby={`${id}-label`}>
+    <span id={`${id}-label`} className="ui-label">{label}</span>
+    <div className="flex flex-wrap gap-x-5 gap-y-1">{children}</div>
+    {help ? <p className="ui-help">{help}</p> : null}
+  </div>
+)
+
+const Choice = ({ type, label, ...input }) => (
+  <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm text-ink">
+    <input type={type} className="h-5 w-5 accent-brand" {...input} />
+    <span>{label}</span>
+  </label>
 )
 
 /**
@@ -83,24 +75,30 @@ export default function OrderFormDialog({ open, order = null, assignees = [], on
   )
 
   const set = (key) => (event) => setDraft((current) => ({ ...current, [key]: event.target.value }))
+  const setValue = (key, value) => setDraft((current) => ({ ...current, [key]: value }))
+  const toggleFacility = (item) =>
+    setDraft((current) => ({
+      ...current,
+      facilities: current.facilities.includes(item) ? current.facilities.filter((entry) => entry !== item) : [...current.facilities, item],
+    }))
+
+  // Options come from the stored order, so an older value stays on screen even after it is unticked.
+  const sources = sourceChoices(order?.source)
+  const gasOptions = gasChoices(draftFrom(order).gas)
+  const facilityOptions = facilityChoices(parseFacilities(order?.facilities))
 
   const submit = async ({ confirmDuplicate = false } = {}) => {
     setLocalError(null)
     const values = normalise(draft)
     if (!values.customer_name) return setLocalError('Customer name is required.')
-    if (!isEdit && !values.customer_phone && !values.facebook_thread_url) {
-      return setLocalError('Add at least one contact channel: a phone number or the Facebook thread link.')
-    }
+    if (!isEdit && !values.customer_phone) return setLocalError('Phone number is required.')
     if (values.budget_min !== null && values.budget_max !== null && values.budget_min > values.budget_max) {
       return setLocalError('Minimum budget cannot be greater than maximum budget.')
     }
 
     let payload
     if (isEdit) {
-      payload = {}
-      for (const [key, value] of Object.entries(values)) {
-        if (!sameValue(key, value, order)) payload[key] = value
-      }
+      payload = changedFields(values, order)
       if (Object.keys(payload).length === 0) return onClose()
     } else {
       payload = Object.fromEntries(Object.entries(values).filter(([, value]) => value !== null))
@@ -153,22 +151,25 @@ export default function OrderFormDialog({ open, order = null, assignees = [], on
           <Field id="co-name" label="Customer name">
             <input id="co-name" className="ui-field" required maxLength={255} value={draft.customer_name} onChange={set('customer_name')} />
           </Field>
-          <Field id="co-phone" label="Phone" help="01XXXXXXXXX or +8801XXXXXXXXX">
-            <input id="co-phone" className="ui-field" inputMode="tel" maxLength={20} value={draft.customer_phone} onChange={set('customer_phone')} />
+          <Field id="co-phone" label="Phone" help="11 digits, for example 01712345678">
+            <input id="co-phone" className="ui-field" inputMode="tel" required={!isEdit} maxLength={20} placeholder="01XXXXXXXXX" value={draft.customer_phone} onChange={set('customer_phone')} />
           </Field>
+          <ChoiceGroup id="co-source" label="Source" role="radiogroup" className="sm:col-span-2">
+            {sources.map((value) => (
+              <Choice
+                key={value}
+                type="radio"
+                name="co-source"
+                label={SOURCE_LABELS[value] || value}
+                value={value}
+                checked={draft.source === value}
+                disabled={order?.source === 'website'}
+                onChange={set('source')}
+              />
+            ))}
+          </ChoiceGroup>
           <Field id="co-fb-name" label="Facebook profile name">
             <input id="co-fb-name" className="ui-field" maxLength={255} value={draft.facebook_name} onChange={set('facebook_name')} />
-          </Field>
-          <Field id="co-fb-thread" label="Facebook thread link" help="Link to the Messenger conversation in Business Suite.">
-            <input id="co-fb-thread" className="ui-field" type="url" maxLength={1000} placeholder="https://" value={draft.facebook_thread_url} onChange={set('facebook_thread_url')} />
-          </Field>
-          <Field id="co-source" label="Source">
-            <select id="co-source" className="ui-field" value={draft.source} onChange={set('source')} disabled={draft.source === 'website'}>
-              {draft.source === 'website' ? <option value="website">{SOURCE_LABELS.website}</option> : null}
-              {MANUAL_SOURCES.map((value) => (
-                <option key={value} value={value}>{SOURCE_LABELS[value]}</option>
-              ))}
-            </select>
           </Field>
           {!isEdit ? (
             <Field id="co-assignee" label="Assign to">
@@ -203,27 +204,47 @@ export default function OrderFormDialog({ open, order = null, assignees = [], on
             <input id="co-budget-max" className="ui-field" type="number" min={0} step={1} value={draft.budget_max} onChange={set('budget_max')} />
           </Field>
           <Field id="co-rooms" label="Rooms">
-            <input id="co-rooms" className="ui-field" type="number" min={0} max={50} step={1} value={draft.rooms} onChange={set('rooms')} />
+            <select id="co-rooms" className="ui-field" value={draft.rooms} onChange={set('rooms')}>
+              <option value="">Not specified</option>
+              {countChoices(order?.rooms).map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
           </Field>
           <Field id="co-move-in" label="Move-in date">
             <input id="co-move-in" className="ui-field" type="date" value={draft.move_in_date} onChange={set('move_in_date')} />
           </Field>
           <Field id="co-bathrooms" label="Bathrooms">
-            <input id="co-bathrooms" className="ui-field" type="number" min={0} max={50} step={1} value={draft.bathrooms} onChange={set('bathrooms')} />
+            <select id="co-bathrooms" className="ui-field" value={draft.bathrooms} onChange={set('bathrooms')}>
+              <option value="">Not specified</option>
+              {countChoices(order?.bathrooms).map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
           </Field>
           <Field id="co-balconies" label="Balconies">
             <input id="co-balconies" className="ui-field" type="number" min={0} max={50} step={1} value={draft.balconies} onChange={set('balconies')} />
           </Field>
-          <Field id="co-gas" label="Gas">
-            <input id="co-gas" className="ui-field" maxLength={255} placeholder="line / cylinder" value={draft.gas} onChange={set('gas')} />
-          </Field>
+          <ChoiceGroup id="co-gas" label="Gas">
+            {gasOptions.map((option) => (
+              <Choice
+                key={option.value}
+                type="checkbox"
+                label={option.label}
+                checked={draft.gas === option.value}
+                onChange={(event) => setValue('gas', event.target.checked ? option.value : '')}
+              />
+            ))}
+          </ChoiceGroup>
           <Field id="co-follow-up" label="Follow up at" help="Shows as overdue on the dashboard once it passes.">
             <input id="co-follow-up" className="ui-field" type="datetime-local" value={draft.follow_up_at} onChange={set('follow_up_at')} />
           </Field>
         </div>
-        <Field id="co-facilities" label="Facilities">
-          <input id="co-facilities" className="ui-field" maxLength={2000} placeholder="lift, parking, generator…" value={draft.facilities} onChange={set('facilities')} />
-        </Field>
+        <ChoiceGroup id="co-facilities" label="Facilities">
+          {facilityOptions.map((item) => (
+            <Choice key={item} type="checkbox" label={item} checked={draft.facilities.includes(item)} onChange={() => toggleFacility(item)} />
+          ))}
+        </ChoiceGroup>
         <Field id="co-notes" label="Requirement notes">
           <textarea id="co-notes" className="ui-field" rows={3} maxLength={2000} value={draft.requirement_notes} onChange={set('requirement_notes')} />
         </Field>

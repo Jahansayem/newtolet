@@ -169,7 +169,7 @@ Response `201` with the order: `status: "PENDING"`, `service_charge_bdt: 500`, `
 
 - `customer.name` is required, plus at least one of `customer.phone` or `customer.facebook_thread_url`.
 - `type` may be omitted; only `HOUSE_SEARCH` is accepted.
-- `source`: `messenger` (default for agent keys), `lead_generation`, `manual`, `phone`.
+- `source`: `messenger` (default for agent keys), `lead_generation`, `manual`, `phone`, `whatsapp`.
 - `assigned_to` is optional: an admin user's id or email.
 - `follow_up_at` is optional: an ISO 8601 timestamp.
 - **Idempotency:** send an `Idempotency-Key` header. Sending the same key again with the same API key returns the original order with `200` instead of creating a duplicate.
@@ -204,7 +204,7 @@ curl -s "$BASE/orders?created_via=ai_agent&created_from=2026-11-01&sort=oldest&p
 | `rooms` | Exact number of rooms |
 | `move_in_from`, `move_in_to` | Move-in date range, `YYYY-MM-DD` |
 | `assigned_to` | Admin user id or email |
-| `source` | `messenger`, `lead_generation`, `manual`, `phone`, `website` |
+| `source` | `messenger`, `lead_generation`, `manual`, `phone`, `whatsapp`, `website` |
 | `created_via` | `customer`, `ai_agent`, `human_agent` |
 | `payment_status` | `PENDING`, `PARTIAL_PAID`, `PAID` |
 | `has_listings` | `true` (at least one listing found) or `false` (none) |

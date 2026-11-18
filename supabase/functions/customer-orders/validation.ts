@@ -17,7 +17,7 @@ export const ORDER_STATUSES = [
   "SELF_SERVICE", "CANCELLED", "REFUND_REQUESTED", "REFUNDED", "PAYMENT_ISSUE", "PAYMENT_FAILED",
 ];
 export const PAYMENT_STATUSES = ["PENDING", "PARTIAL_PAID", "PAID"];
-export const SOURCES = ["messenger", "lead_generation", "manual", "phone", "website"];
+export const SOURCES = ["messenger", "lead_generation", "manual", "phone", "whatsapp", "website"];
 export const CREATED_VIA = ["customer", "ai_agent", "human_agent"];
 export const SORTS = ["newest", "oldest", "move_in"];
 

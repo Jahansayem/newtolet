@@ -104,10 +104,11 @@ export const CREATED_VIA_LABELS = Object.freeze({
 })
 
 export const SOURCE_LABELS = Object.freeze({
-  messenger: 'Messenger',
+  messenger: 'Facebook',
   lead_generation: 'Lead generation',
   manual: 'Manual entry',
-  phone: 'Phone',
+  phone: 'Phone call',
+  whatsapp: 'WhatsApp',
   website: 'Website',
 })
 

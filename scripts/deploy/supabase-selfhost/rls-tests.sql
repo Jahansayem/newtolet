@@ -1249,4 +1249,267 @@ begin
 end $$;
 select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.4' else 'PASS T12.4 admin approval of an order payment marks the order, adds no credits, keeps a short payment partial' end;
 
+-- ---------------------------------------------------------------------------
+-- T13. Payment links (20261119090000_payment_links.sql). Skipped until the
+--      migration is applied. Admin functions are called as authenticated
+--      users; the gateway marker is called as the table owner (what the Edge
+--      Function does with the service role).
+-- ---------------------------------------------------------------------------
+create temp table t_pl (k text primary key, id uuid not null);
+grant select, insert on t_pl to public;
+reset role;
+
+-- T13.1 grants: the paid-marker is server-only, clients cannot touch the table
+do $$
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  if has_function_privilege('anon', 'public.mark_payment_link_paid_from_gateway(uuid,uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.mark_payment_link_paid_from_gateway(uuid,uuid)', 'execute') then
+    raise exception 'TEST FAIL: mark_payment_link_paid_from_gateway is client-executable';
+  end if;
+  if has_function_privilege('anon', 'public.admin_create_payment_link(integer,text,text,text,text,text,uuid)', 'execute') then
+    raise exception 'TEST FAIL: admin_create_payment_link is executable by anon';
+  end if;
+  if has_table_privilege('anon', 'public.payment_links', 'select')
+     or has_table_privilege('authenticated', 'public.payment_links', 'insert')
+     or has_table_privilege('authenticated', 'public.payment_links', 'update')
+     or has_table_privilege('authenticated', 'public.payment_links', 'delete') then
+    raise exception 'TEST FAIL: payment_links is readable by anon or writable by clients';
+  end if;
+end $$;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.1' else 'PASS T13.1 payment links: server-only paid-marker, no client writes, no anon read' end;
+
+-- T13.2 moderator (no payments.review) cannot create; plain user sees nothing
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'mod'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'mod'), true);
+do $$
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500, 'Service charge')$q$, 'ADMIN_PERMISSION_DENIED');
+  perform pg_temp.co_expect($q$select public.admin_payment_link_counts()$q$, 'ADMIN_PERMISSION_DENIED');
+end $$;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.2' else 'PASS T13.2 a moderator cannot create or count payment links' end;
+
+-- T13.3 finance creates links; validation; codes; counts
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'fin'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'fin'), true);
+do $$
+declare r jsonb; o jsonb; c jsonb;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(5, 'Too small')$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500001, 'Too large')$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500, 'x')$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500, 'Service charge', 'Rahim', '12345')$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500, 'Service charge', 'Rahim', null, 'not-an-email')$q$, 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500, 'Service charge', null, null, null, null, gen_random_uuid())$q$, 'ADMIN_NOT_FOUND');
+
+  r := public.admin_create_payment_link(1500, '  Advance for flat visit ', 'Rahim Uddin', '+8801712345678', 'Rahim@Example.com', 'call first');
+  o := r -> 'row';
+  if o ->> 'code' !~ '^[A-Z2-9]{10}$' or o ->> 'status' <> 'ACTIVE' or (o ->> 'amount_bdt')::int <> 1500
+     or o ->> 'purpose' <> 'Advance for flat visit' or o ->> 'customer_phone' <> '01712345678'
+     or o ->> 'customer_email' <> 'rahim@example.com' or o ->> 'created_by_label' <> 'RLS Fin'
+     or (o ->> 'attempts')::int <> 0 or r ->> 'audit_id' is null then
+    raise exception 'TEST FAIL: created payment link: %', r;
+  end if;
+  insert into t_pl values ('a', (o ->> 'id')::uuid);
+
+  -- A link with no customer details, for the second-payment and cancel checks.
+  r := public.admin_create_payment_link(300, 'Listing boost');
+  if r -> 'row' ->> 'customer_name' is not null then raise exception 'TEST FAIL: empty name was stored: %', r; end if;
+  insert into t_pl values ('b', (r -> 'row' ->> 'id')::uuid);
+  r := public.admin_create_payment_link(400, 'Short payment check');
+  insert into t_pl values ('held', (r -> 'row' ->> 'id')::uuid);
+
+  c := public.admin_payment_link_counts();
+  if (c ->> 'active')::int < 3 or (c ->> 'active_bdt')::int < 2200 then raise exception 'TEST FAIL: payment link counts: %', c; end if;
+  if (select count(*) from public.payment_links_admin) < 3 then raise exception 'TEST FAIL: finance cannot read payment_links_admin'; end if;
+end $$;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.3' else 'PASS T13.3 finance creates payment links; amounts, purpose, phone, email and order are validated' end;
+
+-- T13.4 plain user: no rows, no create, and a browser insert cannot attach a payment to a link
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'plain'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'plain'), true);
+do $$
+declare f uuid := gen_random_uuid(); r public.payment_transactions%rowtype;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  if (select count(*) from public.payment_links) <> 0 or (select count(*) from public.payment_links_admin) <> 0 then
+    raise exception 'TEST FAIL: a plain user can read payment links';
+  end if;
+  perform pg_temp.co_expect($q$select public.admin_create_payment_link(500, 'Service charge')$q$, 'ADMIN_PERMISSION_DENIED');
+  begin
+    update public.payment_links set status = 'PAID';
+    raise exception 'TEST FAIL: a plain user could update payment_links';
+  exception when insufficient_privilege then null;
+  end;
+  insert into public.payment_transactions (id, user_id, payment_link_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (f, (select id from t_ids where k = 'plain'), (select id from t_pl where k = 'a'), 'RLS-TEST-LINK-FORGED', 1500, 'awaiting_admin_approval', 0, 'eps', '176350000000022222');
+  select * into r from public.payment_transactions where id = f;
+  if r.payment_link_id is not null or r.status <> 'pending' or r.reference is not null then
+    raise exception 'TEST FAIL: a browser insert attached itself to a payment link: %', to_jsonb(r);
+  end if;
+end $$;
+reset role;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.4' else 'PASS T13.4 plain users see no payment links and cannot attach a payment row to one' end;
+
+-- T13.5 gateway success: payment credited, link PAID once; short and second payments are not accepted
+do $$
+declare l uuid; p uuid := gen_random_uuid(); p2 uuid := gen_random_uuid(); r jsonb; e record; c_before int; c_after int;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  select id into l from t_pl where k = 'a';
+  select coalesce(sum(credits), 0) into c_before from public.users;
+  insert into public.payment_transactions (id, user_id, payment_link_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p, null, l, 'RLS-TEST-LINK-PAY-1', 1500, 'pending', 0, 'eps', '176350000000033333');
+  perform pg_temp.co_expect(format('select public.mark_payment_link_paid_from_gateway(%L)', p), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format('select public.mark_payment_link_paid_from_gateway(%L)', (select id from t_ids where k = 'pay')), 'ADMIN_VALIDATION');
+  update public.payment_transactions set status = 'awaiting_admin_approval', amount = 1000 where id = p;
+  perform pg_temp.co_expect(format('select public.mark_payment_link_paid_from_gateway(%L)', p), 'ADMIN_VALIDATION');
+  update public.payment_transactions set amount = 1500, credits_to_add = 5 where id = p;
+  perform pg_temp.co_expect(format('select public.mark_payment_link_paid_from_gateway(%L)', p), 'ADMIN_VALIDATION');
+  update public.payment_transactions set credits_to_add = 0 where id = p;
+  if (select status from public.payment_links where id = l) <> 'ACTIVE' then
+    raise exception 'TEST FAIL: a refused payment still closed the link';
+  end if;
+
+  r := public.mark_payment_link_paid_from_gateway(p);
+  if r ->> 'status' <> 'credited' or r ->> 'link_status' <> 'PAID' or (r ->> 'already_paid')::boolean or r ->> 'mirror' <> 'skipped' then
+    raise exception 'TEST FAIL: mark link paid result: %', r;
+  end if;
+  select status, paid_at, paid_payment_id, paid_reference into e from public.payment_links_admin where id = l;
+  if e.status <> 'PAID' or e.paid_at is null or e.paid_payment_id <> p or e.paid_reference <> '176350000000033333' then
+    raise exception 'TEST FAIL: link after payment: %', to_jsonb(e);
+  end if;
+  if (select status from public.payment_transactions where id = p) <> 'credited' then
+    raise exception 'TEST FAIL: link payment is not credited';
+  end if;
+  r := public.mark_payment_link_paid_from_gateway(p);
+  if not (r ->> 'already_paid')::boolean then raise exception 'TEST FAIL: second call was not a no-op: %', r; end if;
+
+  -- A second customer payment on the same link is held, not accepted.
+  insert into public.payment_transactions (id, user_id, payment_link_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p2, null, l, 'RLS-TEST-LINK-PAY-2', 1500, 'awaiting_admin_approval', 0, 'eps', '176350000000044444');
+  r := public.mark_payment_link_paid_from_gateway(p2);
+  if r ->> 'held' <> 'link_already_paid' or r ->> 'status' <> 'awaiting_admin_approval' then
+    raise exception 'TEST FAIL: second payment result: %', r;
+  end if;
+  if (select status from public.payment_transactions where id = p2) <> 'awaiting_admin_approval'
+     or (select review_note from public.payment_transactions where id = p2) is null
+     or (select paid_payment_id from public.payment_links where id = l) <> p then
+    raise exception 'TEST FAIL: a second payment replaced the first or was accepted';
+  end if;
+  insert into t_pl values ('dup_pay', p2);
+  select coalesce(sum(credits), 0) into c_after from public.users;
+  if c_after <> c_before then raise exception 'TEST FAIL: a payment link payment changed a credit balance'; end if;
+end $$;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.5' else 'PASS T13.5 gateway payment closes the link once; short and second payments are held; no credits move' end;
+
+-- T13.6 finance: approving a held short payment takes the link path; a duplicate cannot be approved; cancel rules
+do $$
+declare p uuid := gen_random_uuid();
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  -- 350 of 400: the automatic path refuses it, so it waits for finance.
+  insert into public.payment_transactions (id, user_id, payment_link_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p, null, (select id from t_pl where k = 'held'), 'RLS-TEST-LINK-PAY-3', 350, 'awaiting_admin_approval', 0, 'eps', '176350000000055555');
+  perform pg_temp.co_expect(format('select public.mark_payment_link_paid_from_gateway(%L)', p), 'ADMIN_VALIDATION');
+  insert into t_pl values ('held_pay', p);
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'fin'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'fin'), true);
+do $$
+declare r jsonb;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  -- A link with a payment waiting for review cannot be cancelled from under it.
+  perform pg_temp.co_expect(format('select public.admin_cancel_payment_link(%L, %L)', (select id from t_pl where k = 'held'), 'Customer changed plans'), 'ADMIN_CONFLICT');
+
+  r := public.admin_approve_payment((select id from t_pl where k = 'held_pay'));
+  if r -> 'row' ->> 'status' <> 'credited' or (r ->> 'credits_added')::int <> 0 then
+    raise exception 'TEST FAIL: finance approval of a link payment: %', r;
+  end if;
+  if (select status from public.payment_links_admin where id = (select id from t_pl where k = 'held')) <> 'PAID' then
+    raise exception 'TEST FAIL: approved link payment did not close the link';
+  end if;
+
+  -- The duplicate from T13.5 must not be approvable: its link is already paid.
+  perform pg_temp.co_expect(format('select public.admin_approve_payment(%L)', (select id from t_pl where k = 'dup_pay')), 'ADMIN_CONFLICT');
+
+  perform pg_temp.co_expect(format('select public.admin_cancel_payment_link(%L, %L)', (select id from t_pl where k = 'b'), '  '), 'ADMIN_VALIDATION');
+  perform pg_temp.co_expect(format('select public.admin_cancel_payment_link(%L, %L)', (select id from t_pl where k = 'a'), 'Already paid'), 'ADMIN_INVALID_TRANSITION');
+  r := public.admin_cancel_payment_link((select id from t_pl where k = 'b'), 'Customer changed plans');
+  if r -> 'row' ->> 'status' <> 'CANCELLED' or r -> 'row' ->> 'cancel_reason' <> 'Customer changed plans' or r ->> 'audit_id' is null then
+    raise exception 'TEST FAIL: cancel result: %', r;
+  end if;
+  perform pg_temp.co_expect(format('select public.admin_cancel_payment_link(%L, %L)', (select id from t_pl where k = 'b'), 'Again'), 'ADMIN_INVALID_TRANSITION');
+end $$;
+reset role;
+do $$
+declare p uuid := gen_random_uuid(); r jsonb; n int;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  -- Read as the table owner: RLS would hide ledger rows from the finance user.
+  select count(*) into n from public.credit_transactions where reference_id = (select id from t_pl where k = 'held_pay');
+  if n <> 0 then raise exception 'TEST FAIL: a link payment wrote a credit ledger row'; end if;
+  -- The customer was already on the EPS page when the link was cancelled.
+  insert into public.payment_transactions (id, user_id, payment_link_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p, null, (select id from t_pl where k = 'b'), 'RLS-TEST-LINK-PAY-4', 300, 'awaiting_admin_approval', 0, 'eps', '176350000000066666');
+  r := public.mark_payment_link_paid_from_gateway(p);
+  if r ->> 'held' <> 'link_cancelled' or (select status from public.payment_links where id = (select id from t_pl where k = 'b')) <> 'CANCELLED' then
+    raise exception 'TEST FAIL: payment on a cancelled link: %', r;
+  end if;
+end $$;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.6' else 'PASS T13.6 finance approval closes the link without credits; duplicates and cancelled links are held; cancel rules hold' end;
+
+-- T13.7 a link attached to a Customer Order records and verifies the payment on that order
+do $$
+declare r jsonb;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  r := public.co_create_order('api_agent', null, 'agent-1',
+    '{"type":"HOUSE_SEARCH","customer_name":"Link Customer","customer_phone":"01812345670","source":"messenger","area":"Banani"}', null, false);
+  insert into t_pl values ('order', (r -> 'order' ->> 'id')::uuid);
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'fin'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'fin'), true);
+do $$
+declare r jsonb; o jsonb;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  r := public.admin_create_payment_link(500, 'Service charge for house search', null, null, null, null, (select id from t_pl where k = 'order'));
+  o := r -> 'row';
+  -- Name and phone are taken from the order when the admin leaves them empty.
+  if o ->> 'customer_name' <> 'Link Customer' or o ->> 'customer_phone' <> '01812345670' or o ->> 'customer_order_id' is null then
+    raise exception 'TEST FAIL: link attached to an order: %', r;
+  end if;
+  insert into t_pl values ('order_link', (o ->> 'id')::uuid);
+end $$;
+reset role;
+do $$
+declare p uuid := gen_random_uuid(); r jsonb; e record; n int;
+begin
+  if to_regclass('public.payment_links') is null then return; end if;
+  insert into public.payment_transactions (id, user_id, payment_link_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p, null, (select id from t_pl where k = 'order_link'), 'RLS-TEST-LINK-PAY-5', 500, 'awaiting_admin_approval', 0, 'eps', '176350000000077777');
+  r := public.mark_payment_link_paid_from_gateway(p);
+  if r ->> 'mirror' <> 'verified' or r ->> 'link_status' <> 'PAID' then raise exception 'TEST FAIL: order link paid result: %', r; end if;
+  select status, payment_status, payment_verification, amount_verified, payment_verified_at into e
+  from public.customer_orders_enriched where id = (select id from t_pl where k = 'order');
+  if e.status <> 'PAYMENT_VERIFIED' or e.payment_status <> 'PAID' or e.payment_verification <> 'VERIFIED'
+     or e.amount_verified <> 500 or e.payment_verified_at is null then
+    raise exception 'TEST FAIL: customer order after a link payment: %', to_jsonb(e);
+  end if;
+  r := public.mark_payment_link_paid_from_gateway(p);
+  select count(*) into n from public.customer_order_payment_claims where order_id = (select id from t_pl where k = 'order');
+  if n <> 1 then raise exception 'TEST FAIL: % claims after a repeated call, expected 1', n; end if;
+  if (select customer_order_no from public.payment_links_admin where id = (select id from t_pl where k = 'order_link')) is null then
+    raise exception 'TEST FAIL: payment_links_admin does not show the order number';
+  end if;
+end $$;
+select case when to_regclass('public.payment_links') is null then 'SKIP T13.7' else 'PASS T13.7 a link attached to a Customer Order verifies the payment on the order exactly once' end;
+
 select 'RLS_TESTS_PASSED';

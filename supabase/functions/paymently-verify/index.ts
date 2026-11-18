@@ -74,7 +74,10 @@ Deno.serve(async (request) => {
         ? await getPaymentTransactionById(adminClient, paymentId)
         : await getPaymentTransactionForInvoice(adminClient, lookupReference);
 
-      if (!payment) {
+      // Payment link payments have their own function (payment-links), which
+      // also checks the link code. This branch needs no sign-in, so it must
+      // not reveal or settle them.
+      if (!payment || payment.payment_link_id) {
         return Response.json(
           { error: "Payment transaction not found for this payment" },
           { status: 404 },

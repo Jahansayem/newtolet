@@ -18,6 +18,7 @@ const PAGE_BY_PATH = Object.freeze({
   '/my-orders': 'my-orders',
   '/my-properties': 'my-properties',
   '/orderhome': 'orderhome',
+  '/pay': 'pay',
   '/payment-confirm': 'payment-confirm',
   '/privacy': 'privacy',
   '/propertylist': 'propertylist',

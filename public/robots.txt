@@ -9,6 +9,7 @@ Disallow: /my-properties/
 Disallow: /my-orders/
 Disallow: /book/
 Disallow: /payment-confirm/
+Disallow: /pay/
 Disallow: /reset-password/
 Disallow: /saved/
 

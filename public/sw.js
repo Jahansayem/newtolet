@@ -32,6 +32,7 @@ const BLOCKED_DOCUMENT_PREFIXES = [
   '/addproperty',
   '/edit-property',
   '/payment-confirm',
+  '/pay',
 ]
 
 const SUPABASE_PUBLIC_TABLES = new Set([

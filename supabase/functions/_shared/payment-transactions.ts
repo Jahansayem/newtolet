@@ -219,6 +219,17 @@ export const getPayableOrderOrThrow = async (
   return order;
 };
 
+// A verified payment for a payment link. The database decides whether the link
+// becomes PAID or the payment is held for review (link already paid/cancelled).
+const markPaymentLinkPaid = async (adminClient: any, paymentId: string) => {
+  const { error } = await adminClient.rpc("mark_payment_link_paid_from_gateway", {
+    p_payment_transaction_id: paymentId,
+  });
+
+  if (error) throw error;
+  return getPaymentTransactionById(adminClient, paymentId);
+};
+
 const markOrderPaid = async (adminClient: any, paymentId: string) => {
   const { error } = await adminClient.rpc("mark_order_paid_from_gateway", {
     p_payment_transaction_id: paymentId,
@@ -231,9 +242,10 @@ const markOrderPaid = async (adminClient: any, paymentId: string) => {
 export const createPendingPaymentTransaction = async (
   adminClient: any,
   payload: {
-    userId: string;
+    userId: string | null;
     packageId?: string | null;
     orderId?: string | null;
+    paymentLinkId?: string | null;
     transactionId: string;
     amount: number;
     creditsToAdd: number;
@@ -249,6 +261,7 @@ export const createPendingPaymentTransaction = async (
       user_id: payload.userId,
       package_id: payload.packageId || null,
       order_id: payload.orderId || null,
+      payment_link_id: payload.paymentLinkId || null,
       transaction_id: payload.transactionId,
       amount: payload.amount,
       status: "pending",
@@ -406,6 +419,25 @@ export const syncGatewayPayment = async (
       ...sharedUpdate,
       status: "awaiting_admin_approval",
     });
+
+    // Payment link: no user and no credits. A matching amount marks the link
+    // paid; any other amount stays in awaiting_admin_approval for a human.
+    if (syncedPayment.payment_link_id) {
+      if (!amountMatches) {
+        return syncedPayment;
+      }
+
+      try {
+        return await markPaymentLinkPaid(adminClient, syncedPayment.id);
+      } catch (error) {
+        console.error("[payment-transactions] marking the payment link paid failed", {
+          paymentId: syncedPayment.id,
+          paymentLinkId: syncedPayment.payment_link_id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return syncedPayment;
+      }
+    }
 
     // Order payment: no credits. A matching amount marks the order paid; any
     // other amount stays in awaiting_admin_approval for a human to decide.

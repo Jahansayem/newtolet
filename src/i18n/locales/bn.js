@@ -115,7 +115,7 @@ const core = {
     openQuickActions: 'দ্রুত অ্যাকশন খুলুন',
     quickAccess: 'দ্রুত অ্যাক্সেস',
     addProperty: 'প্রপার্টি যোগ করুন',
-    orderHome: 'বাসা অর্ডার করুন',
+    orderHome: 'বাসা অর্ডার',
     propertyList: 'প্রপার্টি লিস্ট',
     property: 'প্রপার্টি',
     buyCredits: 'ক্রেডিট কিনুন',

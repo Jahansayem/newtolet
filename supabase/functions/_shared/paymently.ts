@@ -80,17 +80,20 @@ export const getPaymentErrorMessage = (error: unknown, fallback: string) =>
 export const getFunctionUrl = (name: string) =>
   `${getSupabasePublicUrl()}/functions/v1/${name}`;
 
-export const getEpsCheckoutUrls = (merchantTransactionId: string) => ({
-  successUrl: `${getSiteUrl()}/payment-confirm?provider=eps&reference=${
-    encodeURIComponent(merchantTransactionId)
-  }`,
-  failUrl: `${getSiteUrl()}/payment-confirm?provider=eps&state=failed&reference=${
-    encodeURIComponent(merchantTransactionId)
-  }`,
-  cancelUrl: `${getSiteUrl()}/payment-confirm?provider=eps&state=cancelled&reference=${
-    encodeURIComponent(merchantTransactionId)
-  }`,
-});
+// `kind` tells the return page what was bought ("order") even when it shows a
+// cancelled checkout without calling the verify function. Omitted for credits.
+export const getEpsCheckoutUrls = (merchantTransactionId: string, kind = "") => {
+  const base = `${getSiteUrl()}/payment-confirm?provider=eps${
+    kind ? `&kind=${encodeURIComponent(kind)}` : ""
+  }`;
+  const reference = `&reference=${encodeURIComponent(merchantTransactionId)}`;
+
+  return {
+    successUrl: `${base}${reference}`,
+    failUrl: `${base}&state=failed${reference}`,
+    cancelUrl: `${base}&state=cancelled${reference}`,
+  };
+};
 
 export const getBearerToken = (request: Request) => {
   const authorization = request.headers.get("authorization") || "";

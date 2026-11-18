@@ -24,6 +24,7 @@ const isAuthorizedPing = (request: Request) => {
 
 const sanitizePayment = (payment: Record<string, unknown>) => ({
   id: payment.id || null,
+  order_id: payment.order_id || null,
   transaction_id: payment.transaction_id || null,
   invoice_id: payment.invoice_id || null,
   reference: payment.reference || null,

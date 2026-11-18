@@ -172,6 +172,7 @@ export const initializeEpsPayment = async (payload: {
   customerEmail: string;
   customerPhone: string;
   productName: string;
+  productCategory?: string;
   ipAddress?: string;
 }) => {
   // EPS requires a digit-only merchant transaction id of at least 10 digits.
@@ -220,7 +221,7 @@ export const initializeEpsPayment = async (payload: {
         noOfItem: "1",
         productName: payload.productName,
         productProfile: "general",
-        productCategory: "Credits",
+        productCategory: payload.productCategory || "Credits",
       }),
     },
     EPS_TIMEOUT_MS,

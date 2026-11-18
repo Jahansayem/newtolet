@@ -167,11 +167,73 @@ export const assertUserCanPurchaseCredits = async (
   }
 };
 
+// The Order Home price lives in the database (order_home_pricing()), so the
+// amount charged can never come from the browser.
+export const getOrderHomePayableAmount = async (adminClient: any) => {
+  const { data, error } = await adminClient.rpc("order_home_pricing");
+  if (error) throw error;
+
+  const payable = toNumber(data?.payable_bdt, 0);
+  if (payable <= 0) throw new Error("Order price is not configured");
+  return payable;
+};
+
+// An order can be paid for only by its owner, only while it is unpaid, and
+// only at the current server price.
+export const getPayableOrderOrThrow = async (
+  adminClient: any,
+  orderId: string,
+  userId: string,
+  payableAmount: number,
+) => {
+  const { data: order, error } = await adminClient
+    .from("orders")
+    .select("id, user_id, status, cost, archived_at")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!order || order.user_id !== userId || order.archived_at) {
+    throw new Error("Order not found");
+  }
+  if (order.status !== "pending_payment") {
+    throw new Error("This order is already paid or closed");
+  }
+  if (Math.abs(toNumber(order.cost, 0) - payableAmount) >= 0.01) {
+    throw new Error("Order price has changed. Please contact support.");
+  }
+
+  // A verified payment that is still held for review also blocks a second charge.
+  const { data: paidRows, error: paidError } = await adminClient
+    .from("payment_transactions")
+    .select("id")
+    .eq("order_id", orderId)
+    .in("status", ["credited", "awaiting_admin_approval", CREDITING_STATUS])
+    .limit(1);
+
+  if (paidError) throw paidError;
+  if (paidRows?.length) {
+    throw new Error("This order is already paid or closed");
+  }
+
+  return order;
+};
+
+const markOrderPaid = async (adminClient: any, paymentId: string) => {
+  const { error } = await adminClient.rpc("mark_order_paid_from_gateway", {
+    p_payment_transaction_id: paymentId,
+  });
+
+  if (error) throw error;
+  return getPaymentTransactionById(adminClient, paymentId);
+};
+
 export const createPendingPaymentTransaction = async (
   adminClient: any,
   payload: {
     userId: string;
-    packageId: string;
+    packageId?: string | null;
+    orderId?: string | null;
     transactionId: string;
     amount: number;
     creditsToAdd: number;
@@ -185,7 +247,8 @@ export const createPendingPaymentTransaction = async (
     .from("payment_transactions")
     .insert({
       user_id: payload.userId,
-      package_id: payload.packageId,
+      package_id: payload.packageId || null,
+      order_id: payload.orderId || null,
       transaction_id: payload.transactionId,
       amount: payload.amount,
       status: "pending",
@@ -343,6 +406,25 @@ export const syncGatewayPayment = async (
       ...sharedUpdate,
       status: "awaiting_admin_approval",
     });
+
+    // Order payment: no credits. A matching amount marks the order paid; any
+    // other amount stays in awaiting_admin_approval for a human to decide.
+    if (syncedPayment.order_id) {
+      if (!amountMatches) {
+        return syncedPayment;
+      }
+
+      try {
+        return await markOrderPaid(adminClient, syncedPayment.id);
+      } catch (error) {
+        console.error("[payment-transactions] marking the order paid failed", {
+          paymentId: syncedPayment.id,
+          orderId: syncedPayment.order_id,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return syncedPayment;
+      }
+    }
 
     if (verifiedAmount > AUTO_APPROVAL_THRESHOLD_BDT || !amountMatches) {
       return syncedPayment;

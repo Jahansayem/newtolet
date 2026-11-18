@@ -12,10 +12,13 @@ import {
   createPendingPaymentTransaction,
   getCreditPackageOrThrow,
   getDisplayName,
+  getOrderHomePayableAmount,
+  getPayableOrderOrThrow,
   updatePaymentTransactionById,
 } from "../_shared/payment-transactions.ts";
 
 const PROVIDER = "eps";
+const ORDER_DESCRIPTION = "Order Home service charge";
 
 // EPS requires a digit-only merchant transaction id (minimum 10 digits).
 // 13-digit millisecond timestamp + 5 random digits = 18 digits, unique enough per merchant.
@@ -33,28 +36,67 @@ Deno.serve(async (request) => {
     const { user, profile, adminClient } = await getAuthenticatedContext(request);
     const body = await request.json().catch(() => ({}));
     const packageId = body?.packageId;
+    const orderId = body?.orderId || body?.order_id;
 
-    if (!packageId) {
+    if (!packageId && !orderId) {
       return Response.json({ error: "Package is required" }, { status: 400 });
     }
 
-    await assertUserCanPurchaseCredits(adminClient, profile);
-
-    const selectedPackage = await getCreditPackageOrThrow(adminClient, packageId);
-    const price = Number(selectedPackage.price_bdt ?? 0);
-    const discount = Number(selectedPackage.discount_percentage ?? 0);
-    const finalAmount = Number((price - (price * discount) / 100).toFixed(2));
-    const creditsToAdd = Number(selectedPackage.credits_amount ?? 0);
     const transactionId = buildTransactionId();
     const customerPhone = body?.phoneNumber || body?.phone_number || profile.phone || "01700000000";
 
+    // What is being bought: an Order Home service charge, or a credit package.
+    let purchase: {
+      packageId: string | null;
+      orderId: string | null;
+      amount: number;
+      creditsToAdd: number;
+      description: string;
+      productCategory: string;
+      returnKind: string;
+    };
+
+    if (orderId && !packageId) {
+      const payableAmount = await getOrderHomePayableAmount(adminClient);
+      const order = await getPayableOrderOrThrow(adminClient, orderId, profile.id, payableAmount);
+
+      purchase = {
+        packageId: null,
+        orderId: order.id,
+        amount: payableAmount,
+        creditsToAdd: 0,
+        description: ORDER_DESCRIPTION,
+        productCategory: "Service",
+        returnKind: "order",
+      };
+    } else {
+      await assertUserCanPurchaseCredits(adminClient, profile);
+
+      const selectedPackage = await getCreditPackageOrThrow(adminClient, packageId);
+      const price = Number(selectedPackage.price_bdt ?? 0);
+      const discount = Number(selectedPackage.discount_percentage ?? 0);
+
+      purchase = {
+        packageId: selectedPackage.id,
+        orderId: null,
+        amount: Number((price - (price * discount) / 100).toFixed(2)),
+        creditsToAdd: Number(selectedPackage.credits_amount ?? 0),
+        description: `${selectedPackage.package_name} credit purchase`,
+        productCategory: "Credits",
+        returnKind: "",
+      };
+    }
+
+    const finalAmount = purchase.amount;
+
     const paymentTransaction = await createPendingPaymentTransaction(adminClient, {
       userId: profile.id,
-      packageId: selectedPackage.id,
+      packageId: purchase.packageId,
+      orderId: purchase.orderId,
       transactionId,
       amount: finalAmount,
-      creditsToAdd,
-      description: `${selectedPackage.package_name} credit purchase`,
+      creditsToAdd: purchase.creditsToAdd,
+      description: purchase.description,
       provider: PROVIDER,
       paymentMethod: PROVIDER,
       customerPhone,
@@ -63,7 +105,7 @@ Deno.serve(async (request) => {
     const merchantTransactionId = buildMerchantTransactionId();
 
     try {
-      const checkoutUrls = getEpsCheckoutUrls(merchantTransactionId);
+      const checkoutUrls = getEpsCheckoutUrls(merchantTransactionId, purchase.returnKind);
 
       console.info("[paymently-create-checkout] starting EPS checkout", {
         paymentId: paymentTransaction.id,
@@ -82,7 +124,8 @@ Deno.serve(async (request) => {
         // EPS marks customerEmail as mandatory; phone-only accounts have no email.
         customerEmail: profile.email || user.email || "support@newtolet.com",
         customerPhone,
-        productName: `${selectedPackage.package_name} credit purchase`,
+        productName: purchase.description,
+        productCategory: purchase.productCategory,
       });
 
       const paymentUrl = gatewayResponse.redirectUrl;
@@ -135,8 +178,10 @@ Deno.serve(async (request) => {
       ? 401
       : message === "Package is required"
       ? 400
-      : message === "Credit package not found"
+      : message === "Credit package not found" || message === "Order not found"
       ? 404
+      : message === "This order is already paid or closed" || message.startsWith("Order price has changed")
+      ? 409
       : message.includes("inactive") || message.includes("restricted")
       ? 403
       : 500;

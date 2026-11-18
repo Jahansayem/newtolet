@@ -4,6 +4,7 @@ import Script from 'next/script'
 import { Hind_Siliguri, Poppins } from 'next/font/google'
 import { DEFAULT_OG_IMAGE, ROUTE_SEO, SITE_NAME, SITE_URL } from '../src/lib/seo/siteMeta.js'
 import { siteJsonLd } from '../src/lib/seo/jsonLd.js'
+import { DOUBLE_SLASH_GUARD } from '../src/lib/doubleSlashGuard.js'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -69,6 +70,7 @@ export default function RootLayout({ children }) {
       <head>
         <Script id="remove-extension-hydration-attrs" strategy="beforeInteractive">
           {`
+            ${DOUBLE_SLASH_GUARD}
             (function () {
               try {
                 if (localStorage.getItem('appLanguage') === 'bn') {

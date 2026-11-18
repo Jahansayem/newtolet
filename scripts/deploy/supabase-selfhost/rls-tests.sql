@@ -1062,4 +1062,136 @@ begin
 end $$;
 select case when to_regclass('public.customer_orders') is null then 'SKIP T11.8' else 'PASS T11.8 moderator manages orders but cannot verify or delete; finance verifies; every write records its actor' end;
 
+-- ---------------------------------------------------------------------------
+-- T12. EPS payment for website orders (20261118100000_order_eps_payment.sql).
+--      Skipped until the migration is applied.
+-- ---------------------------------------------------------------------------
+create temp table t_op (k text primary key, id uuid not null);
+grant select, insert on t_op to public;
+
+-- T12.1 price constant and grants
+do $$
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  if public.order_home_pricing() <> '{"regular_bdt":1000,"discount_percent":50,"payable_bdt":500}'::jsonb then
+    raise exception 'TEST FAIL: order_home_pricing: %', public.order_home_pricing();
+  end if;
+  if has_function_privilege('anon', 'public.mark_order_paid_from_gateway(uuid,uuid)', 'execute')
+     or has_function_privilege('authenticated', 'public.mark_order_paid_from_gateway(uuid,uuid)', 'execute') then
+    raise exception 'TEST FAIL: mark_order_paid_from_gateway is client-executable';
+  end if;
+end $$;
+select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.1' else 'PASS T12.1 order price is 500 (1000 less 50%) and the paid-marker is server-only' end;
+
+-- T12.2 a browser insert cannot choose its cost or status, and cannot mark itself paid
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'plain'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'plain'), true);
+do $$
+declare l uuid := gen_random_uuid(); o public.orders%rowtype;
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  insert into public.orders (id, user_id, division, district, area, category, rooms, max_budget, cost, status)
+  values (l, (select id from t_ids where k = 'plain'), 'Dhaka', 'Dhaka', 'Banani', 'Family', 2, 18000, 1, 'confirmed');
+  select * into o from public.orders where id = l;
+  if o.cost <> 500 or o.status <> 'pending_payment' then
+    raise exception 'TEST FAIL: tampered insert stored cost % status %', o.cost, o.status;
+  end if;
+  insert into t_op values ('order', l);
+  begin
+    perform public.mark_order_paid_from_gateway(gen_random_uuid());
+    raise exception 'TEST FAIL: authenticated executed mark_order_paid_from_gateway';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.orders set status = 'pending' where id = l;
+  exception when insufficient_privilege then null;
+  end;
+  if exists (select 1 from public.orders where id = l and status <> 'pending_payment') then
+    raise exception 'TEST FAIL: a customer moved their own order out of pending_payment';
+  end if;
+end $$;
+reset role;
+select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.2' else 'PASS T12.2 browser inserts are forced to the offer price and pending_payment' end;
+
+-- T12.3 gateway success: payment credited, order pending, mirror verified, idempotent
+do $$
+declare l uuid; p uuid := gen_random_uuid(); r jsonb; e record; n int; c_before int; c_after int;
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  select id into l from t_op where k = 'order';
+  if (select service_charge_bdt from public.customer_orders where legacy_order_id = l) <> 500 then
+    raise exception 'TEST FAIL: mirrored order does not carry the 500 BDT charge';
+  end if;
+  select credits into c_before from public.users where id = (select id from t_ids where k = 'plain');
+  insert into public.payment_transactions (id, user_id, order_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p, (select id from t_ids where k = 'plain'), l, 'RLS-TEST-ORDER-PAY-1', 500, 'pending', 0, 'eps', '176350000000012345');
+  perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', p), 'ADMIN_INVALID_TRANSITION');
+  perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', (select id from t_ids where k = 'pay')), 'ADMIN_VALIDATION');
+  update public.payment_transactions set status = 'awaiting_admin_approval' where id = p;
+
+  r := public.mark_order_paid_from_gateway(p);
+  if r ->> 'mirror' <> 'verified' or r ->> 'order_status' <> 'pending' or (r ->> 'already_paid')::boolean then
+    raise exception 'TEST FAIL: mark paid result: %', r;
+  end if;
+  if (select status from public.payment_transactions where id = p) <> 'credited' then
+    raise exception 'TEST FAIL: order payment is not credited';
+  end if;
+  select status, payment_status, payment_verification, amount_verified, payment_verified_at into e
+  from public.customer_orders_enriched where legacy_order_id = l;
+  if e.status <> 'PAYMENT_VERIFIED' or e.payment_status <> 'PAID' or e.payment_verification <> 'VERIFIED'
+     or e.amount_verified <> 500 or e.payment_verified_at is null then
+    raise exception 'TEST FAIL: mirrored order after payment: %', to_jsonb(e);
+  end if;
+
+  r := public.mark_order_paid_from_gateway(p);
+  if not (r ->> 'already_paid')::boolean then raise exception 'TEST FAIL: second call was not a no-op: %', r; end if;
+  select count(*) into n from public.customer_order_payment_claims c
+    join public.customer_orders o on o.id = c.order_id where o.legacy_order_id = l;
+  if n <> 1 then raise exception 'TEST FAIL: % claims after a repeated call, expected 1', n; end if;
+  select credits into c_after from public.users where id = (select id from t_ids where k = 'plain');
+  if c_after <> c_before then raise exception 'TEST FAIL: an order payment changed the credit balance'; end if;
+end $$;
+select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.3' else 'PASS T12.3 gateway payment marks the order paid once, verifies the mirror, grants no credits' end;
+
+-- T12.4 a held order payment approved by finance takes the order path, not the credit path
+do $$
+declare l uuid := gen_random_uuid(); p uuid := gen_random_uuid();
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  insert into public.orders (id, user_id, division, district, area, category, rooms, max_budget, cost, status)
+  values (l, (select id from t_ids where k = 'plain'), 'Dhaka', 'Dhaka', 'Dhanmondi', 'Family', 3, 30000, 500, 'pending_payment');
+  insert into public.payment_transactions (id, user_id, order_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values (p, (select id from t_ids where k = 'plain'), l, 'RLS-TEST-ORDER-PAY-2', 450, 'awaiting_admin_approval', 0, 'eps', '176350000000054321');
+  insert into t_op values ('held_order', l), ('held_pay', p);
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'fin'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'fin'), true);
+do $$
+declare r jsonb;
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  r := public.admin_approve_payment((select id from t_op where k = 'held_pay'));
+  if r -> 'row' ->> 'status' <> 'credited' or (r ->> 'credits_added')::int <> 0 then
+    raise exception 'TEST FAIL: finance approval of an order payment: %', r;
+  end if;
+end $$;
+reset role;
+do $$
+declare e record;
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  if (select status from public.orders where id = (select id from t_op where k = 'held_order')) <> 'pending' then
+    raise exception 'TEST FAIL: approved order payment did not move the order to pending';
+  end if;
+  -- 450 of 500: recorded and verified, but the order is not fully paid.
+  select status, payment_status, amount_verified into e
+  from public.customer_orders_enriched where legacy_order_id = (select id from t_op where k = 'held_order');
+  if e.amount_verified <> 450 or e.payment_status <> 'PARTIAL_PAID' or e.status = 'PAYMENT_VERIFIED' then
+    raise exception 'TEST FAIL: mirrored order after a short payment: %', to_jsonb(e);
+  end if;
+end $$;
+select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.4' else 'PASS T12.4 admin approval of an order payment marks the order, adds no credits, keeps a short payment partial' end;
+
 select 'RLS_TESTS_PASSED';

@@ -13,6 +13,7 @@
 #                        (the Stage 3 follow-up); enables the T9 checks.
 #   --dry-run-customers  same for 20261102090000_customer_events.sql; enables T10.
 #   --dry-run-customer-orders  same for 20261116090000_customer_orders.sql; enables T11.
+#   --dry-run-order-payment  same for 20261118100000_order_eps_payment.sql; enables T12.
 #
 # Everything runs inside BEGIN ... ROLLBACK, so nothing persists. Identity is
 # switched with SET LOCAL ROLE + request.jwt.claims; `postgres` is a member of
@@ -32,12 +33,14 @@ DRY_RUN=0
 DRY_RUN_LOCKDOWN=0
 DRY_RUN_CUSTOMERS=0
 DRY_RUN_CUSTOMER_ORDERS=0
+DRY_RUN_ORDER_PAYMENT=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run-migration) DRY_RUN=1 ;;
     --dry-run-lockdown) DRY_RUN_LOCKDOWN=1 ;;
     --dry-run-customers) DRY_RUN_CUSTOMERS=1 ;;
     --dry-run-customer-orders) DRY_RUN_CUSTOMER_ORDERS=1 ;;
+    --dry-run-order-payment) DRY_RUN_ORDER_PAYMENT=1 ;;
     *) SSH_KEY="$arg" ;;
   esac
 done
@@ -52,6 +55,7 @@ MIGRATION="$REPO/supabase/migrations/20261025090000_admin_roles_audit_rpcs.sql"
 LOCKDOWN="$REPO/supabase/migrations/20261101090000_lock_admin_direct_writes.sql"
 CUSTOMERS="$REPO/supabase/migrations/20261102090000_customer_events.sql"
 CUSTOMER_ORDERS="$REPO/supabase/migrations/20261116090000_customer_orders.sql"
+ORDER_PAYMENT="$REPO/supabase/migrations/20261118100000_order_eps_payment.sql"
 [[ -f "$TESTS" ]] || { echo "missing $TESTS" >&2; exit 1; }
 
 SSH_OPTS=(-i "$SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
@@ -73,6 +77,10 @@ build_sql() {
   if [[ "$DRY_RUN_CUSTOMER_ORDERS" == "1" ]]; then
     echo "-- dry run: customer orders migration body without its own begin/commit"
     tr -d '\r' < "$CUSTOMER_ORDERS" | sed -e '/^begin;$/d' -e '/^commit;$/d'
+  fi
+  if [[ "$DRY_RUN_ORDER_PAYMENT" == "1" ]]; then
+    echo "-- dry run: order EPS payment migration body without its own begin/commit"
+    tr -d '\r' < "$ORDER_PAYMENT" | sed -e '/^begin;$/d' -e '/^commit;$/d'
   fi
   tr -d '\r' < "$TESTS"
   echo "rollback;"

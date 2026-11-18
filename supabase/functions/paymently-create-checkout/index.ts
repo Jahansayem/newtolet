@@ -45,6 +45,9 @@ Deno.serve(async (request) => {
     const transactionId = buildTransactionId();
     const customerPhone = body?.phoneNumber || body?.phone_number || profile.phone || "01700000000";
 
+    // Inactive and blacklisted accounts cannot start any checkout.
+    await assertUserCanPurchaseCredits(adminClient, profile);
+
     // What is being bought: an Order Home service charge, or a credit package.
     let purchase: {
       packageId: string | null;
@@ -70,8 +73,6 @@ Deno.serve(async (request) => {
         returnKind: "order",
       };
     } else {
-      await assertUserCanPurchaseCredits(adminClient, profile);
-
       const selectedPackage = await getCreditPackageOrThrow(adminClient, packageId);
       const price = Number(selectedPackage.price_bdt ?? 0);
       const discount = Number(selectedPackage.discount_percentage ?? 0);

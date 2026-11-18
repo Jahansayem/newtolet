@@ -6,6 +6,8 @@
 --   1. order_home_pricing()            the one server-side source of the price
 --   2. orders_enforce_price trigger    a browser insert can never choose its cost
 --   3. one-time reprice of unpaid website orders to the current offer
+--   3b. payment_transactions_guard_client_writes trigger: a browser can no
+--      longer forge or re-point a payment row
 --   4. mark_order_paid_from_gateway()  payment -> credited, order -> pending,
 --                                      Customer Orders mirror -> PAYMENT_VERIFIED
 --   5. approve_credit_payment_transaction() routes order payments to (4) so an
@@ -88,6 +90,57 @@ begin
     );
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- 3b. payment_transactions is written by the Edge Functions (service role) and
+--     the admin RPCs. The RLS policies still let a signed-in user insert rows
+--     for themselves and update their own pending rows, with no limit on the
+--     columns. That allowed a forged "verified" row, or a cheap credit checkout
+--     re-pointed at an order (or given more credits) before paying. From the
+--     browser a row can now only be created inert and only be cancelled.
+--     Not SECURITY DEFINER on purpose: current_user must stay the caller's role.
+-- ---------------------------------------------------------------------------
+create or replace function public.payment_transactions_guard_client_writes()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+declare
+  v_status text;
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.status := 'pending';
+    new.order_id := null;
+    new.package_id := null;
+    new.credits_to_add := 0;
+    new.reference := null;
+    new.invoice_id := null;
+    new.gateway_payload := '{}'::jsonb;
+    new.approved_at := null;
+    new.approved_by := null;
+    new.credited_at := null;
+    new.credited_by := null;
+    return new;
+  end if;
+
+  -- UPDATE: the only change a customer may make is the status (RLS limits it
+  -- to cancelling a pending row). Every other column keeps its stored value.
+  v_status := new.status;
+  new := old;
+  new.status := v_status;
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_payment_transactions_guard_client_writes on public.payment_transactions;
+create trigger trg_payment_transactions_guard_client_writes
+  before insert or update on public.payment_transactions
+  for each row execute function public.payment_transactions_guard_client_writes();
+
 create index if not exists idx_payment_transactions_order
   on public.payment_transactions (order_id) where order_id is not null;
 
@@ -137,6 +190,21 @@ begin
   select * into v_order from public.orders where id = v_pay.order_id for update;
   if not found then
     raise exception using errcode = 'P0001', message = 'ADMIN_NOT_FOUND: Order was not found.';
+  end if;
+  if v_order.user_id is distinct from v_pay.user_id then
+    raise exception using errcode = 'P0001', message = 'ADMIN_VALIDATION: The payment and the order belong to different users.';
+  end if;
+  -- Without a human approver (the automatic gateway path) the payment must be a
+  -- plain order payment that covers the order's stored price. Anything else
+  -- stays in awaiting_admin_approval for someone with payments.review.
+  if p_actor_id is null and (
+       v_pay.package_id is not null
+       or coalesce(v_pay.credits_to_add, 0) <> 0
+       or v_pay.reference is null
+       or v_pay.amount < v_order.cost
+     ) then
+    raise exception using errcode = 'P0001',
+      message = 'ADMIN_VALIDATION: This payment does not cover the order and needs a manual review.';
   end if;
 
   update public.orders set status = 'pending', updated_at = now()

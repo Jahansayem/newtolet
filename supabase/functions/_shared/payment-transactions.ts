@@ -163,7 +163,7 @@ export const assertUserCanPurchaseCredits = async (
   }
 
   if (blacklistEntry) {
-    throw new Error("Your account is restricted from purchasing credits.");
+    throw new Error("Your account is restricted from making payments.");
   }
 };
 

@@ -1114,6 +1114,48 @@ end $$;
 reset role;
 select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.2' else 'PASS T12.2 browser inserts are forced to the offer price and pending_payment' end;
 
+-- T12.2b a customer cannot forge a verified payment row or re-point a pending one
+do $$
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  -- A genuine pending credit checkout, as the Edge Function creates it.
+  insert into public.payment_transactions (id, user_id, transaction_id, amount, status, credits_to_add, provider, reference)
+  values ('00000000-0000-4000-8000-0000000000a2', (select id from t_ids where k = 'plain'), 'RLS-TEST-CHEAP-CHECKOUT', 100, 'pending', 10, 'eps', '176350000000099999');
+end $$;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', (select id from t_ids where k = 'plain'), 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', (select id::text from t_ids where k = 'plain'), true);
+do $$
+declare f uuid := gen_random_uuid(); l uuid; r public.payment_transactions%rowtype;
+begin
+  if to_regproc('public.mark_order_paid_from_gateway') is null then return; end if;
+  select id into l from t_op where k = 'order';
+  begin
+    insert into public.payment_transactions (id, user_id, order_id, transaction_id, amount, status, credits_to_add, provider, reference)
+    values (f, (select id from t_ids where k = 'plain'), l, 'RLS-TEST-FORGED', 500, 'awaiting_admin_approval', 9999, 'eps', '176350000000011111');
+    select * into r from public.payment_transactions where id = f;
+    if r.status <> 'pending' or r.order_id is not null or r.credits_to_add <> 0 or r.reference is not null then
+      raise exception 'TEST FAIL: forged payment row kept its values: %', to_jsonb(r);
+    end if;
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.payment_transactions set order_id = l, credits_to_add = 9999, amount = 1
+    where id = '00000000-0000-4000-8000-0000000000a2';
+  exception when insufficient_privilege then null;
+  end;
+  select * into r from public.payment_transactions where id = '00000000-0000-4000-8000-0000000000a2';
+  if r.order_id is not null or r.credits_to_add <> 10 or r.amount <> 100 then
+    raise exception 'TEST FAIL: a customer re-pointed their pending payment: %', to_jsonb(r);
+  end if;
+  update public.payment_transactions set status = 'cancelled' where id = '00000000-0000-4000-8000-0000000000a2';
+  if (select status from public.payment_transactions where id = '00000000-0000-4000-8000-0000000000a2') <> 'cancelled' then
+    raise exception 'TEST FAIL: a customer can no longer cancel their own pending payment';
+  end if;
+end $$;
+reset role;
+select case when to_regproc('public.mark_order_paid_from_gateway') is null then 'SKIP T12.2b' else 'PASS T12.2b customers cannot forge or re-point payment rows, and can still cancel a pending one' end;
+
 -- T12.3 gateway success: payment credited, order pending, mirror verified, idempotent
 do $$
 declare l uuid; p uuid := gen_random_uuid(); r jsonb; e record; n int; c_before int; c_after int;
@@ -1129,6 +1171,19 @@ begin
   perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', p), 'ADMIN_INVALID_TRANSITION');
   perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', (select id from t_ids where k = 'pay')), 'ADMIN_VALIDATION');
   update public.payment_transactions set status = 'awaiting_admin_approval' where id = p;
+
+  -- The automatic path refuses a payment that does not cover the order, one
+  -- that carries credits, and one that belongs to another user.
+  update public.payment_transactions set amount = 100 where id = p;
+  perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', p), 'ADMIN_VALIDATION');
+  update public.payment_transactions set amount = 500, credits_to_add = 5 where id = p;
+  perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', p), 'ADMIN_VALIDATION');
+  update public.payment_transactions set credits_to_add = 0, user_id = (select id from t_ids where k = 'fin') where id = p;
+  perform pg_temp.co_expect(format('select public.mark_order_paid_from_gateway(%L)', p), 'ADMIN_VALIDATION');
+  update public.payment_transactions set user_id = (select id from t_ids where k = 'plain') where id = p;
+  if (select status from public.orders where id = l) <> 'pending_payment' then
+    raise exception 'TEST FAIL: a refused payment still moved the order';
+  end if;
 
   r := public.mark_order_paid_from_gateway(p);
   if r ->> 'mirror' <> 'verified' or r ->> 'order_status' <> 'pending' or (r ->> 'already_paid')::boolean then

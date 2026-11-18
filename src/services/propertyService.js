@@ -15,7 +15,9 @@ import {
 } from './imageUploadService'
 import { hasUnlockedContactView } from './creditService'
 import { getUserPanelCachePolicy } from './userPanelCacheConfig'
+import { normalizeAvailabilityStatus, normalizeRentIncludes } from '../lib/listingAvailability.js'
 import {
+  ensureAvailabilityColumns,
   getAllProperties,
   getAllPropertiesCacheKey,
   getHomepageProperties,
@@ -490,6 +492,11 @@ export const submitPropertyListing = async (
       created_at: new Date().toISOString(),
     }
 
+    // New listings are always 'available' (the column default); only what the rent covers is asked.
+    if (await ensureAvailabilityColumns()) {
+      propertyData.rent_includes = normalizeRentIncludes(formData.rent_includes)
+    }
+
     const { data: propertyRecord, error: propertyError } = await supabase
       .from('properties')
       .insert([propertyData])
@@ -777,6 +784,17 @@ export const updateProperty = async (propertyId, updates) => {
 }
 
 /**
+ * Owner quick action from My Properties: mark a listing rented / available / coming soon. Only this
+ * column changes, so an approved listing stays approved (a full edit would send it back to review).
+ */
+export const setPropertyAvailabilityStatus = async (propertyId, status) => {
+  if (!(await ensureAvailabilityColumns())) {
+    throw new Error('AVAILABILITY_NOT_SUPPORTED')
+  }
+  return updateProperty(propertyId, { availability_status: normalizeAvailabilityStatus(status) })
+}
+
+/**
  * Update property with images and amenities (for editing)
  * @param {string} propertyId - The property ID to update
  * @param {Object} formData - Complete form data from all 4 screens
@@ -897,6 +915,11 @@ export const updatePropertyWithImages = async (
         : propertyStatus === 'approved'
           ? new Date().toISOString()
           : null,
+    }
+
+    if (await ensureAvailabilityColumns()) {
+      propertyData.rent_includes = normalizeRentIncludes(formData.rent_includes)
+      propertyData.availability_status = normalizeAvailabilityStatus(formData.availability_status)
     }
 
     // Admin edits have no required fields, so reshape blanks into values the columns accept.
@@ -1215,6 +1238,7 @@ export const getUserProperties = async (userId) => {
           status: property.status,
           expires_at: property.expires_at || null,
           whatsapp_enabled: property.whatsapp_enabled === true,
+          availability_status: normalizeAvailabilityStatus(property.availability_status),
           is_active: property.is_active !== false,
           pinned_at: property.pinned_at || null,
           pinned_until: property.pinned_until || null,

@@ -13,6 +13,9 @@ import {
 } from '../../utils/formValidation'
 import { divisions, districts, areas, subAreas } from '../../utils/bangladeshLocations'
 import RentDisplay from '../../components/RentDisplay'
+import RentIncludesField from '../../components/AddProperty/RentIncludesField'
+import AvailabilityStatusField from '../../components/AddProperty/AvailabilityStatusField'
+import { normalizeAvailabilityStatus, normalizeRentIncludes } from '../../lib/listingAvailability.js'
 import { useLanguage } from '../../i18n/useLanguage'
 
 // Errors thrown while loading carry an i18n key so the message can be
@@ -285,6 +288,8 @@ const EditPropertyForm = ({ adminPanel = null }) => {
     available_from: '',
     deadline: '',
     images: [],
+    rent_includes: [],
+    availability_status: 'available',
   })
 
   const [existingImageUrls, setExistingImageUrls] = useState([])
@@ -446,6 +451,9 @@ const EditPropertyForm = ({ adminPanel = null }) => {
           available_from: processedProperty.available_from || '',
           deadline: processedProperty.deadline || '',
           images: [],
+          // Read straight from the row: before migration 20261118120000 these are undefined.
+          rent_includes: normalizeRentIncludes(property.rent_includes),
+          availability_status: normalizeAvailabilityStatus(property.availability_status),
         })
 
         // Set existing images
@@ -1071,6 +1079,12 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                   </p>
                 </div>
               )}
+
+              <RentIncludesField
+                idPrefix='edit'
+                value={formData.rent_includes}
+                onChange={(rentIncludes) => updateFormData({ rent_includes: rentIncludes })}
+              />
             </div>
           </div>
 
@@ -1390,6 +1404,13 @@ const EditPropertyForm = ({ adminPanel = null }) => {
                     />
                     {errors.deadline && <p className='ui-error'>{errors.deadline}</p>}
                   </div>
+                </div>
+                <div className='mt-3 md:mt-4 sm:max-w-[calc(50%-0.5rem)]'>
+                  <AvailabilityStatusField
+                    idPrefix='edit'
+                    value={formData.availability_status}
+                    onChange={(status) => updateFormData({ availability_status: status })}
+                  />
                 </div>
               </div>
 

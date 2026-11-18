@@ -160,6 +160,9 @@ const listing = {
         kitchen: 'Kitchen',
       },
       occupancyRestrictions: 'Occupancy Restrictions',
+      rentIncludes: 'Rent includes:',
+      lastUpdated: 'Last updated {date}',
+      rentedNotice: 'The owner has marked this property as rented. Similar listings are below.',
       description: 'Description',
       noDescription: 'No description available for this property.',
       facilities: 'Facilities',
@@ -235,6 +238,22 @@ const listing = {
     categories: {
       Warehouse: 'Warehouse',
       Factory: 'Factory',
+    },
+    rentIncludes: {
+      water: 'Water bill',
+      gas: 'Gas bill',
+      electricity: 'Electricity bill',
+      service_charge: 'Service charge',
+      security: 'Security / guard',
+      internet: 'Internet',
+      lift: 'Lift',
+      generator: 'Generator',
+      parking: 'Parking',
+    },
+    availabilityStatuses: {
+      available: 'Available',
+      coming_soon: 'Available soon',
+      rented: 'Already rented',
     },
   },
 }

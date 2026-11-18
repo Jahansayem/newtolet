@@ -20,6 +20,7 @@ const INITIAL_STATE = {
   rent_amount_bdt: '',
   rent_period: '',
   is_rent_negotiable: false,
+  rent_includes: [],
 
   // Screen 3
   state_district: '',

@@ -160,6 +160,9 @@ const listing = {
         kitchen: 'রান্নাঘর',
       },
       occupancyRestrictions: 'ভাড়াটিয়া সংক্রান্ত শর্ত',
+      rentIncludes: 'ভাড়ার মধ্যে:',
+      lastUpdated: 'সর্বশেষ আপডেট {date}',
+      rentedNotice: 'মালিক এই প্রপার্টিকে ভাড়া হয়ে গেছে হিসেবে চিহ্নিত করেছেন। নিচে একই ধরনের লিস্টিং দেখুন।',
       description: 'বিবরণ',
       noDescription: 'এই প্রপার্টির কোনো বিবরণ নেই।',
       facilities: 'সুবিধাসমূহ',
@@ -236,6 +239,22 @@ const listing = {
     categories: {
       Warehouse: 'গুদাম',
       Factory: 'কারখানা',
+    },
+    rentIncludes: {
+      water: 'পানির বিল',
+      gas: 'গ্যাস বিল',
+      electricity: 'বিদ্যুৎ বিল',
+      service_charge: 'সার্ভিস চার্জ',
+      security: 'সিকিউরিটি/দারোয়ান',
+      internet: 'ইন্টারনেট',
+      lift: 'লিফট',
+      generator: 'জেনারেটর',
+      parking: 'পার্কিং',
+    },
+    availabilityStatuses: {
+      available: 'খালি আছে',
+      coming_soon: 'শীঘ্রই খালি হবে',
+      rented: 'ভাড়া হয়ে গেছে',
     },
   },
 }

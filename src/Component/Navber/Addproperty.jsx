@@ -13,6 +13,7 @@ import {
 } from '../../utils/formValidation'
 import { getStoredUser } from '../../services/authService'
 import RentDisplay from '../../components/RentDisplay'
+import RentIncludesField from '../../components/AddProperty/RentIncludesField'
 import locationData from '../../thetolet_locations_bundle.json'
 import { useLanguage } from '../../i18n/useLanguage'
 
@@ -794,6 +795,12 @@ const AddPropertyContent = () => {
                   </p>
                 </div>
               )}
+
+              <RentIncludesField
+                idPrefix='add'
+                value={formData.rent_includes}
+                onChange={(rentIncludes) => updateFormData({ rent_includes: rentIncludes })}
+              />
             </div>
           </div>
 

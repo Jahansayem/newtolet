@@ -2,11 +2,11 @@
 
 import React, { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiBarChart2, FiEdit2, FiEye, FiMapPin, FiPlus, FiPower, FiStar, FiTrash2, FiRefreshCw } from 'react-icons/fi'
+import { FiBarChart2, FiCheckSquare, FiEdit2, FiEye, FiMapPin, FiPlus, FiPower, FiStar, FiTrash2, FiRefreshCw } from 'react-icons/fi'
 import { useAuth } from '../../hooks/useAuth'
 import useCachedPanelResource from '../../hooks/useCachedPanelResource'
 import { buildEditPropertyHref, buildListDetailsHref } from '../../lib/routePaths'
-import { deleteProperty, getUserProperties } from '../../services/propertyService'
+import { deleteProperty, getUserProperties, setPropertyAvailabilityStatus } from '../../services/propertyService'
 import { getPropertyAnalytics, pinPropertyFor24h, renewPropertyListing, updatePropertyPanelState } from '../../services/userPanelService'
 import UserPanelShell from '../../components/user-panel/UserPanelShell.jsx'
 import { EmptyState, formatPanelDate, PanelCard, PanelCardHeader } from '../../components/user-panel/UserPanelPrimitives.jsx'
@@ -137,6 +137,25 @@ const MyProperties = () => {
     setMessageType('success')
     setMessage(nextIsActive ? t('dashboard.myProperties.postActivated') : t('dashboard.myProperties.postDeactivated'))
     setRefreshKey((current) => current + 1)
+  }
+
+  const [availabilityPropertyId, setAvailabilityPropertyId] = useState(null)
+
+  // Only availability_status changes, so an approved listing stays approved (no new review).
+  const handleRentedToggle = async (property) => {
+    const nextStatus = property.availability_status === 'rented' ? 'available' : 'rented'
+    setAvailabilityPropertyId(property.id)
+    try {
+      await setPropertyAvailabilityStatus(property.id, nextStatus)
+      setMessageType('success')
+      setMessage(nextStatus === 'rented' ? t('dashboard.myProperties.markedRented') : t('dashboard.myProperties.markedAvailable'))
+      setRefreshKey((current) => current + 1)
+    } catch {
+      setMessageType('error')
+      setMessage(t('dashboard.myProperties.statusUpdateError'))
+    } finally {
+      setAvailabilityPropertyId(null)
+    }
   }
 
   const handlePinProperty = async (property) => {
@@ -315,6 +334,11 @@ const MyProperties = () => {
                               {t('dashboard.myProperties.pinned')}
                             </span>
                           ) : null}
+                          {property.availability_status === 'rented' || property.availability_status === 'coming_soon' ? (
+                            <span className={`ui-badge ${property.availability_status === 'rented' ? 'ui-badge-neutral' : 'ui-badge-warning'}`}>
+                              {tv('availabilityStatuses', property.availability_status)}
+                            </span>
+                          ) : null}
                         </div>
 
                         <p className="mt-3 text-lg font-semibold text-slate-900">
@@ -371,6 +395,16 @@ const MyProperties = () => {
                       >
                         <FiPower />
                         {property.is_active === false ? t('dashboard.myProperties.activatePost') : t('dashboard.myProperties.deactivatePost')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRentedToggle(property)}
+                        disabled={availabilityPropertyId === property.id}
+                        aria-pressed={property.availability_status === 'rented'}
+                        className="ui-btn ui-btn-secondary ui-btn-sm"
+                      >
+                        <FiCheckSquare />
+                        {property.availability_status === 'rented' ? t('dashboard.myProperties.markAvailable') : t('dashboard.myProperties.markRented')}
                       </button>
                       <button
                         type="button"

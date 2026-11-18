@@ -47,7 +47,7 @@ import {
 } from '../../services/userPanelService';
 import { trackEvent } from '../../services/customerEventsService';
 import dynamic from 'next/dynamic';
-import { getListingExtras, getSimilarProperties, getVerifiedOwnerPropertyIds } from '../../services/propertyCatalogService';
+import { EMPTY_LISTING_EXTRAS, getListingExtras, getSimilarProperties, getVerifiedOwnerPropertyIds } from '../../services/propertyCatalogService';
 import { VerifiedOwnerBadge, WhatsAppContactButton } from '../../components/listing/ListingTrust';
 import ReportListingDialog from '../../components/listing/ReportListingDialog';
 import PropertyListingCard from '../../components/PropertyListingCard';
@@ -91,7 +91,7 @@ const DetailSkeleton = () => (
 const Listdetails = () => {
     const [searchParams] = useSearchParams();
     const id = searchParams.get('id') || '';
-    const { t, tv, isBengali } = useLanguage();
+    const { t, tv, fd, isBengali } = useLanguage();
     const routerLocation = useLocation();
     const { user, session, updateUserInContext } = useAuth();
     const viewer = useMemo(() => ({
@@ -335,7 +335,7 @@ const Listdetails = () => {
         void recordPropertyView(user.id, id);
     }, [id, session?.user?.id, user?.id]);
 
-    const [listingExtras, setListingExtras] = useState({ whatsappEnabled: false, expiresAt: null });
+    const [listingExtras, setListingExtras] = useState(EMPTY_LISTING_EXTRAS);
     const [ownerVerified, setOwnerVerified] = useState(false);
     const [similarProperties, setSimilarProperties] = useState([]);
     const [isReportOpen, setIsReportOpen] = useState(false);
@@ -346,7 +346,7 @@ const Listdetails = () => {
         }
 
         let active = true;
-        setListingExtras({ whatsappEnabled: false, expiresAt: null });
+        setListingExtras(EMPTY_LISTING_EXTRAS);
         setOwnerVerified(false);
         setSimilarProperties([]);
 
@@ -829,6 +829,13 @@ const Listdetails = () => {
                             {listingExtras.expiresAt && new Date(listingExtras.expiresAt).getTime() < Date.now() ? (
                                 <p role="status" className="ui-note mt-3">{t('listing.trust.expired')}</p>
                             ) : null}
+                            {listingExtras.availabilityStatus === 'rented' ? (
+                                <p role="status" className="ui-note ui-note-danger mt-3">
+                                    <strong>{tv('availabilityStatuses', 'rented')}.</strong> {t('listing.detail.rentedNotice')}
+                                </p>
+                            ) : listingExtras.availabilityStatus === 'coming_soon' ? (
+                                <p className="mt-3"><span className="ui-badge ui-badge-warning">{tv('availabilityStatuses', 'coming_soon')}</span></p>
+                            ) : null}
                             <p className="mt-2 flex items-start gap-2 text-body text-muted">
                                 <FiMapPin className="mt-1 shrink-0 text-brand" aria-hidden="true" />
                                 <span>{visibleLocationText}</span>
@@ -879,6 +886,26 @@ const Listdetails = () => {
                                     )}
                                 </div>
                             </div>
+
+                            {listingExtras.rentIncludes.length > 0 || listingExtras.updatedAt ? (
+                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                                    {listingExtras.rentIncludes.length > 0 ? (
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className="text-caption text-muted">{t('listing.detail.rentIncludes')}</span>
+                                            <ul className="flex flex-wrap gap-1.5" aria-label={t('listing.detail.rentIncludes')}>
+                                                {listingExtras.rentIncludes.map((item) => (
+                                                    <li key={item} className="ui-badge ui-badge-success">{tv('rentIncludes', item)}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ) : <span />}
+                                    {listingExtras.updatedAt && !Number.isNaN(new Date(listingExtras.updatedAt).getTime()) ? (
+                                        <p className="text-caption text-muted">
+                                            {t('listing.detail.lastUpdated', { date: fd(new Date(listingExtras.updatedAt), { day: 'numeric', month: 'short', year: 'numeric' }) })}
+                                        </p>
+                                    ) : null}
+                                </div>
+                            ) : null}
 
                             <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                                 {specTiles.map((tile) => (

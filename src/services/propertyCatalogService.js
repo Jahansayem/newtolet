@@ -12,6 +12,7 @@ import locationData from '../thetolet_locations_bundle.json'
 import { createLocationIndex } from '../lib/search/locationIndex.js'
 import { buildSearchPlan } from '../lib/search/queryPlan.js'
 import { PAGE_SIZE, parseAmenityList, parsePageNumber } from '../lib/search/filterOptions.js'
+import { normalizeAvailabilityStatus, normalizeRentIncludes } from '../lib/listingAvailability.js'
 
 const PROPERTY_IMAGES_BUCKET = 'property-images'
 const RELATED_RECORD_BATCH_SIZE = 100
@@ -333,13 +334,49 @@ export const ensureCatalogCapabilities = () => {
       })
   }
 
-  return expiryColumnProbe || Promise.resolve()
+  // Both probes run in parallel; callers only need them settled before building a query.
+  return Promise.all([expiryColumnProbe || Promise.resolve(), ensureAvailabilityColumns()])
+}
+
+// availability_status / rent_includes arrive with migration 20261118120000. Same probe pattern as
+// above: until the columns exist, saves leave them out and search does not filter on them.
+let availabilityColumnProbe = null
+let hasAvailabilityColumns = false
+
+export const ensureAvailabilityColumns = () => {
+  if (!availabilityColumnProbe) {
+    availabilityColumnProbe = supabase
+      .from('properties')
+      .select('availability_status, rent_includes', { head: true })
+      .limit(1)
+      .then(({ error }) => {
+        hasAvailabilityColumns = !error
+        if (error && !isMissingDatabaseObjectError(error)) {
+          availabilityColumnProbe = null
+        }
+      })
+      .catch(() => {
+        availabilityColumnProbe = null
+      })
+  }
+
+  return (availabilityColumnProbe || Promise.resolve()).then(() => hasAvailabilityColumns)
 }
 
 /** Rows the public may see: approved, active, not soft-deleted, not expired. */
 export const applyPublicVisibility = (query) => {
   const visible = query.eq('status', 'approved').neq('is_active', false).is('deleted_at', null)
   return hasExpiryColumn ? visible.gt('expires_at', new Date().toISOString()) : visible
+}
+
+/**
+ * Rows for search results, the home page and "similar listings": public rows minus listings the
+ * owner marked rented (those stay reachable on their detail page with a banner). Call after
+ * ensureCatalogCapabilities().
+ */
+export const applySearchVisibility = (query) => {
+  const visible = applyPublicVisibility(query)
+  return hasAvailabilityColumns ? visible.neq('availability_status', 'rented') : visible
 }
 
 // PostgREST returns at most 1000 rows per request (max_rows), so "everything" must be paged.
@@ -353,7 +390,7 @@ const FULL_CATALOG_CAP = 3000
 const fetchPublicProperties = async ({ select = PUBLIC_PROPERTY_SELECT, limit = null, offset = 0 } = {}) => {
   await ensureCatalogCapabilities()
   const fetchRange = async (from, to) => {
-    const { data, error } = await applyPublicVisibility(supabase.from('properties').select(select))
+    const { data, error } = await applySearchVisibility(supabase.from('properties').select(select))
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -452,7 +489,7 @@ const MAX_PINNED_RESULTS = 6
  * SQL so `count: 'exact'` and `.range()` give a true total and real pages.
  */
 const applySearchPlan = (query, filters, plan) => {
-  let nextQuery = applyPublicVisibility(query)
+  let nextQuery = applySearchVisibility(query)
 
   if (plan.logic) {
     nextQuery = nextQuery.or(plan.logic)
@@ -713,12 +750,12 @@ export const getHomepageProperties = async () => {
       HOME_CATEGORIES.map(async (category) => {
         const values = getPropertyCategoryValues(category)
         const [pinnedResult, latestResult] = await Promise.all([
-          applyPublicVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
+          applySearchVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
             .in('category', values)
             .gt('pinned_until', nowIso)
             .order('pinned_until', { ascending: false })
             .limit(HOMEPAGE_CATEGORY_ITEM_LIMIT),
-          applyPublicVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
+          applySearchVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
             .in('category', values)
             .order('created_at', { ascending: false })
             .limit(HOMEPAGE_CATEGORY_ITEM_LIMIT),
@@ -916,25 +953,44 @@ export const withOwnerVerification = async (properties = []) => {
   return properties.map((property) => ({ ...property, owner_verified: verifiedIds.has(property.id) }))
 }
 
-/** WhatsApp opt-in and expiry date for one listing (columns added 2026-11-14). */
-export const getListingExtras = async (propertyId) => {
-  const empty = { whatsappEnabled: false, expiresAt: null }
+export const EMPTY_LISTING_EXTRAS = Object.freeze({
+  whatsappEnabled: false,
+  expiresAt: null,
+  updatedAt: null,
+  availabilityStatus: 'available',
+  rentIncludes: [],
+})
 
+/**
+ * Detail-page fields the main listing load does not carry: WhatsApp opt-in and expiry (added
+ * 2026-11-14), last update, availability status and rent includes (20261118120000, read only once
+ * the columns exist).
+ */
+export const getListingExtras = async (propertyId) => {
   if (!propertyId) {
-    return empty
+    return EMPTY_LISTING_EXTRAS
   }
 
+  const withAvailability = await ensureAvailabilityColumns()
   const { data, error } = await supabase
     .from('properties')
-    .select('whatsapp_enabled, expires_at')
+    .select(withAvailability
+      ? 'whatsapp_enabled, expires_at, updated_at, availability_status, rent_includes'
+      : 'whatsapp_enabled, expires_at, updated_at')
     .eq('id', propertyId)
     .maybeSingle()
 
   if (error || !data) {
-    return empty
+    return EMPTY_LISTING_EXTRAS
   }
 
-  return { whatsappEnabled: data.whatsapp_enabled === true, expiresAt: data.expires_at || null }
+  return {
+    whatsappEnabled: data.whatsapp_enabled === true,
+    expiresAt: data.expires_at || null,
+    updatedAt: data.updated_at || null,
+    availabilityStatus: normalizeAvailabilityStatus(data.availability_status),
+    rentIncludes: normalizeRentIncludes(data.rent_includes),
+  }
 }
 
 const SIMILAR_LIMIT = 6
@@ -954,7 +1010,7 @@ export const getSimilarProperties = async (property = {}) => {
   try {
     await ensureCatalogCapabilities()
     const base = () => {
-      let query = applyPublicVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
+      let query = applySearchVisibility(supabase.from('properties').select(PUBLIC_PROPERTY_SELECT))
         .neq('id', property.id)
         .ilike('state_district', `${district}%`)
         .order('created_at', { ascending: false })

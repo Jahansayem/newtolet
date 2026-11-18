@@ -15,6 +15,7 @@ import {
   FiHome,
   FiLogOut,
   FiMap,
+  FiPackage,
   FiPlus,
   FiSearch,
   FiUser,
@@ -408,6 +409,15 @@ const Navber = () => {
             <span>{t('nav.addProperty')}</span>
           </Link>
 
+          <Link
+            to="/orderhome"
+            className="ui-btn ui-btn-secondary ui-btn-sm hidden xl:inline-flex"
+            aria-label={t('nav.orderHome')}
+            title={t('nav.orderHome')}
+          >
+            <FiPackage className="text-base" aria-hidden="true" />
+          </Link>
+
           <LanguageToggle size="sm" className="hidden md:inline-flex" />
 
           <SavedSearchBell />
@@ -575,6 +585,14 @@ const Navber = () => {
                         {t('nav.orderHome')}
                       </Link>
                     </li>
+                    {isAuthenticated ? null : (
+                      <li className="mt-2 border-t border-line pt-2">
+                        <Link to="/saved" className={drawerLinkClassName} onClick={closeDrawer}>
+                          <FiHeart aria-hidden="true" />
+                          {t('nav.savedProperty')}
+                        </Link>
+                      </li>
+                    )}
                     {isAuthenticated ? (
                       <>
                         <li className="mt-2 border-t border-line pt-2">

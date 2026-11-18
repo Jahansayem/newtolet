@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FiAlertCircle, FiCheckCircle, FiClock, FiLoader } from 'react-icons/fi'
 import { verifyPayment } from '../../services/paymentService'
+import { invalidateUserOrdersCache } from '../../services/orderService'
+import { supabase } from '../../services/supabaseClient'
 import { useLanguage } from '../../i18n/useLanguage'
 import LanguageToggle from '../../components/LanguageToggle.jsx'
 
@@ -50,6 +52,24 @@ const STATUS_STYLES = {
   },
 }
 
+// Order Home payments reuse the page with their own wording where the credit
+// text would be wrong (a paid order adds no credits).
+const ORDER_STATUS_KEYS = {
+  awaiting_admin_approval: {
+    titleKey: 'payments.confirm.order.status.awaiting_admin_approval.title',
+    descriptionKey: 'payments.confirm.order.status.awaiting_admin_approval.description',
+  },
+  credited: {
+    titleKey: 'payments.confirm.order.status.credited.title',
+    descriptionKey: 'payments.confirm.order.status.credited.description',
+  },
+}
+
+const resolveStatusKeys = (status, isOrderPayment) => {
+  const base = STATUS_STYLES[status] || STATUS_STYLES.failed
+  return (isOrderPayment && ORDER_STATUS_KEYS[status]) || base
+}
+
 const PaymentConfirmPage = () => {
   const { t, tv, fdt } = useLanguage()
   const [searchParams] = useSearchParams()
@@ -74,7 +94,9 @@ const PaymentConfirmPage = () => {
   const provider = searchParams.get('provider')
   const reference = searchParams.get('reference') || searchParams.get('slug')
   const explicitState = searchParams.get('state')
+  const kind = searchParams.get('kind')
   const displayReference = invoiceId || paymentId || reference
+  const isOrderPayment = kind === 'order' || Boolean(paymentData?.order_id)
 
   const statusConfig = useMemo(() => {
     if (pageState === 'processing') {
@@ -120,23 +142,30 @@ const PaymentConfirmPage = () => {
 
       const payment = result.data?.payment || null
       const nextStatus = payment?.status || 'pending'
-      const resolvedConfig = STATUS_STYLES[nextStatus] || STATUS_STYLES.failed
+      const orderPayment = kind === 'order' || Boolean(payment?.order_id)
+
+      if (orderPayment) {
+        // The server has just changed the order; drop the cached order list.
+        const { data } = await supabase.auth.getSession()
+        invalidateUserOrdersCache(data?.session?.user?.id)
+      }
 
       setPaymentData(payment)
       setPageState(nextStatus)
       setMessageText('')
-      setMessageKey(resolvedConfig.descriptionKey)
+      setMessageKey(resolveStatusKeys(nextStatus, orderPayment).descriptionKey)
     }
 
     runVerification()
-  }, [explicitState, invoiceId, paymentId, provider, reference])
+  }, [explicitState, invoiceId, paymentId, provider, reference, kind])
 
+  // Order payments go back to My Orders, where an unpaid order has "Pay now".
   const handleGoToDashboard = () => {
-    navigate('/dashboard')
+    navigate(isOrderPayment ? '/my-orders' : '/dashboard')
   }
 
   const handleTryAgain = () => {
-    navigate('/book/buy-credits')
+    navigate(isOrderPayment ? '/my-orders' : '/book/buy-credits')
   }
 
   if (pageState === 'processing') {
@@ -177,7 +206,9 @@ const PaymentConfirmPage = () => {
           </div>
 
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{t(statusConfig.titleKey)}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {t(resolveStatusKeys(pageState, isOrderPayment).titleKey)}
+            </h2>
             <p className="text-gray-600">{message}</p>
           </div>
 
@@ -205,10 +236,12 @@ const PaymentConfirmPage = () => {
                 <span className="font-medium">{t('common.amount')}</span>
                 <span className="text-right">৳{Number(paymentData?.amount || 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between gap-4">
-                <span className="font-medium">{t('payments.confirm.fields.credits')}</span>
-                <span className="text-right">{Number(paymentData?.credits_to_add || 0)}</span>
-              </div>
+              {isOrderPayment ? null : (
+                <div className="flex justify-between gap-4">
+                  <span className="font-medium">{t('payments.confirm.fields.credits')}</span>
+                  <span className="text-right">{Number(paymentData?.credits_to_add || 0)}</span>
+                </div>
+              )}
               <div className="flex justify-between gap-4">
                 <span className="font-medium">{t('payments.confirm.fields.method')}</span>
                 <span className="capitalize text-right">{paymentData?.payment_method || t('common.na')}</span>
@@ -220,7 +253,7 @@ const PaymentConfirmPage = () => {
             </div>
           </div>
 
-          {pageState === 'awaiting_admin_approval' ? (
+          {pageState === 'awaiting_admin_approval' && !isOrderPayment ? (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
               <p className="text-sm text-blue-900 font-medium mb-2">{t('payments.confirm.nextSteps.title')}</p>
               <ul className="text-sm text-blue-800 space-y-1">
@@ -236,7 +269,7 @@ const PaymentConfirmPage = () => {
               onClick={handleGoToDashboard}
               className="ui-btn ui-btn-primary w-full"
             >
-              {t('payments.confirm.goToDashboard')}
+              {isOrderPayment ? t('payments.confirm.order.goToMyOrders') : t('payments.confirm.goToDashboard')}
             </button>
             {pageState === 'failed' || pageState === 'cancelled' ? (
               <button

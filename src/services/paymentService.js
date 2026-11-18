@@ -35,7 +35,9 @@ export const getCreditPackage = async (packageId) => {
 
 export const getPaymentGateways = () => Object.values(PAYMENT_GATEWAYS)
 
-export const createPaymentTransaction = async (packageId, options = {}) => {
+// Starts an EPS checkout for one purchase ({ packageId } or { orderId }) and
+// returns the gateway URL the caller redirects to.
+const startEpsCheckout = async (purchase, options = {}) => {
   try {
     const token = await getAccessToken()
 
@@ -47,7 +49,7 @@ export const createPaymentTransaction = async (packageId, options = {}) => {
       functionName: 'paymently-create-checkout',
       token,
       body: {
-        packageId,
+        ...purchase,
         paymentMethod: 'eps',
         phoneNumber: options.phoneNumber || options.phone_number || null,
       },
@@ -68,6 +70,13 @@ export const createPaymentTransaction = async (packageId, options = {}) => {
     return { data: null, error }
   }
 }
+
+export const createPaymentTransaction = (packageId, options = {}) =>
+  startEpsCheckout({ packageId }, options)
+
+/** EPS checkout for an Order Home order; the server decides the amount. */
+export const createOrderPaymentCheckout = (orderId, options = {}) =>
+  startEpsCheckout({ orderId }, options)
 
 export const verifyPayment = async (invoiceOrOptions) => {
   try {

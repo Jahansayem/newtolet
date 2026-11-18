@@ -191,6 +191,9 @@ const dashboard = {
       created: 'তৈরি: {date}',
       package: 'প্যাকেজ',
       sevenDaysPackage: '৭ দিনের প্যাকেজ',
+      payNow: 'এখনই পেমেন্ট করুন',
+      paying: 'পেমেন্ট পেজ খোলা হচ্ছে...',
+      payFailed: 'পেমেন্ট পেজ খোলা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।',
     },
 
     invoices: {

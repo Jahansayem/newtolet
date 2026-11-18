@@ -2,19 +2,14 @@ import React, { useEffect, useMemo, useState, useId } from 'react'
 import { Link } from 'react-router-dom'
 import {
   FiAlertCircle,
-  FiCheck,
   FiMapPin,
   FiPlus,
   FiTrash2,
 } from 'react-icons/fi'
 import { supabase } from '../../services/supabaseClient'
-import {
-  createOrder,
-  getOrderCost,
-  validateOrderData,
-  updateOrderStatus,
-} from '../../services/orderService'
-import PaymentMethodSelector from './PaymentMethodSelector'
+import { createOrder, validateOrderData } from '../../services/orderService'
+import { createOrderPaymentCheckout } from '../../services/paymentService'
+import { getOrderPricing } from '../../lib/orderPricing'
 import {
   categories,
   divisions,
@@ -48,11 +43,8 @@ const getInitialFormData = () => ({
   agreedToTerms: false,
 })
 
-const PAYMENT_GATEWAYS = [
-  { id: 'bkash', name: 'bKash', icon: 'BK' },
-  { id: 'nagad', name: 'Nagad', icon: 'NG' },
-  { id: 'rocket', name: 'Rocket', icon: 'RK' },
-]
+const ORDER_PRICING = getOrderPricing()
+const formatBdt = (amount) => `৳${Number(amount).toLocaleString('en-BD')}`
 
 const GENDER_OPTIONS = ['Any', 'Male', 'Female']
 const BATH_ROOM_OPTIONS = ['1', '2', '3', '4', '5+']
@@ -192,10 +184,7 @@ export default function CreateOrderForm() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(false)
-  const [currentOrderId, setCurrentOrderId] = useState(null)
   const [errors, setErrors] = useState({})
-  const [successMessage, setSuccessMessage] = useState('')
   const [formData, setFormData] = useState(getInitialFormData)
 
   useEffect(() => {
@@ -306,12 +295,10 @@ export default function CreateOrderForm() {
   const resetForm = () => {
     setFormData(getInitialFormData())
     setErrors({})
-    setCurrentOrderId(null)
   }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    setSuccessMessage('')
 
     const validation = validateOrderData(formData)
     if (!validation.isValid) {
@@ -332,6 +319,7 @@ export default function CreateOrderForm() {
     }
 
     setSubmitting(true)
+    let redirecting = false
 
     try {
       const primaryLocation = normalizedLocations[0]
@@ -363,32 +351,30 @@ export default function CreateOrderForm() {
         throw error
       }
 
-      setCurrentOrderId(data.id)
-      setShowPaymentModal(true)
-      setErrors({})
+      // The order is saved as "pending payment"; hand the customer to EPS.
+      const { data: checkout, error: checkoutError } = await createOrderPaymentCheckout(data.id)
+
+      if (checkoutError || !checkout?.payment_url) {
+        console.error('Error starting order payment:', checkoutError)
+        // The order exists, so clear the form (a second submit would duplicate
+        // it) and point the customer to My Orders, where they can pay for it.
+        resetForm()
+        setErrors({ submit: t('orders.create.errors.checkoutFailed') })
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+
+      // Keep the button disabled while the browser leaves for the gateway.
+      redirecting = true
+      window.location.assign(checkout.payment_url)
     } catch (error) {
       console.error('Error creating order:', error)
       setErrors({ submit: t('orders.create.errors.createFailed') })
     } finally {
-      setSubmitting(false)
+      if (!redirecting) {
+        setSubmitting(false)
+      }
     }
-  }
-
-  const handlePaymentComplete = async () => {
-    try {
-      await updateOrderStatus(currentOrderId, 'confirmed')
-      setShowPaymentModal(false)
-      setSuccessMessage(t('orders.create.success'))
-      resetForm()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    } catch (error) {
-      console.error('Error completing payment:', error)
-      setErrors({ submit: t('orders.create.errors.paymentFailed') })
-    }
-  }
-
-  const handlePaymentClose = () => {
-    setShowPaymentModal(false)
   }
 
   if (loading) {
@@ -443,17 +429,15 @@ export default function CreateOrderForm() {
           </p>
         </div>
 
-        {successMessage ? (
-          <div className="flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-green-800">
-            <FiCheck className="mt-0.5 flex-shrink-0 text-lg" />
-            <p className="text-sm font-medium">{successMessage}</p>
-          </div>
-        ) : null}
-
         {errors.submit ? (
           <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
             <FiAlertCircle className="mt-0.5 flex-shrink-0 text-lg" />
-            <p className="text-sm font-medium">{errors.submit}</p>
+            <div className="text-sm font-medium">
+              <p>{errors.submit}</p>
+              <Link to="/my-orders" className="mt-1 inline-block underline hover:no-underline">
+                {t('orders.create.goToMyOrders')}
+              </Link>
+            </div>
           </div>
         ) : null}
 
@@ -663,10 +647,25 @@ export default function CreateOrderForm() {
                   title={t('orders.create.package.packageLabel')}
                   value={t('orders.create.package.duration')}
                 />
-                <RequirementBadge
-                  title={t('orders.create.package.price')}
-                  value={t('orders.create.package.priceValue', { price: getOrderCost() })}
-                />
+                <div className="rounded-2xl border border-brand/10 bg-brand/5 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
+                    {t('orders.create.package.price')}
+                  </p>
+                  {ORDER_PRICING.hasDiscount ? (
+                    <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-gray-500 line-through">{formatBdt(ORDER_PRICING.regular)}</span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                        {t('orders.create.package.discountBadge', { percent: ORDER_PRICING.discountPercent })}
+                      </span>
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-sm font-semibold text-gray-900">
+                    {t('orders.create.package.youPay', { amount: formatBdt(ORDER_PRICING.payable) })}
+                  </p>
+                </div>
+                <p className="text-xs leading-5 text-gray-500 sm:col-span-2">
+                  {t('orders.create.package.paymentNote')}
+                </p>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -710,7 +709,9 @@ export default function CreateOrderForm() {
               disabled={submitting}
               className="inline-flex min-w-[180px] justify-center rounded-2xl bg-brand px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting ? t('orders.create.processing') : t('orders.create.create')}
+              {submitting
+                ? t('orders.create.processing')
+                : t('orders.create.payWithEps', { amount: formatBdt(ORDER_PRICING.payable) })}
             </button>
             <Link
               to="/dashboard?tab=orders"
@@ -722,18 +723,6 @@ export default function CreateOrderForm() {
         </form>
       </div>
 
-      {showPaymentModal ? (
-        <PaymentMethodSelector
-          package_={{
-            name: t('orders.create.package.orderName'),
-            price: getOrderCost(),
-            credits: 0,
-          }}
-          gateways={PAYMENT_GATEWAYS}
-          onGatewaySelected={handlePaymentComplete}
-          onClose={handlePaymentClose}
-        />
-      ) : null}
     </div>
   )
 }

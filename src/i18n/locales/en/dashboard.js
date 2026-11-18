@@ -191,6 +191,9 @@ const dashboard = {
       created: 'Created: {date}',
       package: 'Package',
       sevenDaysPackage: '7 Days Package',
+      payNow: 'Pay now',
+      paying: 'Opening payment...',
+      payFailed: 'Could not open the payment page. Please try again.',
     },
 
     invoices: {
@@ -448,7 +451,7 @@ const dashboard = {
   values: {
     status: {
       pending: 'pending',
-      pending_payment: 'pending_payment',
+      pending_payment: 'pending payment',
       confirmed: 'confirmed',
       cancelled: 'cancelled',
       completed: 'completed',

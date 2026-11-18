@@ -5,7 +5,7 @@ import {
   getEpsCheckoutUrls,
   getPaymentErrorMessage,
 } from "../_shared/paymently.ts";
-import { initializeEpsPayment } from "../_shared/eps.ts";
+import { buildMerchantTransactionId, initializeEpsPayment } from "../_shared/eps.ts";
 import {
   assertUserCanPurchaseCredits,
   buildTransactionId,
@@ -19,13 +19,6 @@ import {
 
 const PROVIDER = "eps";
 const ORDER_DESCRIPTION = "Order Home service charge";
-
-// EPS requires a digit-only merchant transaction id (minimum 10 digits).
-// 13-digit millisecond timestamp + 5 random digits = 18 digits, unique enough per merchant.
-const buildMerchantTransactionId = () => {
-  const random = crypto.getRandomValues(new Uint32Array(1))[0] % 100_000;
-  return `${Date.now()}${String(random).padStart(5, "0")}`;
-};
 
 Deno.serve(async (request) => {
   try {

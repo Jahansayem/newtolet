@@ -8,6 +8,8 @@
 #                  default: agent-listings. supabase/functions/_shared is always included.
 #                  Payments: paymently-create-checkout paymently-verify paymently-approve
 #                  Customer Orders API: customer-orders (needs the customer orders migration)
+#                  Payment links: payment-links (needs 20261119090000_payment_links.sql and
+#                  the same EPS_* values as the paymently-* functions)
 #
 # Environment (all optional once the server .env already has them):
 #   AGENT_USER_ID  value for LISTINGS_AGENT_USER_ID (from create-agent-owner.sh)
@@ -329,7 +331,7 @@ for key in EPS_BASE_URL EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD E
   if [[ -n "${!key:-}" ]]; then set_secret "$key" "${!key}"; fi
 done
 DEPLOYING_PAYMENTS=0
-if printf '%s\n' "${FUNCTIONS[@]}" | grep -q '^paymently-'; then
+if printf '%s\n' "${FUNCTIONS[@]}" | grep -qE '^(paymently-|payment-links$)'; then
   DEPLOYING_PAYMENTS=1
   for key in EPS_MERCHANT_ID EPS_STORE_ID EPS_USERNAME EPS_PASSWORD EPS_HASH_KEY; do
     if ! grep -qE "^${key}=.+" "$ENV_FILE"; then
@@ -466,6 +468,26 @@ if [[ "$DEPLOYING_PAYMENTS" == "1" ]] && printf '%s\n' "${FUNCTIONS[@]}" | grep 
   fi
   rm -f /tmp/pay-smoke.json /tmp/pay-ping.json
 fi
+# Payment links smoke test (only when payment-links was deployed): an unknown code must
+# come back as a 404 JSON error (function routed, env loaded, payment_links table present).
+if printf '%s\n' "${FUNCTIONS[@]}" | grep -qx payment-links; then
+  PORT="$(get_env API_GW_HTTP_PORT)"; PORT="${PORT:-8000}"
+  ANON="$(get_env ANON_KEY)"
+  CODE="$(curl -s -o /tmp/paylink-smoke.json -w '%{http_code}' --max-time 60 -X POST \
+    "http://127.0.0.1:${PORT}/functions/v1/payment-links" \
+    -H "Content-Type: application/json" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+    --data '{"action":"get","code":"AAAAAAAAAA"}' </dev/null)"
+  echo "smoke payment-links: unknown code -> $CODE (expect 404 Payment link not found)"
+  if [[ "$CODE" != "404" ]] || ! grep -q "Payment link not found" /tmp/paylink-smoke.json; then
+    head -c 600 /tmp/paylink-smoke.json; echo
+    echo "--- recent functions logs ---"
+    docker logs supabase-edge-functions --tail 40 2>&1 </dev/null | tail -40
+    rm -f /tmp/paylink-smoke.json
+    exit 1
+  fi
+  rm -f /tmp/paylink-smoke.json
+fi
+
 # Customer Orders API smoke test (only when customer-orders was deployed). Read-only apart
 # from the rate-limit counter: no key and a wrong key are refused, an agent key can list
 # orders, an agent key is refused payment-verify, an admin key can list.

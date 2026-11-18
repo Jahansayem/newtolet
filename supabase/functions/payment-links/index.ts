@@ -133,7 +133,8 @@ const handlePay = async (adminClient: any, body: any, request: Request) => {
     transactionId: buildTransactionId(),
     amount: Number(link.amount_bdt),
     creditsToAdd: 0,
-    description: `Payment link ${link.code}: ${link.purpose}`,
+    // No link code here: paymently-verify can show a payment's description.
+    description: link.purpose,
     provider: PROVIDER,
     paymentMethod: PROVIDER,
     customerPhone,

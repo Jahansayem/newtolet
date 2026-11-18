@@ -26,6 +26,7 @@ import AdminVerificationsSection from './sections/AdminVerificationsSection.jsx'
 import AdminReportsSection from './sections/AdminReportsSection.jsx'
 import AdminInquiriesSection from './sections/AdminInquiriesSection.jsx'
 import AdminOrdersSection from './sections/AdminOrdersSection.jsx'
+import AdminPaymentLinksSection from './sections/AdminPaymentLinksSection.jsx'
 import AdminPricingSection from './sections/AdminPricingSection.jsx'
 import AdminPropertiesSection from './sections/AdminPropertiesSection.jsx'
 import AdminSettingsSection from './sections/AdminSettingsSection.jsx'
@@ -86,6 +87,8 @@ const AdminPanelApp = () => {
         return <AdminDashboardSection onQuickAction={handleMenuChange} />
       case 'payments':
         return <PaymentMonitoring />
+      case 'payment-links':
+        return <AdminPaymentLinksSection />
       case 'referrals':
         return <ReferralManagement />
       case 'credits':

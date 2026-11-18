@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { FiCheck, FiPlus, FiX } from 'react-icons/fi'
+import { FiCheck, FiLink, FiPlus, FiX } from 'react-icons/fi'
 import { recordPaymentClaim, reviewPaymentClaim } from '../../../services/admin/customerOrders'
 import {
   CLAIM_STATUS_META,
@@ -19,6 +19,8 @@ import Button from '../../ui/Button'
 import ConfirmDialog from '../../ui/ConfirmDialog'
 import FormDialog from '../../ui/FormDialog'
 import InlineAlert from '../../ui/InlineAlert'
+import PaymentLinkDetailDialog from '../payment-links/PaymentLinkDetailDialog'
+import PaymentLinkFormDialog from '../payment-links/PaymentLinkFormDialog'
 
 const bdt = (value) => `৳${Number(value || 0).toLocaleString('en-US')}`
 const formatWhen = (value) => (value ? new Date(value).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—')
@@ -42,6 +44,8 @@ export default function PaymentPanel({ order, claims = [], onChanged }) {
   const [recordOpen, setRecordOpen] = useState(false)
   const [verifyTarget, setVerifyTarget] = useState(null)
   const [rejectTarget, setRejectTarget] = useState(null)
+  const [linkFormOpen, setLinkFormOpen] = useState(false)
+  const [createdLink, setCreatedLink] = useState(null)
 
   const reviewMutation = useAdminMutation((claimId, payload) => reviewPaymentClaim(claimId, payload), {
     successMessage: (result, _claimId, payload) => (payload.decision === 'verify' ? 'Payment verified' : 'Payment claim rejected'),
@@ -139,10 +143,24 @@ export default function PaymentPanel({ order, claims = [], onChanged }) {
         <Button variant="secondary" icon={<FiPlus />} disabled={!canRecord} onClick={() => setRecordOpen(true)}>
           Record payment
         </Button>
+        {canReview ? (
+          <Button variant="secondary" icon={<FiLink />} disabled={!canRecord} onClick={() => setLinkFormOpen(true)}>
+            Create payment link
+          </Button>
+        ) : null}
         {!canRecord ? <span className="text-caption text-muted">Payments cannot be recorded on a closed or refund-requested order.</span> : null}
       </div>
 
       <RecordPaymentDialog open={recordOpen} order={order} onClose={() => setRecordOpen(false)} onRecorded={onChanged} />
+
+      {/* An EPS link for this order: once the customer pays, the payment is recorded and verified here. */}
+      <PaymentLinkFormDialog
+        open={linkFormOpen}
+        presetOrder={order}
+        onClose={() => setLinkFormOpen(false)}
+        onCreated={(link) => setCreatedLink(link)}
+      />
+      <PaymentLinkDetailDialog link={createdLink} mode="created" onClose={() => setCreatedLink(null)} />
 
       <ConfirmDialog
         open={Boolean(verifyTarget)}

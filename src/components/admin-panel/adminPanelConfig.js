@@ -8,6 +8,7 @@ import {
   FiActivity,
   FiHome,
   FiImage,
+  FiLink,
   FiMail,
   FiMessageSquare,
   FiPackage,
@@ -140,6 +141,14 @@ export const ADMIN_NAV_ITEMS = [
     permission: PERMISSIONS.PAYMENTS_VIEW,
     badgeKey: 'awaitingPayments',
     description: 'Credit purchases awaiting approval.',
+  },
+  {
+    key: 'payment-links',
+    label: 'Payment links',
+    section: 'Finance',
+    icon: FiLink,
+    permission: PERMISSIONS.PAYMENTS_VIEW,
+    description: 'Send a customer a link to pay any amount through EPS.',
   },
   {
     key: 'refunds',

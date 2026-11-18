@@ -1,5 +1,5 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { normalizeHrefKey, useNavigate, useParams } from 'react-router-dom'
+import { Link, normalizeHrefKey, useNavigate, useParams } from 'react-router-dom'
 import { usePathname } from 'next/navigation'
 import { useDeferredSearchParams } from '../../lib/useDeferredSearchParams.jsx'
 import { parsePageNumber } from '../../lib/search/filterOptions.js'
@@ -14,6 +14,8 @@ import { buildListDetailsHref } from '../../lib/routePaths'
 import { extractExactPropertyIdNumber } from '../../utils/propertyDisplaySerial'
 import {
   DEFAULT_SEARCH_FILTERS,
+  PROPERTY_DIVISIONS,
+  buildLegacyPropertyDivisionHref,
   buildSearchHref,
   clearSearchFilter,
   getActiveSearchChips,
@@ -230,9 +232,11 @@ const Propertylist2 = () => {
     setSaveSearchState(error ? 'error' : 'saved')
   }, [committedSearchFilters, navigate, t, tv, user?.id])
 
-  const pageTitle = routeContext.division
-    ? t('listing.browse.titleDivision', { division: tv('divisions', routeContext.division) })
-    : t('listing.browse.titleAll')
+  const pageTitle = routeContext.category
+    ? t(`categoryPages.${routeContext.category}.title`)
+    : routeContext.division
+      ? t('listing.browse.titleDivision', { division: tv('divisions', routeContext.division) })
+      : t('listing.browse.titleAll')
 
   const handleSearchSubmit = useCallback((event) => {
     event.preventDefault()
@@ -261,9 +265,16 @@ const Propertylist2 = () => {
       <div className='mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between'>
         <div className='max-w-3xl'>
           <h1 className='text-2xl font-bold leading-tight text-ink md:text-3xl'>{pageTitle}</h1>
-          <p className='mt-1 text-caption text-muted md:text-body'>
-            {t('listing.browse.subtitle')}
-          </p>
+          {routeContext.category ? (
+            // Category landing page: a short guide to this kind of rental (also crawlable text).
+            <p className='mt-2 text-caption leading-6 text-muted md:text-body md:leading-7'>
+              {t(`categoryPages.${routeContext.category}.intro`)}
+            </p>
+          ) : (
+            <p className='mt-1 text-caption text-muted md:text-body'>
+              {t('listing.browse.subtitle')}
+            </p>
+          )}
         </div>
 
         <div className='md:hidden'>
@@ -356,6 +367,26 @@ const Propertylist2 = () => {
           onSuggestionSelect={(suggestion) => applyNextFilters(updateSearchFilters(committedSearchFilters, 'search', suggestion), { syncUrl: true })}
         />
       )}
+
+      {routeContext.category ? (
+        <nav className='mt-10 border-t border-line pt-6' aria-labelledby='category-divisions-heading'>
+          <h2 id='category-divisions-heading' className='text-lg font-bold text-ink'>
+            {t('categoryPages.byDivision', { category: tv('categories', routeContext.category) })}
+          </h2>
+          <ul className='mt-3 flex flex-wrap gap-2'>
+            {PROPERTY_DIVISIONS.map((division) => (
+              <li key={division}>
+                <Link
+                  to={`${buildLegacyPropertyDivisionHref(division)}?category=${encodeURIComponent(routeContext.category)}`}
+                  className='ui-btn ui-btn-secondary ui-btn-sm'
+                >
+                  {tv('divisions', division)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
     </div>
   )
 }

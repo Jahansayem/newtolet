@@ -2,6 +2,7 @@ import locationData from '../../thetolet_locations_bundle.json'
 import { HOME_CATEGORIES } from './categoryConfig'
 import { buildPageHref, canonicalizeInternalHref } from '../../lib/routePaths.js'
 import { matchesPropertyCategory } from '../../lib/propertyCategories'
+import { CATEGORY_PAGE_PREFIX, buildCategoryPageHref, getCategoryFromSlug } from '../../lib/seo/categoryPages.js'
 import {
   PROPERTY_TYPE_OPTIONS,
   matchesPropertyTypeOption,
@@ -45,6 +46,8 @@ const LEGACY_DIVISION_SLUGS = Object.freeze({
   Rangpur: 'rangpur',
   Sylhet: 'sylhet',
 })
+/** The 8 divisions, in display order (each has a /bd/property-division/<slug>/ page). */
+export const PROPERTY_DIVISIONS = Object.freeze(Object.keys(LEGACY_DIVISION_SLUGS))
 const LEGACY_DIVISION_NAMES = Object.freeze(
   Object.entries(LEGACY_DIVISION_SLUGS).reduce((accumulator, [division, slug]) => {
     accumulator[slug] = division
@@ -266,6 +269,23 @@ export const getSearchRouteContext = (pathname = '', routeParams = {}) => {
     }
   }
 
+  if (normalizedPathname.startsWith(`${CATEGORY_PAGE_PREFIX}/`)) {
+    const categorySlug =
+      getRouteParamValue(routeParams, 'categorySlug') ||
+      normalizedPathname.slice(`${CATEGORY_PAGE_PREFIX}/`.length)
+    const category = getCategoryFromSlug(categorySlug)
+
+    if (category) {
+      return {
+        pathname: normalizedPathname,
+        isCategoryPage: true,
+        isLegacyPropertyList: false,
+        division: '',
+        category,
+      }
+    }
+  }
+
   return {
     pathname: normalizedPathname || '/propertylist2',
     isLegacyPropertyList: false,
@@ -354,7 +374,8 @@ export const parseSearchFilters = (paramsLike, routeContext = null) => {
     district: getValue(paramsLike, 'district').trim(),
     upazilla: getValue(paramsLike, 'upazilla', ['area']).trim(),
     subArea: getValue(paramsLike, 'subArea', ['sub_area', 'sub-area']).trim(),
-    category: getValue(paramsLike, 'category').trim(),
+    // On /bd/property/category/<slug>/ the path decides the category.
+    category: routeContext?.category || getValue(paramsLike, 'category').trim(),
     propertyType: getValue(paramsLike, 'propertyType', ['property_type', 'type']).trim(),
     minPrice: normalizePositiveNumber(getValue(paramsLike, 'minPrice', ['minBudget', 'min_budget'])),
     maxPrice: normalizePositiveNumber(getValue(paramsLike, 'maxPrice', ['maxBudget', 'max_budget'])),
@@ -499,6 +520,16 @@ export const buildSearchHref = (filters, routeContext = '/propertylist2') => {
     typeof routeContext === 'string'
       ? routeContext
       : routeContext?.pathname || '/propertylist2'
+
+  // Category pages keep their path while the category stays the same (the path carries it); picking
+  // another category, or "All", continues on the main listing URL with the other filters kept.
+  if (typeof routeContext === 'object' && routeContext?.isCategoryPage) {
+    if (normalizedFilters.category === routeContext.category) {
+      return canonicalizeInternalHref(buildCategoryPageHref(routeContext.category, params))
+    }
+
+    return buildSearchHref(normalizedFilters, { pathname: LEGACY_PROPERTY_LIST_PATH, isLegacyPropertyList: true, division: '' })
+  }
 
   if (typeof routeContext === 'object' && routeContext?.isLegacyPropertyList) {
     params.delete('division')

@@ -19,7 +19,8 @@ export const STATIC_PATHS = [
 // Must match getLegacyDivisionSlug() in src/Component/Home/propertySearch.js.
 export const DIVISION_SLUGS = [
   'barishal',
-  'chattogram',
+  // The page is built at /bd/property-division/chittagong/ (legacy slug); "chattogram" was a 404.
+  'chittagong',
   'dhaka',
   'khulna',
   'mymensingh',
@@ -27,6 +28,9 @@ export const DIVISION_SLUGS = [
   'rangpur',
   'sylhet',
 ]
+
+// Must match CATEGORY_PAGE_SLUGS in src/lib/seo/categoryPages.js (tests/categoryPages.test.mjs checks).
+export const CATEGORY_SLUGS = ['family', 'bachelor', 'office', 'sublet', 'hostel', 'shop']
 
 const XML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }
 export const escapeXml = (value) => String(value).replace(/[&<>"']/g, (char) => XML_ESCAPES[char])
@@ -60,6 +64,11 @@ export function buildSitemapXml(listings = [], { divisionSlugs = DIVISION_SLUGS 
     ...STATIC_PATHS.map(({ path, changefreq, priority }) => ({ loc: `${SITE_URL}${path}`, changefreq, priority })),
     ...divisionSlugs.map((slug) => ({
       loc: `${SITE_URL}/bd/property-division/${slug}/`,
+      changefreq: 'daily',
+      priority: '0.8',
+    })),
+    ...CATEGORY_SLUGS.map((slug) => ({
+      loc: `${SITE_URL}/bd/property/category/${slug}/`,
       changefreq: 'daily',
       priority: '0.8',
     })),

@@ -8,6 +8,7 @@ import {
   formatOrderPreferencesSummary,
 } from '../utils/orderPreferences'
 import { useLanguage } from '../i18n/useLanguage'
+import { buildCategoryPagePath } from '../lib/seo/categoryPages.js'
 
 const formatCurrency = (value, t) => {
   if (!value) {
@@ -71,10 +72,9 @@ const buildFallbackDescription = (order, t, language) => {
   return parts.join(' | ') || t('orders.jobFeed.fallbackDescription')
 }
 
-const buildCategoryHref = (category) => {
-  const encodedCategory = encodeURIComponent(category || 'All')
-  return `/propertylist2?category=${encodedCategory}`
-}
+// Known categories go to their landing page; anything else falls back to the filtered list.
+const buildCategoryHref = (category) =>
+  buildCategoryPagePath(category) || `/propertylist2?category=${encodeURIComponent(category || 'All')}`
 
 const buildThumbnailLabel = (order, t, tv, language) => {
   const category = tv('categories', order.category?.trim()) || t('orders.jobFeed.defaultCategory')

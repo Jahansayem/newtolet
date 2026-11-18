@@ -29,6 +29,7 @@ import {
     getComparedPropertyIds,
 } from '../../services/propertyCompareService';
 import AdsterraBanner from './Ads';
+import { buildCategoryPagePath } from '../../lib/seo/categoryPages.js';
 import { useLanguage } from '../../i18n/useLanguage';
 
 const Cover = dynamic(
@@ -451,7 +452,7 @@ const Home = () => {
                                             <p className='mt-0.5 text-caption text-muted'>{t('home.categorySummary', { count: items.length, category: tv('categories', category).toLowerCase() })}</p>
                                         </div>
                                         <Link
-                                            to={`/propertylist2?category=${encodeURIComponent(category)}`}
+                                            to={buildCategoryPagePath(category)}
                                             className='ui-btn ui-btn-ghost ui-btn-sm -mr-2 hidden text-brand sm:inline-flex'
                                         >
                                             {t('home.seeMoreCategory', { category: tv('categories', category).toLowerCase() })}
@@ -474,7 +475,7 @@ const Home = () => {
 
                                     <div className='flex justify-center pt-1 sm:hidden'>
                                         <Link
-                                            to={`/propertylist2?category=${encodeURIComponent(category)}`}
+                                            to={buildCategoryPagePath(category)}
                                             className='ui-btn ui-btn-secondary ui-btn-sm'
                                         >
                                             {t('home.seeMoreCategory', { category: tv('categories', category).toLowerCase() })}

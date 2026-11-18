@@ -181,6 +181,34 @@ const core = {
     },
   },
 
+  categoryPages: {
+    byDivision: '{category} rentals by division',
+    Family: {
+      title: 'Family flats and houses for rent in Bangladesh',
+      intro: 'Family listings are whole flats or houses for a household: usually two or more bedrooms, a kitchen, and often a drawing and dining room. Many owners in Dhaka and other cities rent only to families, so these listings tend to be quieter buildings with a guard or caretaker. Before you call, compare the floor, whether there is a lift, and whether gas comes through a line or a cylinder. Ask what the rent covers: service charge, water and the guard are sometimes included and sometimes billed separately. Most owners ask for one or two months of advance; see the flat in person and agree everything in writing before you pay anything.',
+    },
+    Bachelor: {
+      title: 'Bachelor rooms, seats and flats for rent in Bangladesh',
+      intro: 'Bachelor listings are for single students and job holders: a seat in a shared room, a single room, or a small flat shared with friends. Many buildings in Bangladesh do not accept bachelors, so these listings come from owners who do. Check who can rent (male only or female only), house rules such as gate closing time and guests, and whether meals or a cook are arranged. Ask whether electricity, gas, water and internet are part of the rent or split between tenants. Visit at the time you would normally come home to see the area, and pay advance only after you have seen the room.',
+    },
+    Office: {
+      title: 'Office space for rent in Bangladesh',
+      intro: 'Office listings cover single rooms for a small team, full flats used as offices, and whole commercial floors. Location and access matter most: check the road width, parking, lift and generator backup, and how busy the area is during office hours. Ask whether the building allows commercial use and signboards, what the service charge includes, and how the electricity meter is set up. Owners of larger spaces often expect a longer agreement and a bigger advance, so read the terms carefully and get them in writing.',
+    },
+    Sublet: {
+      title: 'Sublet rooms for rent in Bangladesh',
+      intro: 'A sublet is a room inside a flat where the main tenant or the owner\'s family also lives. It usually costs less than renting a whole flat and suits students, small families and working women. Read the listing rules closely: many sublets are for female tenants only or for a small family, and some ask for a particular profession. Ask which parts of the flat you share, such as the kitchen and bathroom, and how bills are divided. Meet the people you would live with before you agree, and keep a written note of the rent and advance you pay.',
+    },
+    Hostel: {
+      title: 'Hostel and mess seats for rent in Bangladesh',
+      intro: 'Hostels and messes rent seats or rooms by the month, mostly to students and young job holders near universities, colleges and business areas. A seat usually comes with a bed and shared bathroom; some places include meals, Wi-Fi and cleaning. Compare the number of people per room, whether meals are part of the rent, the gate and visitor rules, and the notice period for leaving. Female-only and male-only hostels are listed separately, so check who each place accepts before you call.',
+    },
+    Shop: {
+      title: 'Shops and retail space for rent in Bangladesh',
+      intro: 'Shop listings include ground-floor shops on busy roads, units inside markets and shopping complexes, and small spaces for a pharmacy, grocery or service business. Footfall and visibility from the road matter most, so visit at different times of day. Ask about the size, the shutter and electricity load, whether water is available, and the market\'s opening hours and service charge. Many shop owners ask for a larger advance (sometimes called salami); make sure the amount, the refund terms and the length of the agreement are written down.',
+    },
+  },
+
   compareTray: {
     text: 'Compare ({count})',
     label: 'Compare properties: {count} of {max} added',

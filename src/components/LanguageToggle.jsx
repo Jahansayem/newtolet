@@ -6,6 +6,8 @@ const SIZE_CLASSES = {
   xs: 'h-8 text-xs px-2.5',
   sm: 'h-10 min-w-11 text-xs px-3',
   md: 'h-10 text-sm px-3.5',
+  lg: 'h-12 min-w-12 text-base px-4',
+  xl: 'h-14 min-w-14 text-lg px-5',
 }
 
 const OPTIONS = [

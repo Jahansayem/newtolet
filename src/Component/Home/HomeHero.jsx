@@ -34,17 +34,17 @@ const HomeHero = () => {
   }, [category, division, keyword, submitSearch])
 
   return (
-    <section className='relative overflow-hidden rounded-[var(--radius-panel)] bg-ink px-5 py-8 text-white sm:px-8 sm:py-10 md:px-12 md:py-14'>
+    <section className='relative overflow-hidden rounded-[var(--radius-panel)] bg-ink px-5 py-5 text-white sm:px-8 sm:py-6 md:px-12 md:py-8'>
       {/* Restrained brand mark: a single soft brand glow in the corner, no gradients across the text. */}
-      <div className='pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-brand/30 blur-3xl' aria-hidden='true' />
+      <div className='pointer-events-none absolute -right-24 -top-20 h-72 w-72 rounded-full bg-brand/30 blur-3xl' aria-hidden='true' />
 
       <div className='relative max-w-3xl'>
         <h1 className='text-balance text-[26px] font-bold leading-[1.15] sm:text-3xl md:text-[40px]'>
           {t('home.hero.title')}
         </h1>
-        <p className='mt-3 max-w-2xl text-sm leading-6 text-primary-100/85 md:text-base md:leading-7'>
+        {/* <p className='mt-3 max-w-2xl text-sm leading-6 text-primary-100/85 md:text-base md:leading-7'>
           {t('home.hero.subtitle')}
-        </p>
+        </p> */}
       </div>
 
       <form

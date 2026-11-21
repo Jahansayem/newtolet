@@ -34,6 +34,12 @@ const OptimizedImage = ({
   useEffect(() => {
     if (priority || !imgRef.current) return;
 
+    // No observer support: load the image now instead of throwing in the effect.
+    if (typeof IntersectionObserver === 'undefined') {
+      setIsInView(true);
+      return;
+    }
+
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {

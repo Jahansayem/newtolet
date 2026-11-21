@@ -253,7 +253,7 @@ const Propertylist2 = () => {
   }, [applyNextFilters, committedSearchFilters])
 
   return (
-    <div className='site-shell min-h-screen py-5 md:py-6'>
+    <div className='site-shell site-shell-full min-h-screen py-5 md:py-6 lg:px-25'>
       {searchParamsBridge}
       <div className='site-shell-bleed sticky top-[var(--nav-h)] z-40 mb-6 border-b border-line/80 bg-canvas/95 py-2.5 backdrop-blur'>
         <CategoryFilterBar

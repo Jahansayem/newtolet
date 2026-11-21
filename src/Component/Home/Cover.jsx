@@ -125,7 +125,7 @@ const Cover = () => {
             <div
                 role='status'
                 aria-label={t('home.cover.loading')}
-                className={`${COVER_FRAME_CLASSES} animate-pulse rounded-2xl bg-slate-200`}
+                className={`${COVER_FRAME_CLASSES} mx-auto animate-pulse rounded-2xl bg-slate-200`}
             />
         );
     }
@@ -138,7 +138,7 @@ const Cover = () => {
     const autoplayEnabled = !reduceMotion && slides.length > 1;
 
     return (
-        <div className='relative w-full'>
+        <div className='relative mx-auto w-full'>
             <Swiper
                 modules={[Navigation, Pagination, Autoplay]}
                 onSwiper={(instance) => {
@@ -166,7 +166,7 @@ const Cover = () => {
                                 src={slide.image}
                                 alt={`${t('home.cover.photoAlt')} ${index + 1}`}
                                 className='relative z-[1] h-full w-full object-cover'
-                                loading={index === 0 ? 'eager' : 'lazy'}
+                                loading='eager'
                                 fetchPriority={index === 0 ? 'high' : 'auto'}
                                 decoding='async'
                                 draggable={false}

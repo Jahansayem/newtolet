@@ -10,10 +10,10 @@ import {
 import { supabase } from '../../services/supabaseClient'
 import {
   createOrder,
-  getOrderCost,
   validateOrderData,
   updateOrderStatus,
 } from '../../services/orderService'
+import { getOrderPricing } from '../../lib/orderPricing'
 import PaymentMethodSelector from './PaymentMethodSelector'
 import {
   categories,
@@ -47,6 +47,9 @@ const getInitialFormData = () => ({
   parkingFacility: '',
   agreedToTerms: false,
 })
+
+const ORDER_PRICING = getOrderPricing()
+const formatBdt = (amount) => `৳${Number(amount).toLocaleString('en-BD')}`
 
 const PAYMENT_GATEWAYS = [
   { id: 'bkash', name: 'bKash', icon: 'BK' },
@@ -426,8 +429,8 @@ export default function CreateOrderForm() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-8 md:py-10">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <div className="min-h-screen bg-gray-50 px-4 py-5 md:py-6">
+      <div className="mx-auto max-w-6xl space-y-4">
         <nav className="text-sm text-gray-500">
           <Link to="/" className="font-medium text-brand hover:text-brand-hover">
             {t('common.home')}
@@ -436,12 +439,7 @@ export default function CreateOrderForm() {
           <span>{t('orders.create.title')}</span>
         </nav>
 
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">{t('orders.create.title')}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-            {t('orders.create.description')}
-          </p>
-        </div>
+        <h1 className="text-3xl font-bold tracking-tight text-gray-900">{t('orders.create.title')}</h1>
 
         {successMessage ? (
           <div className="flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 px-5 py-4 text-green-800">
@@ -663,10 +661,22 @@ export default function CreateOrderForm() {
                   title={t('orders.create.package.packageLabel')}
                   value={t('orders.create.package.duration')}
                 />
-                <RequirementBadge
-                  title={t('orders.create.package.price')}
-                  value={t('orders.create.package.priceValue', { price: getOrderCost() })}
-                />
+                <div className="rounded-2xl border border-brand/10 bg-brand/5 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
+                    {t('orders.create.package.price')}
+                  </p>
+                  {ORDER_PRICING.hasDiscount ? (
+                    <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-gray-500 line-through">{formatBdt(ORDER_PRICING.regular)}</span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                        {t('orders.create.package.discountBadge', { percent: ORDER_PRICING.discountPercent })}
+                      </span>
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-sm font-semibold text-gray-900">
+                    {t('orders.create.package.youPay', { amount: formatBdt(ORDER_PRICING.payable) })}
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -726,7 +736,7 @@ export default function CreateOrderForm() {
         <PaymentMethodSelector
           package_={{
             name: t('orders.create.package.orderName'),
-            price: getOrderCost(),
+            price: ORDER_PRICING.payable,
             credits: 0,
           }}
           gateways={PAYMENT_GATEWAYS}

@@ -45,10 +45,10 @@ const CategoryFilterBar = ({ selectedCategory: selectedCategoryProp, onCategoryS
                         key={label}
                         type='button'
                         onClick={() => handleCategoryClick(label)}
-                        className='ui-chip shrink-0 md:min-h-11 md:px-5'
+                        className='ui-chip shrink-0 text-2xl md:min-h-11 md:px-5'
                         {...stateProps}
                     >
-                        <Icon className='text-base' aria-hidden='true' />
+                        <Icon className='text-2xl' aria-hidden='true' />
                         <span>{tv('categories', label)}</span>
                     </button>
                 );

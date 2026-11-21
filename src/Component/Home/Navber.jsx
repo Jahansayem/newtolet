@@ -54,7 +54,7 @@ const NavSearchOverlay = dynamic(
 
 // Single-row header links: 64px row, 2px active bar on the bottom edge.
 const desktopLinkClassName = (isActive) =>
-  `relative inline-flex h-16 items-center gap-1.5 whitespace-nowrap px-1 text-sm font-medium transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors ${
+  `relative inline-flex h-16 items-center gap-1.5 whitespace-nowrap px-1 text-xl font-bold transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:transition-colors ${
     isActive
       ? 'text-brand after:bg-brand'
       : 'text-ink/80 after:bg-transparent hover:text-brand'
@@ -87,7 +87,7 @@ const DesktopNavLink = ({ href, label, isActive }) => (
   </Link>
 )
 
-const Logo = ({ className = 'h-9 w-auto max-w-[150px] object-contain', alt }) => (
+const Logo = ({ className = 'h-16 w-auto max-w-60 object-contain', alt }) => (
   <img
     className={className}
     src={LOGO_SRC}
@@ -323,7 +323,7 @@ const Navber = () => {
         isHomepage && !homeNavVisible ? '-translate-y-full pointer-events-none' : 'translate-y-0'
       }`}
     >
-      <div className={`site-shell flex h-16 items-center gap-3 lg:gap-6 ${isHomepage ? 'site-shell-full' : ''}`}>
+      <div className='site-shell site-shell-full flex min-h-20 items-center gap-3 py-3 lg:gap-6 lg:px-25'>
         <Link to="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label={t('nav.logoAlt')}>
           <Logo alt={t('nav.logoAlt')} />
         </Link>
@@ -394,20 +394,20 @@ const Navber = () => {
             <FiSearch className="text-xl" aria-hidden="true" />
           </button>
 
-          <Link to="/addproperty" className="ui-btn ui-btn-primary ui-btn-sm hidden lg:inline-flex">
-            <FiPlus className="text-base" aria-hidden="true" />
+          <Link to="/addproperty" className="ui-btn ui-btn-primary ui-btn-lg text-xl hidden lg:inline-flex">
+            <FiPlus className="text-xl" aria-hidden="true" />
             <span>{t('nav.addProperty')}</span>
           </Link>
 
           <Link
             to="/orderhome"
-            className="ui-btn ui-btn-secondary ui-btn-sm hidden xl:inline-flex"
+            className="ui-btn ui-btn-secondary ui-btn-lg text-xl hidden xl:inline-flex"
           >
-            <FiPackage className="text-base" aria-hidden="true" />
+            <FiPackage className="text-xl" aria-hidden="true" />
             <span>{t('nav.orderHome')}</span>
           </Link>
 
-          <LanguageToggle size="sm" className="hidden md:inline-flex" />
+          <LanguageToggle size="xl" className="hidden md:inline-flex" />
 
           <SavedSearchBell />
 
@@ -458,8 +458,8 @@ const Navber = () => {
               ) : null}
             </div>
           ) : (
-            <Link to="/login" className="ui-btn ui-btn-secondary ui-btn-sm hidden lg:inline-flex">
-              <FiUser className="text-base" aria-hidden="true" />
+            <Link to="/login" className="ui-btn ui-btn-secondary ui-btn-lg text-xl hidden lg:inline-flex">
+              <FiUser className="text-xl" aria-hidden="true" />
               <span>{t('nav.login')}</span>
             </Link>
           )}

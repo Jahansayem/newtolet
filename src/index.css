@@ -85,8 +85,9 @@
   --site-shadow-soft: 0 4px 12px rgba(14, 40, 76, 0.08);
 
   /* Header height, read by sticky offsets (CSS) and the homepage scroll logic (JS). Must match
-     the rendered <header>: 64px row + 1px border on every width. */
-  --nav-h: 65px;
+     the rendered <header>: min-h-20 row (80px floor, grown to 64px logo + py-3 24px = 88px) + 1px
+     border on every width. */
+  --nav-h: 89px;
 
   /* z-index scale */
   --z-nav: 50;

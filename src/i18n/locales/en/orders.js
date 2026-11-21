@@ -123,8 +123,6 @@ const orders = {
       title: 'Create Order',
       loginPrompt: 'Please login first to create a property requirement and continue to payment.',
       loginNow: 'Login Now',
-      description:
-        'Share your preferred location and requirements. We will use this order to match you with suitable homes and confirm the request after payment.',
       locationHint:
         'If your exact location is not listed, choose the nearest area and add another location row. We will review all selected locations when processing the order.',
       selectOption: 'Select an option',
@@ -185,6 +183,8 @@ const orders = {
         duration: '7 Days',
         price: 'Price',
         priceValue: '{price} BDT',
+        discountBadge: '{percent}% OFF (limited time)',
+        youPay: 'You pay: {amount}',
         agree: 'I agree to the {terms}, {privacy}, and {refund}.',
         terms: 'Terms & Conditions',
         privacy: 'Privacy Policy',

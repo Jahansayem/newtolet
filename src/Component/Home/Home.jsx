@@ -372,7 +372,7 @@ const Home = () => {
     }, []);
 
     return (
-        <div className='site-shell site-shell-full min-h-screen py-5 md:py-6'>
+        <div className='site-shell site-shell-full min-h-screen pb-5 pt-2 md:pb-6 md:pt-3 lg:px-25'>
             {searchParamsBridge}
             <div ref={stickySentinelRef} className='h-0 w-full' aria-hidden='true' />
             <div
@@ -391,8 +391,8 @@ const Home = () => {
             </div>
 
             <div className='mb-12 space-y-6 md:mb-16'>
-                <HomeHero />
                 <Cover />
+                <HomeHero />
             </div>
 
             <DeferredSection
@@ -509,6 +509,7 @@ const Home = () => {
                 className='px-0  md:px-4 xl:px-8'
                 fallback={<ContentSectionFallback height='180px' />}
                 rootMargin='0px 0px 120px 0px'
+                mountAfterMs={null}
             >
                 <AdsterraBanner></AdsterraBanner>
             </DeferredSection>
@@ -524,6 +525,7 @@ const Home = () => {
                 className='px-0  md:px-4 xl:px-8'
                 fallback={<ContentSectionFallback height='180px' />}
                 rootMargin='0px 0px 120px 0px'
+                mountAfterMs={null}
             >
                 <AdsterraBanner></AdsterraBanner>
             </DeferredSection>

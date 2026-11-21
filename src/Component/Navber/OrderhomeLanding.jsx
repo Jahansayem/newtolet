@@ -27,7 +27,7 @@ export default function OrderhomeLanding() {
     return (
         <div className='min-h-screen bg-gray-50'>
             <section className='border-b border-gray-100 bg-white'>
-                <div className='mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:py-20'>
+                <div className='mx-auto grid max-w-6xl gap-10 px-4 py-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:py-20'>
                     <div>
                         <div className='inline-flex items-center gap-2 rounded-full bg-brand/10 px-4 py-2 text-sm font-semibold text-brand'>
                             <BiHome className='text-lg' />
@@ -82,7 +82,7 @@ export default function OrderhomeLanding() {
                 </div>
             </section>
 
-            <section className='mx-auto max-w-6xl px-4 py-14'>
+            <section className='mx-auto max-w-6xl px-4 py-8 lg:py-14'>
                 <div className='rounded-[28px] border border-gray-200 bg-white p-8 shadow-sm lg:p-10'>
                     <div className='grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start'>
                         <div>

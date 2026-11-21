@@ -1,7 +1,7 @@
 // Search filter vocabulary shared by the search form, URL parsing and the query planner.
 // Stored values vary between listing sources, so each option lists every stored spelling.
 
-export const PAGE_SIZE = 20
+export const PAGE_SIZE = 30
 
 export const BATHROOM_FILTER_OPTIONS = ['1', '2', '3']
 

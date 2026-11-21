@@ -9,7 +9,7 @@ const home = {
     seeMoreCategory: 'See more {category} listings',
 
     hero: {
-      title: 'Find a home to rent in Bangladesh, broker-free',
+      title: 'Find a home to rent in Bangladesh',
       subtitle: 'Verified family, bachelor, office and sublet listings with clear rent, real photos and a Property ID you can quote on the phone.',
       keywordLabel: 'Area, sub-area or property ID',
       keywordPlaceholder: 'Area, sub-area or property ID',
